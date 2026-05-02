@@ -15,7 +15,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('destek-kur')
-        .setDescription('TEAF Moderasyon Destek Sistemini kurar.')
+        .setDescription('TSA Moderasyon Destek Sistemini kurar.')
         .addStringOption(option => 
             option.setName('yetkili-roller')
                 .setDescription('Yetkili rolleri etiketle (Örn: @Rol1 @Rol2)')
@@ -38,7 +38,7 @@ module.exports = {
             .setTitle('Turkish Armed Forces')
             .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz. Talebiniz en kısa sürede ekibimiz tarafından yanıtlanacaktır.\n\n🔄 **Moderatör Bileti** — Discord içi sorunlar, kural ihlalleri ve moderasyon desteği için seçiniz.\n🎖️ **General Bileti** — Oyun içi sorunlar, kural ihlalleri ve genel destek için seçiniz.\n💰 **Gamepass Bileti** — Robux ile alınan rütbe/gamepass sorunları için bu kategoriyi seçiniz.\n🚨 **Yönetim Bileti** — Ciddi ve üst yönetim gerektiren önemli konular için bu kategoriyi seçiniz.')
             .setColor('#4a69bd') // Görseldeki maviye yakın ton
-            .setImage('https://r.resimlink.com/7p9L1Q.jpg'); // Attığın görseldeki resim
+            .setImage('https://r.resimlink.com/EnN8AFTihKvk.png'); // Attığın görseldeki resim
 
         // Görseldeki "Destek Talebi Oluştur" Butonu
         const row = new ActionRowBuilder().addComponents(
