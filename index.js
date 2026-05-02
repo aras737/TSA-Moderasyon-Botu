@@ -1,24 +1,31 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, REST, Routes, EmbedBuilder } = require('discord.js');
 const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 require('dotenv').config();
 
+// --- 1. RENDER 7/24 AKTİF TUTMA (WEB SERVER) ---
 const app = express();
-app.get('/', (req, res) => res.send('TSA Sistemi 7/24 Aktif!'));
-app.listen(8080);
+app.get('/', (req, res) => res.send('TSA İttifak Sistemi 7/24 Aktif!'));
+app.listen(8080, () => console.log('Web sunucusu 8080 portunda hazır.'));
 
+// --- 2. BOTU BAŞLATMA ---
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers // Yetki kontrolü için şart
+    ]
 });
 
-// Komut koleksiyonunu oluşturuyoruz
+// Komut koleksiyonu
 client.commands = new Collection();
+const slashCommands = [];
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-const slashCommands = [];
-
+// Komutları klasörden oku
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
@@ -28,37 +35,60 @@ for (const file of commandFiles) {
     }
 }
 
-// Bot hazır olduğunda komutları Discord'a kaydet
+// --- 3. BOT HAZIR OLDUĞUNDA ---
 client.once('ready', async () => {
-    console.log(`${client.user.tag} girişi yapıldı!`);
+    console.log(`[BOT] ${client.user.tag} girişi yapıldı!`);
     
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-        console.log('Slash komutları başarıyla yüklendi.');
+        console.log('[SİSTEM] Slash komutları başarıyla senkronize edildi.');
     } catch (error) {
-        console.error(error);
+        console.error('[HATA] Komutlar yüklenemedi:', error);
     }
 });
 
-// Komut kullanımı ve Ticket etkileşimi
+// --- 4. MERKEZİ ETKİLEŞİM VE YETKİ KONTROLÜ ---
 client.on('interactionCreate', async interaction => {
+    
+    // SLASH KOMUT KONTROLÜ
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
+
+        // --- MERKEZİ YETKİ KONTROLÜ (ERERESİ MANTIĞI) ---
+        if (command.requiredPerms) {
+            const hasPerm = command.requiredPerms.some(perm => interaction.member.permissions.has(perm));
+            
+            if (!hasPerm) {
+                const yetkiHata = new EmbedBuilder()
+                    .setTitle('⚠️ Yetki Yetersiz')
+                    .setDescription('Bu komutu kullanmak için gerekli "İttifak Konseyi" yetkisine sahip değilsin.')
+                    .setColor('Red');
+                
+                return interaction.reply({ embeds: [yetkiHata], ephemeral: true });
+            }
+        }
+
         try {
             await command.execute(interaction);
         } catch (error) {
             console.error(error);
-            await interaction.reply({ content: 'Komut çalışırken bir hata oluştu!', ephemeral: true });
+            await interaction.reply({ content: 'Komut çalışırken bir iç hata oluştu!', ephemeral: true });
         }
     }
 
-    // Ticket Seçim Menüsü İşleyici
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
-        const { ticketHandler } = require('./commands/destek-kur.js');
-        await ticketHandler(interaction);
+    // --- DESTEK SİSTEMİ ETKİLEŞİMLERİ (BUTON VE MENÜ) ---
+    // destek-kur.js içindeki interactionHandler'ı tetikler
+    const biletKomutu = client.commands.get('destek-kur');
+    if (biletKomutu && biletKomutu.interactionHandler) {
+        try {
+            await biletKomutu.interactionHandler(interaction);
+        } catch (error) {
+            console.error('[HATA] Bilet etkileşimi başarısız:', error);
+        }
     }
 });
 
+// --- 5. BOTU ÇALIŞTIR ---
 client.login(process.env.TOKEN);
