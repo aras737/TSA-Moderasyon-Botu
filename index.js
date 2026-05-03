@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('dotenv').config();
 
-// --- 1. 7/24 AKTİFLİK SİSTEMİ ---
+// --- 1. 7/24 AKTİFLİK SİSTEMİ (WEB SERVER) ---
 const app = express();
 app.get('/', (req, res) => res.send('TEAF Moderasyon Sistemi 7/24 Aktif! ✅'));
 app.listen(8080, () => console.log('Web sunucusu 8080 portunda hazır.'));
@@ -40,9 +40,16 @@ process.on('uncaughtException', (err, origin) => {
     console.error('⚠️ [Hata Yakalandı] uncaughtException:', err);
 });
 
-// --- 4. READY EVENT ---
+// --- 4. READY EVENT VE 7/24 DÖNGÜSÜ ---
 client.once('ready', async () => {
     console.log(`[BOT] ${client.user.tag} aktif!`);
+    
+    // RENDER LOGLARI İÇİN HER SANİYE ÇALIŞAN DÖNGÜ
+    setInterval(() => {
+        const zaman = new Date().toLocaleTimeString('tr-TR');
+        console.log(`[7/24 LOG] Sistem Aktif | Saat: ${zaman} | Sunucu: TSA`);
+    }, 1000); // 1000ms = 1 Saniye
+
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
@@ -52,15 +59,13 @@ client.once('ready', async () => {
     }
 });
 
-// --- 5. MERKEZİ ETKİLEŞİM YÖNETİMİ (HATA BURADAYDI) ---
+// --- 5. MERKEZİ ETKİLEŞİM YÖNETİMİ ---
 client.on('interactionCreate', async interaction => {
     
-    // A. SLASH KOMUTLARINI YÖNET
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
 
-        // Yetki Kontrolü
         if (command.requiredPerms) {
             const hasPerm = command.requiredPerms.some(perm => interaction.member.permissions.has(perm));
             if (!hasPerm) {
@@ -72,17 +77,14 @@ client.on('interactionCreate', async interaction => {
             await command.execute(interaction);
         } catch (error) {
             console.error(`[KOMUT HATASI] ${interaction.commandName}:`, error);
-            // Hata mesajını sadece cevap verilmediyse gönder
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ content: 'Bu komut çalışırken bir hata oluştu!', ephemeral: true }).catch(() => {});
             }
         }
-        return; // İşlem bitti, aşağıya (bilet sistemine) geçme!
+        return;
     }
 
-    // B. BİLET SİSTEMİ (BUTON VE MENÜLER)
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        // Eğer etkileşim zaten bir slash komutu tarafından cevaplandıysa dur
         if (interaction.replied || interaction.deferred) return;
 
         const biletKomutu = client.commands.get('destek-kur');
@@ -91,7 +93,6 @@ client.on('interactionCreate', async interaction => {
                 await biletKomutu.interactionHandler(interaction);
             } catch (error) {
                 console.error('[BİLET HATASI]:', error);
-                // Kullanıcıya çaktırmadan hata yönetimini yap
                 if (!interaction.replied && !interaction.deferred) {
                    await interaction.reply({ content: 'İşlem başarısız oldu.', ephemeral: true }).catch(() => {});
                 }
