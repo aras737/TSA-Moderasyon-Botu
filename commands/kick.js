@@ -1,12 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
 
 module.exports = {
-    // Sadece Üyeleri Atma yetkisi veya Yönetici yetkisi olanlar kullanabilir
     requiredPerms: [PermissionsBitField.Flags.KickMembers, PermissionsBitField.Flags.Administrator],
 
     data: new SlashCommandBuilder()
         .setName('kick')
-        .setDescription('TSA sunucusundan bir üyeyi atar.')
+        .setDescription('TSA sunucusundan bir üyeyi atar ve DM atar.')
         .addUserOption(option => 
             option.setName('kullanici')
                 .setDescription('Atılacak üyeyi seçin')
@@ -23,40 +22,47 @@ module.exports = {
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
         const member = interaction.guild.members.cache.get(user.id);
 
-        // --- GÜVENLİK KONTROLLERİ ---
-        if (!member) {
-            return interaction.reply({ content: '❌ Bu kullanıcı sunucuda bulunmuyor kanka.', ephemeral: true });
-        }
+        if (!member) return interaction.reply({ content: '❌ Bu kullanıcı sunucuda yok.', ephemeral: true });
+        if (!member.kickable) return interaction.reply({ content: '❌ Yetkim bu üyeyi atmaya yetmiyor.', ephemeral: true });
 
-        if (!member.kickable) {
-            return interaction.reply({ content: '❌ Bu üyeyi atamıyorum! Rolü benim rolümden yüksek olabilir veya yetkim yetersiz.', ephemeral: true });
-        }
+        // --- 1. ÖZEL DM EMBED MESAJI ---
+        const dmEmbed = new EmbedBuilder()
+            .setTitle('TSA | Sunucudan Atıldınız')
+            .setDescription(`**${interaction.guild.name}** sunucusundan uzaklaştırıldınız.`)
+            .addFields(
+                { name: '📄 Sebep', value: `\`${reason}\`` },
+                { name: '🛡️ Atan Yetkili', value: `${interaction.user.tag}` }
+            )
+            .setColor('#e67e22')
+            .setTimestamp()
+            .setFooter({ text: 'Tekrar katılmak için kurallara uymanız rica olunur.' });
 
-        if (member.id === interaction.user.id) {
-            return interaction.reply({ content: '❌ Kendini mi atacaksın kanka? Yapma öyle şeyler.', ephemeral: true });
-        }
-
+        // Önce DM atmayı dene (Üyeyi atmadan önce yapmalıyız yoksa sunucudan çıktığı için atamayabilir)
         try {
-            // Üyeyi At
+            await user.send({ embeds: [dmEmbed] });
+        } catch (err) {
+            console.log(`${user.tag} kullanıcısının DM'leri kapalı, mesaj iletilemedi.`);
+        }
+
+        // --- 2. ÜYEYİ AT ---
+        try {
             await member.kick(reason);
 
             const kickEmbed = new EmbedBuilder()
-                .setTitle('👢 TSA | Üye Sunucudan Atıldı')
-                .setColor('#f1c40f') // Sarı tonu (Kick için standart)
-                .setThumbnail(user.displayAvatarURL())
+                .setTitle('👢 TSA | İşlem Başarılı')
+                .setDescription(`**${user.tag}** sunucudan atıldı.`)
                 .addFields(
-                    { name: '👤 Atılan Kullanıcı', value: `${user.tag} (${user.id})`, inline: false },
-                    { name: '🛡️ Yetkili', value: `${interaction.user.tag}`, inline: true },
-                    { name: '📄 Sebep', value: `\`${reason}\``, inline: true }
+                    { name: 'Kullanıcı', value: `${user.tag}`, inline: true },
+                    { name: 'Sebep', value: `\`${reason}\``, inline: true },
+                    { name: 'DM Durumu', value: '✅ Gönderildi (DM kapalıysa iletilemez)', inline: false }
                 )
-                .setFooter({ text: 'TSA Disiplin Sistemi' })
+                .setColor('#f1c40f')
                 .setTimestamp();
 
             await interaction.reply({ embeds: [kickEmbed] });
-
         } catch (error) {
             console.error(error);
-            await interaction.reply({ content: '❌ Üye atılırken teknik bir hata oluştu!', ephemeral: true });
+            await interaction.reply({ content: '❌ Kick işlemi sırasında bir hata oluştu!', ephemeral: true });
         }
     }
 };
