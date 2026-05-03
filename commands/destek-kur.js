@@ -35,35 +35,35 @@ module.exports = {
         if (!rolIDleri) return interaction.reply({ content: "❌ Geçerli roller girmelisin!", ephemeral: true });
 
         const anaEmbed = new EmbedBuilder()
-            .setTitle('Turkish Armed Forces')
-            .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz. Talebiniz en kısa sürede ekibimiz tarafından yanıtlanacaktır.\n\n🔄 **Moderatör Bileti** — Discord içi sorunlar, kural ihlalleri ve moderasyon desteği için seçiniz.\n🎖️ **General Bileti** — Oyun içi sorunlar, kural ihlalleri ve genel destek için seçiniz.\n💰 **Gamepass Bileti** — Robux ile alınan rütbe/gamepass sorunları için bu kategoriyi seçiniz.\n🚨 **Yönetim Bileti** — Ciddi ve üst yönetim gerektiren önemli konular için bu kategoriyi seçiniz.')
-            .setColor('#4a69bd') // Görseldeki maviye yakın ton
-            .setImage('https://r.resimlink.com/EnN8AFTihKvk.png'); // Attığın görseldeki resim
+            .setTitle('Turkish Armed Forces | Destek')
+            .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz. Talebiniz en kısa sürede ekibimiz tarafından yanıtlanacaktır.\n\n🔄 **Moderatör Bileti** — Discord içi sorunlar ve moderasyon desteği.\n🎖️ **General Bileti** — Oyun içi sorunlar ve genel destek.\n💰 **Gamepass Bileti** — Rütbe ve Gamepass sorunları.\n🚨 **Yönetim Bileti** — Üst yönetim gerektiren ciddi konular.')
+            .setColor('#2f3136')
+            .setImage('https://r.resimlink.com/EnN8AFTihKvk.png')
+            .setFooter({ text: 'TSA Destek Sistemi', iconURL: interaction.guild.iconURL() });
 
-        // Görseldeki "Destek Talebi Oluştur" Butonu
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`tsa_op_ticket_${rolIDleri.join('-')}_${logKanali.id}`)
+                .setCustomId(`tsa_setup_${rolIDleri.join('-')}_${logKanali.id}`)
                 .setLabel('Destek Talebi Oluştur')
                 .setEmoji('📩')
                 .setStyle(ButtonStyle.Primary)
         );
 
-        await interaction.reply({ content: `✅ TEAF Destek Sistemi kuruldu.`, ephemeral: true });
+        await interaction.reply({ content: `✅ **TSA Destek Sistemi** başarıyla kuruldu.`, ephemeral: true });
         await interaction.channel.send({ embeds: [anaEmbed], components: [row] });
     },
 
     async interactionHandler(interaction) {
-        // --- 1. BUTONA BASINCA KATEGORİ SEÇİMİ (MENÜ) AÇILIR ---
-        if (interaction.isButton() && interaction.customId.startsWith('tsa_op_ticket_')) {
+        // --- 1. KATEGORİ SEÇİMİ ---
+        if (interaction.isButton() && interaction.customId.startsWith('tsa_setup_')) {
             const data = interaction.customId.split('_');
-            const roller = data[3];
-            const logID = data[4];
+            const roller = data[2];
+            const logID = data[3];
 
             const menuRow = new ActionRowBuilder().addComponents(
                 new StringSelectMenuBuilder()
-                    .setCustomId(`tsa_cat_${roller}_${logID}`)
-                    .setPlaceholder('Kategori Seçiniz...')
+                    .setCustomId(`tsa_create_${roller}_${logID}`)
+                    .setPlaceholder('Bilet Kategorisi Seçin...')
                     .addOptions([
                         { label: 'Moderatör Bileti', value: 'Moderatör', emoji: '🔄' },
                         { label: 'General Bileti', value: 'General', emoji: '🎖️' },
@@ -72,11 +72,11 @@ module.exports = {
                     ])
             );
 
-            await interaction.reply({ content: 'Lütfen bir bilet kategorisi seçin:', components: [menuRow], ephemeral: true });
+            await interaction.reply({ content: 'Lütfen sorununuzla ilgili kategoriyi seçin:', components: [menuRow], ephemeral: true });
         }
 
-        // --- 2. KATEGORİ SEÇİLİNCE KANAL AÇMA ---
-        if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tsa_cat_')) {
+        // --- 2. BİLET KANALI OLUŞTURMA ---
+        if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tsa_create_')) {
             const data = interaction.customId.split('_');
             const roller = data[2].split('-');
             const logID = data[3];
@@ -89,42 +89,82 @@ module.exports = {
             roller.forEach(r => izinler.push({ id: r, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }));
 
             const kanal = await interaction.guild.channels.create({
-                name: `destek-${interaction.user.username}`,
+                name: `ticket-${interaction.user.username}`,
                 type: ChannelType.GuildText,
                 permissionOverwrites: izinler,
-                topic: logID
+                topic: `Açan: ${interaction.user.id} | Kategori: ${kategori} | Log: ${logID}`
             });
 
-            const biletEmbed = new EmbedBuilder()
-                .setTitle('TEAF Destek Hattı')
-                .setDescription(`Selam ${interaction.user}, **${kategori}** birimi için talebin açıldı.\nEn kısa sürede yetkililer seninle ilgilenecek.`)
-                .setColor('Blue');
+            const hosgeldin = new EmbedBuilder()
+                .setTitle('TSA Destek Hattı')
+                .setThumbnail(interaction.user.displayAvatarURL())
+                .setDescription(`Selam ${interaction.user}, **${kategori}** birimi için talebin oluşturuldu.\n\nYetkililerimiz talebini üstlendiğinde burada bilgi göreceksin. Lütfen sorununuzu detaylıca yazın.`)
+                .addFields(
+                    { name: '👤 Kullanıcı', value: `${interaction.user.tag}`, inline: true },
+                    { name: '📂 Kategori', value: `${kategori}`, inline: true }
+                )
+                .setColor('Blue')
+                .setTimestamp();
 
-            const kapatButon = new ActionRowBuilder().addComponents(
+            const biletButonlar = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('tsa_claim').setLabel('Bileti Üstlen').setStyle(ButtonStyle.Success).setEmoji('🙋‍♂️'),
                 new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('🔒')
             );
 
-            await kanal.send({ content: `${roller.map(r => `<@&${r}>`).join(' ')}`, embeds: [biletEmbed], components: [kapatButon] });
+            await kanal.send({ content: `${roller.map(r => `<@&${r}>`).join(' ')} | ${interaction.user}`, embeds: [hosgeldin], components: [biletButonlar] });
             await interaction.update({ content: `✅ Kanalın başarıyla açıldı: ${kanal}`, components: [], ephemeral: true });
-        }
 
-        // --- 3. BİLET KAPAT (OTOMATİK VE HIZLI SİLME) ---
-        if (interaction.isButton() && interaction.customId === 'tsa_fast_close') {
-            const logID = interaction.channel.topic;
-
-            // Log kanalına mesaj at
+            // Log Gönder
             const logKanal = interaction.guild.channels.cache.get(logID);
             if (logKanal) {
                 const logEmbed = new EmbedBuilder()
-                    .setTitle('Bilet Silindi')
-                    .setDescription(`**${interaction.channel.name}** kanalı, **${interaction.user.tag}** tarafından kapatıldı.`)
+                    .setTitle('📩 Yeni Bilet Açıldı')
+                    .addFields(
+                        { name: 'Kullanıcı', value: `${interaction.user.tag} (${interaction.user.id})` },
+                        { name: 'Kategori', value: kategori },
+                        { name: 'Kanal', value: `${kanal}` }
+                    )
+                    .setColor('Green').setTimestamp();
+                logKanal.send({ embeds: [logEmbed] });
+            }
+        }
+
+        // --- 3. BİLETİ ÜSTLENME ---
+        if (interaction.isButton() && interaction.customId === 'tsa_claim') {
+            const claimEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                .addFields({ name: '🛠️ Üstlenen Yetkili', value: `${interaction.user.tag}`, inline: false })
+                .setColor('Yellow');
+
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('tsa_claimed').setLabel('Bilet Üstlenildi').setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
+                new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+            );
+
+            await interaction.update({ embeds: [claimEmbed], components: [disabledRow] });
+            await interaction.followUp({ content: `📢 **${interaction.user.tag}** bu biletle ilgilenmeye başladı!`, ephemeral: false });
+        }
+
+        // --- 4. HIZLI KAPATMA VE LOGLAMA ---
+        if (interaction.isButton() && interaction.customId === 'tsa_fast_close') {
+            const topicData = interaction.channel.topic;
+            const logID = topicData.split('Log: ')[1];
+            const acanID = topicData.split('Açan: ')[1].split(' |')[0];
+
+            const logKanal = interaction.guild.channels.cache.get(logID);
+            if (logKanal) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('🔒 Bilet Kapatıldı')
+                    .addFields(
+                        { name: 'Kanal', value: `\`${interaction.channel.name}\``, inline: true },
+                        { name: 'Açan Kişi', value: `<@${acanID}>`, inline: true },
+                        { name: 'Kapatan', value: `${interaction.user.tag}`, inline: true }
+                    )
                     .setColor('Red').setTimestamp();
-                logKanal.send({ embeds: [logEmbed] }).catch(() => {});
+                await logKanal.send({ embeds: [logEmbed] });
             }
 
-            // Hiç sormadan direkt kanalı siliyoruz
-            await interaction.reply('🔒 Kanal otomatik olarak siliniyor...');
-            setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
+            await interaction.reply('🔒 **Bilet Kapatıldı.** Kanal 3 saniye içinde imha ediliyor...');
+            setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
         }
     }
 };
