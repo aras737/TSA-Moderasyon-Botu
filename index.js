@@ -2,9 +2,6 @@ const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord
 const fs = require('node:fs');
 require('dotenv').config();
 
-// VDS'te Express'e (app.listen) gerek yok ama istersen durabilir. 
-// Direkt botu çalıştırmaya odaklanıyoruz.
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -26,35 +23,35 @@ for (const file of commandFiles) {
     }
 }
 
-// --- CRITICAL CRASH PROTECTION (VDS'te Botun Asla Kapanmaması İçin) ---
+// --- CRASH PROTECTION (Botun Hatalarda Kapanmasını Önler) ---
 process.on('unhandledRejection', (error) => {
-    console.error('⚠️ [Hata] Yakalanamayan Reddetme:', error);
+    console.error('⚠️ [HATA YAKALANDI]:', error);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('⚠️ [Hata] Yakalanamayan İstisna:', error);
+    console.error('⚠️ [KRİTİK HATA]:', error);
 });
 
 // --- READY EVENT ---
 client.once('ready', async () => {
-    console.log(`🚀 [TSA VDS] ${client.user.tag} Aktif!`);
+    console.log(`🚀 [TSA] ${client.user.tag} Aktif ve Görevde!`);
     
-    // VDS'teysen Saniyelik Log Atabilirsin, Sorun Olmaz:
+    // SANİYELİK LOG YERİNE DAKİKALIK LOG (Kapanma Sebebi Bu!)
     setInterval(() => {
         const zaman = new Date().toLocaleTimeString('tr-TR');
-        console.log(`[TSA LOG] Sistem 7/24 Aktif | Saat: ${zaman}`);
-    }, 1000);
+        console.log(`[TSA DURUM] Sistem Stabil | Saat: ${zaman}`);
+    }, 60000); // 60 saniyede bir log atar.
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-        console.log('📡 [TSA] Komutlar Global Olarak Güncellendi.');
+        console.log('📡 [TSA] Komutlar Başarıyla Güncellendi.');
     } catch (error) {
-        console.error('❌ Slash yükleme hatası:', error);
+        console.error('❌ Komut yükleme hatası:', error);
     }
 });
 
-// --- ETKİLEŞİM YÖNETİMİ ---
+// --- INTERACTION HANDLER ---
 client.on('interactionCreate', async interaction => {
     // 1. SLASH KOMUTLAR
     if (interaction.isChatInputCommand()) {
@@ -63,7 +60,7 @@ client.on('interactionCreate', async interaction => {
 
         if (command.requiredPerms) {
             const hasPerm = command.requiredPerms.some(p => interaction.member.permissions.has(p));
-            if (!hasPerm) return interaction.reply({ content: '⚠️ Bu komutu kullanmaya TSA yetkiniz yetmiyor.', ephemeral: true }).catch(() => {});
+            if (!hasPerm) return interaction.reply({ content: '⚠️ Bu komut için yetkiniz yetersiz.', ephemeral: true }).catch(() => {});
         }
 
         try {
@@ -71,21 +68,21 @@ client.on('interactionCreate', async interaction => {
         } catch (error) {
             console.error(error);
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'Bir hata oluştu!', ephemeral: true }).catch(() => {});
+                await interaction.reply({ content: 'Komut çalışırken bir hata oluştu!', ephemeral: true }).catch(() => {});
             }
         }
     }
 
     // 2. DESTEK SİSTEMİ (BUTON/MENÜ)
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        if (interaction.replied || interaction.deferred) return; // Çakışmayı önle
+        if (interaction.replied || interaction.deferred) return;
 
         const biletKomutu = client.commands.get('destek-kur');
         if (biletKomutu && biletKomutu.interactionHandler) {
             try {
                 await biletKomutu.interactionHandler(interaction);
             } catch (error) {
-                console.error('[BİLET HATASI]:', error);
+                console.error('[BİLET SİSTEM HATASI]:', error);
             }
         }
     }
