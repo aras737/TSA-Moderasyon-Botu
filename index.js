@@ -1,7 +1,6 @@
 const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder } = require('discord.js');
 const fs = require('node:fs');
 const express = require('express'); 
-const db = require('croxydb'); // Sunucu ayarlarını hafızada tutmak için dinamik DB
 require('dotenv').config();
 
 // --- 1. RENDER'I İKNA ETME SİSTEMİ (WEB SERVER) ---
@@ -101,14 +100,20 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 SLASH KOMUTLU DİNAMİK KÜFÜR ENGELLEME MOTORU
+// 🔥 YEREL VERİTABANLI KÜFÜR ENGELLEME MOTORU (EKSTRA PAKET GEREKTİRMEZ)
 // =========================================================================
+const dbDosyaYolu = './kufur_ayarlar.json';
+function dbOku() {
+    if (!fs.existsSync(dbDosyaYolu)) fs.writeFileSync(dbDosyaYolu, JSON.stringify({}));
+    return JSON.parse(fs.readFileSync(dbDosyaYolu, 'utf-8'));
+}
+
 client.on('messageCreate', async (message) => {
     if (!message.guild || message.author.bot) return;
 
-    // Sunucuda küfür engelleyici açık mı kontrol et
-    const sistemDurumu = db.get(`kufur_engel_${message.guild.id}`);
-    if (!sistemDurumu) return; // Açık değilse hiçbir şey yapma
+    // Ayarları dosyadan oku
+    const ayarlar = dbOku();
+    if (!ayarlar[message.guild.id]) return; // Sunucuda sistem kapalıysa geç
 
     // Yetkilileri es geç
     if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
@@ -123,22 +128,19 @@ client.on('messageCreate', async (message) => {
             const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür engelleme sistemi aktiftir!**`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
 
-            // Slash komutlarıyla ayarlanan log kanalı (Varsa log atar, yoksa sadece mesajı siler)
-            const logKanalId = db.get(`log_kanal_${message.guild.id}`);
-            if (logKanalId) {
-                const logKanali = message.guild.channels.cache.get(logKanalId);
-                if (logKanali) {
-                    const embed = new EmbedBuilder()
-                        .setColor('#ff3333')
-                        .setTitle('🤬 Küfür Filtresi Yakaladı')
-                        .addFields(
-                            { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-                            { name: 'Kanal:', value: `${message.channel}`, inline: true },
-                            { name: 'Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
-                        )
-                        .setTimestamp();
-                    await logKanali.send({ embeds: [embed] });
-                }
+            // Eğer sunucuda log kanalı otomatik taranacaksa (isime göre otomatik bulma):
+            let logKanali = message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
+            if (logKanali) {
+                const embed = new EmbedBuilder()
+                    .setColor('#ff3333')
+                    .setTitle('🤬 Küfür Filtresi Yakaladı')
+                    .addFields(
+                        { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
+                        { name: 'Kanal:', value: `${message.channel}`, inline: true },
+                        { name: 'Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
+                    )
+                    .setTimestamp();
+                await logKanali.send({ embeds: [embed] });
             }
         } catch (err) {
             console.error('Küfür silme hatası:', err);
