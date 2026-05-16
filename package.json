@@ -14,6 +14,7 @@
     "googleapis": "^126.0.0",
     "mongoose": "^7.5.0",
     "play-dl": "^1.9.7",
-    "sodium-native": "^5.1.0"
+    "sodium-native": "^5.1.0",
+    "croxydb": "^3.0.1"
   }
 }
