@@ -100,57 +100,50 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 GELİŞMİŞ TÜM MESAJLARI SANİYESİNDE TARAYAN KÜFÜR ENGELLEME MOTORU
+// 🔥 ERENSI STİLİ GELİŞMİŞ KÜFÜR ENGELLEME MOTORU (TÜM KANALLAR İÇİN)
 // =========================================================================
-const dbDosyaYolu = './kufur_ayarlar.json';
-function dbOku() {
-    if (!fs.existsSync(dbDosyaYolu)) fs.writeFileSync(dbDosyaYolu, JSON.stringify({}));
-    return JSON.parse(fs.readFileSync(dbDosyaYolu, 'utf-8'));
-}
+// Sistem ayarlarını RAM üzerinde tutuyoruz, ekstra dosya okuma yükü yapmaz ve saniyesinde yanıt verir.
+const sistemBellegi = new Map();
 
 client.on('messageCreate', async (message) => {
+    // Mesaj sunucudan gelmediyse veya bot attıysa direkt iptal et
     if (!message.guild || message.author.bot) return;
 
-    // Ayarları dosyadan oku
-    const ayarlar = dbOku();
-    const sunucuAyari = ayarlar[message.guild.id];
-    
-    // Sunucuda sistem kapalıysa veya pasifse geç
-    if (!sunucuAyari || !sunucuAyari.durum) return; 
+    // Sunucuda sistemin açık olup olmadığını kontrol et
+    const sunucuAyari = sistemBellegi.get(message.guild.id);
+    if (!sunucuAyari || !sunucuAyari.durum) return;
 
-    // Yetkilileri ve mesaj silme yetkisi olanları es geç
+    // Sunucu sahiplerini, Adminleri ve Mesaj Silme yetkisi olan yetkilileri koru (Filtreye takılmazlar)
     if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
 
-    // Genişletilmiş ve optimize edilmiş küfür listesi
+    // Geniş filtre listesi
     const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç', 'orospuçocuğu', 'oc'];
     
-    // 1. ADIM: Tamamen küçük harfe çevir
     const hamMesaj = message.content.toLowerCase();
-
-    // 2. ADIM: Nokta, sembol, emoji ve tüm boşlukları temizle (Her şeyi yapıştırır)
-    // Örn: "a.m.k" ya da "a m k" yazılırsa direkt "amk" olur.
+    
+    // Boşlukları ve özel karakterleri eritme aşaması (Örn: "a.m.k" -> "amk" olur)
     const birlesikMesaj = hamMesaj.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
 
-    // 3. ADIM: Yan yana uzatılan harfleri teke indir (Harf uzatma hilesini bozar)
-    // Örn: "amkkkkkk" veya "aaammmkkk" yazılırsa "amk" olur.
+    // Harf uzatmalarını teke düşürme aşaması (Örn: "amkkkkkk" -> "amk" olur)
     const temizMesaj = birlesikMesaj.replace(/(.)\1+/g, '$1');
 
-    // TARAMA MOTORU: Mesajın her varyasyonunu kelime kelime değil, saniyede baştan sona tarar
-    const kuralIhlali = kufurler.some(kufur => 
+    // Bütün varyasyonlarda küfür taraması yapılıyor
+    const kufurYakalandi = kufurler.some(kufur => 
         hamMesaj.includes(kufur) || 
         birlesikMesaj.includes(kufur) || 
         temizMesaj.includes(kufur)
     );
 
-    if (kuralIhlali) {
+    if (kufurYakalandi) {
         try {
-            // Mesajı saniyesinde yok et
+            // 1. Saniyede mesajı ortadan kaldır
             await message.delete();
             
-            const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda kelimelerine dikkat etmelisin! Küfür filtresi aktiftir.**`);
+            // 2. Kanala küfür yasak uyarısı geç
+            const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür etmek yasaktır! Filtre saniyede yakalar.**`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
 
-            // Komutla ayarlanan log kanalını kontrol et, yoksa sunucuda otomatik isim taraması yap
+            // 3. Erensi stili log sistemine gönder
             let logKanali = message.guild.channels.cache.get(sunucuAyari.logKanalId) || 
                             message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
             
@@ -161,16 +154,21 @@ client.on('messageCreate', async (message) => {
                     .addFields(
                         { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
                         { name: 'Kanal:', value: `${message.channel}`, inline: true },
-                        { name: 'Yazılan Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
+                        { name: 'Engellenen İçerik:', value: `\`\`\`${message.content}\`\`\`` }
                     )
-                    .setTimestamp();
+                    .setTimestamp()
+                    .setFooter({ text: 'TSA Otomatik Koruma Sistemi' });
+
                 await logKanali.send({ embeds: [embed] }).catch(() => {});
             }
         } catch (err) {
-            console.error('Küfür silme işleminde hata oluştu:', err);
+            console.error('Küfür temizleme motorunda hata:', err);
         }
     }
 });
+
+// Komut dosyasının RAM belleğe erişebilmesi için export ediyoruz
+client.sistemBellegi = sistemBellegi;
 
 // =========================================================================
 // 🔥 DIŞ DOSYA BAĞLANTILARI
