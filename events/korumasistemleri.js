@@ -12,7 +12,7 @@ module.exports = (client) => {
     // =========================================================================
     // 🤬 KORUMA 1: KÜFÜR VE LİNK ENGELLEME SİSTEMİ
     // =========================================================================
-    const kufurler = ['amk', 'aq', 'piç', 'orospu', 'sik', 'yarrak', 'pezevenk', 'göt']; // Burayı genişletebilirsin kanka
+    const kufurler = ['amk', 'aq', 'piç', 'orospu', 'sik', 'yarrak', 'pezevenk', 'göt'];
     const linkRegex = /(https?:\/\/[^\s]+)/g;
 
     client.on('messageCreate', async (message) => {
@@ -25,13 +25,11 @@ module.exports = (client) => {
         let tetiklendi = false;
         let sebep = '';
 
-        // Küfür Kontrolü
         if (kufurler.some(kufur => icerik.includes(kufur))) {
             tetiklendi = true;
             sebep = 'Küfürlü İçerik';
         }
 
-        // Link/Reklam Kontrolü
         if (linkRegex.test(message.content)) {
             tetiklendi = true;
             sebep = 'Link / Reklam Paylaşımı';
@@ -41,9 +39,8 @@ module.exports = (client) => {
             try {
                 await message.delete();
                 const uyariMsg = await message.channel.send(`<a:uyari:1505166167189487757> ${message.author}, bu sunucuda **${sebep}** yasaktır kanka!`);
-                setTimeout(() => uyariMsg.delete().catch(() => {}), 5000); // Uyarıyı 5 saniye sonra siler
+                setTimeout(() => uyariMsg.delete().catch(() => {}), 5000);
 
-                // Log Kanalına Rapor Gönderme
                 const logChan = logKanalGetir(message.guild.id);
                 if (logChan) {
                     const embed = new EmbedBuilder()
@@ -64,43 +61,51 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // 🚨 KORUMA 3: ULTRA ANTİ-RAİD / ANINDA BANLAMA SİSTEMİ (Geliştirildi)
+    // 🚨 KORUMA 2: GLOBAL YAPAY SENSÖRLÜ ANTİ-RAİD & OTO-KARANTİNA (EN İYİSİ)
     // =========================================================================
-    const limits = new Map();
+    const globalSayac = new Map(); 
 
-    const acilMudahele = async (guild, executorId, islemTipi) => {
-        if (executorId === client.user.id) return; // Botun kendisiyse es geç
-        if (executorId === guild.ownerId) return;  // Sunucu sahibiyse es geç
+    const otomatikDefans = async (guild, executorId, islemTipi) => {
+        if (executorId === client.user.id) return; // Bot kendi yaptıysa geç
+        if (executorId === guild.ownerId) return;  // Sunucu sahibiyse geç
 
-        const key = `${executorId}-${islemTipi}`;
         const simdi = Date.now();
+        const guildId = guild.id;
 
-        if (!limits.has(key)) {
-            limits.set(key, [simdi]);
-            return;
+        if (!globalSayac.has(guildId)) {
+            globalSayac.set(guildId, []);
         }
 
-        // Güvenlik duvarını daralttık: 5 saniye içindeki işlemleri sayıyoruz kanka
-        const gecmis = limits.get(key).filter(zaman => simdi - zaman < 5000);
-        gecmis.push(simdi);
-        limits.set(key, gecmis);
+        // ⏱️ Zaman filtresi: Son 4 saniye içindeki TÜM yıkıcı sağ-tık hareketlerini topluyoruz kanka
+        const gecmisIslemler = globalSayac.get(guildId).filter(zaman => simdi - zaman < 4000);
+        gecmisIslemler.push(simdi);
+        globalSayac.set(guildId, gecmisIslemler);
 
-        // 5 saniye içinde 3 veya daha fazla kritik işlem algılanırsa ACIMAK YOK, ANINDA BAN!
-        if (gecmis.length >= 3) {
+        // 🔥 ANORMALLİK KRİTERİ: 4 saniye içinde sunucuda 2 veya daha fazla yıkım (rol/kanal/ban) olursa alarm!
+        if (gecmisIslemler.length >= 2) {
             try {
-                // Zaman kaybettiren rol silme aşamasını atlayıp, saldırganı kökten BANLIYORUZ!
-                await guild.members.ban(executorId, { reason: `🚨 Anti-Raid: Üst üste çok hızlı ${islemTipi} işlemi yapıldı!` });
+                // 1. ÖNLEM: Saldırganı (kim olursa olsun) rekor sürede SUNUCUDAN BANLA kanka!
+                await guild.members.ban(executorId, { reason: `🚨 YAPAY SENSÖR: Saniyeler içinde peş peşe sunucuyu patlatma teşebbüsü!` });
 
-                const logChan = logKanalGetir(guild.id);
+                // 2. ÖNLEM: Sunucuya sızmış başka botlar/hesaplar varsa diye @everyone rolünün konuşma iznini anında KİLİTLE!
+                const everyoneRole = guild.roles.everyone;
+                if (everyoneRole.permissions.has(PermissionFlagsBits.SendMessages)) {
+                    await everyoneRole.setPermissions(everyoneRole.permissions.missing(PermissionFlagsBits.SendMessages), '🚨 OTO-KARANTİNA: Sunucu Saldırı Altında!');
+                }
+
+                // 3. ÖNLEM: Gelişmiş Log Kanalına anında raporu fırlatıp @everyone duyurusu geç
+                const logChan = logKanalGetir(guildId);
                 if (logChan) {
                     const embed = new EmbedBuilder()
-                        .setTitle('<a:alarme:1505209430319300718> REKOR HIZDA MÜDAHALE: Sunucu Korundu!')
-                        .setDescription(`**Saldırgan Yetkili ID:** \`${executorId}\`\n**Gerçekleştirdiği Eylem:** 5 saniye içinde birden fazla **${islemTipi}**!\n\n<:koruma1:1505143174190989352> **Alınan Önlem:** Kullanıcı daha fazla zarar veremeden **DİREKT SUNUCUDAN BANLANDI!**`)
-                        .setColor('#960018').setTimestamp();
-                    logChan.send({ content: '@everyone <a:alarme:1505209430319300718> Sunucuya yapılan saldırı engellendi ve saldırgan banlandı!', embeds: [embed] }).catch(() => {});
+                        .setTitle('<a:alarme:1505209430319300718> OTO-DEFANS SİSTEMİ SUNUCUYU KURTARDI!')
+                        .setDescription(`⚠️ Sunucuda saniyeler içinde peş peşe şüpheli eylemler (**${islemTipi}**) algılandı ve yapay zeka sensörü tetiklendi!\n\n🛡️ **Uygulanan Acil Müdahaleler:**\n• Saldırıyı başlatan yetkili (\`${executorId}\`) **DİREKT SUNUCUDAN BANLANDI!**\n• İkinci bir emre kadar sunucudaki tüm kanallar yazmaya **OTOMATİK KİLİTLENDİ!**`)
+                        .setColor('#960018')
+                        .setTimestamp();
+                    
+                    logChan.send({ content: '@everyone <a:alarme:1505209430319300718> **SUNUCUYA YAPILAN ABUSE/RAID SALDIRISI ENGELLENDİ VE KAPILAR KİLİTLENDİ!**', embeds: [embed] }).catch(() => {});
                 }
             } catch (err) {
-                console.error('Anında anti-raid banlama hatası:', err);
+                console.error('Otomatik defans sistemi hatası:', err);
             }
         }
     };
@@ -112,10 +117,10 @@ module.exports = (client) => {
         const logEntry = fetchedLogs.entries.first();
         if (!logEntry) return;
 
-        await acilMudahele(role.guild, logEntry.executorId, 'Rol Silme');
+        await otomatikDefans(role.guild, logEntry.executorId, 'Rol Silme');
     });
 
-    // 2. Sağ-tık Kanal/Kategori Silme Takibi (Bunu da ekledim, kanalları uçuramasınlar kanka)
+    // 2. Sağ-tık Kanal/Kategori Silme Takibi
     client.on('channelDelete', async (channel) => {
         if (!channel.guild) return;
         const fetchedLogs = await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete }).catch(() => null);
@@ -123,16 +128,16 @@ module.exports = (client) => {
         const logEntry = fetchedLogs.entries.first();
         if (!logEntry) return;
 
-        await acilMudahele(channel.guild, logEntry.executorId, 'Kanal/Kategori Silme');
+        await otomatikDefans(channel.guild, logEntry.executorId, 'Kanal/Kategori Silme');
     });
 
-    // 3. Sağ-tık Üye Banlama Takibi (Yetkili önüne geleni sağ tıkla banlıyorsa)
+    // 3. Sağ-tık Üye Banlama Takibi
     client.on('guildBanAdd', async (ban) => {
         const fetchedLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null);
         if (!fetchedLogs) return;
         const logEntry = fetchedLogs.entries.first();
         if (!logEntry) return;
 
-        await acilMudahele(ban.guild, logEntry.executorId, 'Sağ-tık Banlama');
+        await otomatikDefans(ban.guild, logEntry.executorId, 'Sağ-tık Üye Banlama');
     });
 };
