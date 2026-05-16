@@ -103,8 +103,8 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 LOG MOTORU BAĞLANTISI (Bunu eklemediğin için çalışmıyordu kanka)
+// 🔥 LINUX / RENDER SUNUCULARINA UYUMLU TAMAMEN KÜÇÜK HARFLİ LOG BAĞLANTISI
 // =========================================================================
-require('./events/gelismisLog')(client);
+require('./events/gelismislog')(client);
 
 client.login(process.env.TOKEN);
