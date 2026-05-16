@@ -43,13 +43,22 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // 🚨 KORUMA 2: PROFESYONEL AUDIT LOG HAFIZALI ANTİ-RAİD SİSTEMİ (GUARD MANTIĞI)
+    // 🚨 KORUMA 2: SLASH KOMUT DESTEKLİ PROFESYONEL GUARD MOTORU
     // =========================================================================
-    const yetkiliHafizasi = new Map(); // Yetkililerin son 5 saniyede yaptığı toplam yıkım puanı
+    const yetkiliHafizasi = new Map(); 
 
     const guardDenetim = async (guild, executorId, eylemTipi) => {
-        if (!executorId || executorId === client.user.id) return; // Botun kendisiyse es geç
-        if (executorId === guild.ownerId) return;  // Sunucu sahibiyse es geç
+        if (!executorId || executorId === client.user.id) return; 
+        if (executorId === guild.ownerId) return;  
+
+        // Slash komut ayarını kontrol et kanka, açık değilse sistemi çalıştırma
+        let guardAcikMi = false;
+        if (fs.existsSync('./ayarlar/guardAyari.json')) {
+            const gAyar = JSON.parse(fs.readFileSync('./ayarlar/guardAyari.json', 'utf8'));
+            if (gAyar[guild.id] === true) guardAcikMi = true;
+        }
+
+        if (!guardAcikMi) return; // Komutla açılmadıysa işlem yapma kanka
 
         const simdi = Date.now();
         
@@ -57,29 +66,28 @@ module.exports = (client) => {
             yetkiliHafizasi.set(executorId, []);
         }
 
-        // ⏱️ 5 saniye filtresi: Bu yetkilinin son 5 saniyede yaptığı TÜM tehlikeli işlemleri topla
+        // ⏱️ 5 saniye filtresi
         const sonIslemler = yetkiliHafizasi.get(executorId).filter(zaman => simdi - zaman < 5000);
         sonIslemler.push(simdi);
         yetkiliHafizasi.set(executorId, sonIslemler);
 
-        // 🎯 GUARD ALARMI: Bir yetkili 5 saniye içinde 2. tehlikeli işlemi yaptığı an DİREKT BAN!
+        // 🎯 GUARD ALARMI: 5 saniyede 2. hasar verildiği an ANINDA MÜDAHALE
         if (sonIslemler.length >= 2) {
             try {
-                // Saldırganı anında sunucudan uzaklaştır kanka!
-                await guild.members.ban(executorId, { reason: `🚨 GUARD DETECTED: Peş peşe şüpheli sağ-tık işlemleri (Abuse/Raid)!` });
+                // Saldırganı direkt sunucudan banla
+                await guild.members.ban(executorId, { reason: `🚨 GUARD LOCKDOWN: Peş peşe şüpheli sağ-tık işlemleri (Abuse/Raid)!` });
 
-                // Diğer sızan botlar varsa diye @everyone rolünün konuşma iznini kapatarak sunucuyu karantinaya al
+                // @everyone rolünü kapat ve kanalları kilitle
                 const everyoneRole = guild.roles.everyone;
                 if (everyoneRole.permissions.has(PermissionFlagsBits.SendMessages)) {
                     await everyoneRole.setPermissions(everyoneRole.permissions.missing(PermissionFlagsBits.SendMessages), '🚨 GUARD LOCKDOWN: Sunucu Karantinaya Alındı!');
                 }
 
-                // Log Kanalına O efsane duyuruyu geçelim
                 const logChan = logKanalGetir(guild.id);
                 if (logChan) {
                     const embed = new EmbedBuilder()
                         .setTitle('<a:alarme:1505209430319300718> GUARD GÜVENLİK DUVARI TETİKLENDİ!')
-                        .setDescription(`⚠️ Sunucuda acil durum! Bir yetkilinin peş peşe zarar verici işlemleri (**${eylemTipi}**) guard log hafızası tarafından yakalandı!\n\n🛡️ **Uygulanan Önlemler:**\n• Şüpheli kullanıcı (\`${executorId}\`) **DİREKT BANLANDI!**\n• Sunucu güvenliği için tüm kanallar **OTOMATİK KİLİTLENDİ!**`)
+                        .setDescription(`⚠️ Sunucuda acil durum! Bir yetkilinin peş peşe zarar verici işlemleri (**${eylemTipi}**) guard log hafızası tarafından yakalandı!\n\n🛡 *Uygulanan Önlemler:*\n• Şüpheli kullanıcı (\`${executorId}\`) **DİREKT BANLANDI!**\n• Sunucu güvenliği için tüm kanallar **OTOMATİK KİLİTLENDİ!**`)
                         .setColor('#960018')
                         .setTimestamp();
                     
@@ -93,11 +101,9 @@ module.exports = (client) => {
 
     // ─── 1. ROL SİLME TAKİBİ ───
     client.on('roleDelete', async (role) => {
-        // En son log kaydını çekerek işlemi yapan asıl kişiyi kesin olarak buluyoruz kanka
         const fetchedLogs = await role.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.RoleDelete }).catch(() => null);
         const logEntry = fetchedLogs?.entries.first();
         if (!logEntry) return;
-
         await guardDenetim(role.guild, logEntry.executorId, 'Rol Silme');
     });
 
@@ -107,7 +113,6 @@ module.exports = (client) => {
         const fetchedLogs = await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete }).catch(() => null);
         const logEntry = fetchedLogs?.entries.first();
         if (!logEntry) return;
-
         await guardDenetim(channel.guild, logEntry.executorId, 'Kanal/Kategori Silme');
     });
 
@@ -116,7 +121,6 @@ module.exports = (client) => {
         const fetchedLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null);
         const logEntry = fetchedLogs?.entries.first();
         if (!logEntry) return;
-
         await guardDenetim(ban.guild, logEntry.executorId, 'Sağ-tık Üye Banlama');
     });
 };
