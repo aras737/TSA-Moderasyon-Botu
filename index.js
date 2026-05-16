@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, REST, Routes, Partials } = require('discord.js');
 const fs = require('node:fs');
 const express = require('express'); 
 require('dotenv').config();
@@ -16,13 +16,20 @@ app.listen(PORT, () => {
     console.log(`📡 [WEB] Render Portu Dinleniyor: ${PORT}`);
 });
 
-// --- 2. BOT YAPILANDIRMASI ---
+// --- 2. BOT YAPILANDIRMASI (LOGLARIN GELMESİ İÇİN FULL INTENTS & PARTIALS) ---
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates,   // 🔊 SES HAREKETLERİNİ DUYMASI İÇİN ŞART!
+        GatewayIntentBits.GuildModeration     // 🔨 SAĞ TIK BAN VE UNBAN HAREKETLERİ İÇİN ŞART!
+    ],
+    partials: [
+        Partials.Message,  // 🗑️ Bot açık değilken silinen veya önbellekte olmayan eski mesajları yakalar
+        Partials.Channel,  // 📁 Kanallardaki değişiklikleri eksiksiz tarar
+        Partials.User      // 👤 Kullanıcı verilerini her durumda eksiksiz çeker
     ]
 });
 
@@ -94,5 +101,10 @@ client.on('interactionCreate', async interaction => {
         }
     }
 });
+
+// =========================================================================
+// 🔥 LOG MOTORU BAĞLANTISI (Bunu eklemediğin için çalışmıyordu kanka)
+// =========================================================================
+require('./events/gelismisLog')(client);
 
 client.login(process.env.TOKEN);
