@@ -106,6 +106,6 @@ client.on('interactionCreate', async interaction => {
 // 🔥 ALTYAPI MOTORLARI BAĞLANTISI (LINUX VE RENDER UYUMLU KÜÇÜK HARF)
 // =========================================================================
 require('./events/gelismislog')(client);       // Gelişmiş Log Sistemi kanka
-require('./events/korumasistemleri')(client); // Küfür/Link Engelleyici ve Anti-Raid kanka
+//require('./events/korumasistemleri')(client); // Küfür/Link Engelleyici ve Anti-Raid kanka
 
 client.login(process.env.TOKEN);
