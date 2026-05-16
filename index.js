@@ -103,8 +103,9 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 LINUX / RENDER SUNUCULARINA UYUMLU TAMAMEN KÜÇÜK HARFLİ LOG BAĞLANTISI
+// 🔥 ALTYAPI MOTORLARI BAĞLANTISI (LINUX VE RENDER UYUMLU KÜÇÜK HARF)
 // =========================================================================
-require('./events/gelismislog')(client);
+require('./events/gelismislog')(client);       // Gelişmiş Log Sistemi kanka
+require('./events/korumasistemleri')(client); // Küfür/Link Engelleyici ve Anti-Raid kanka
 
 client.login(process.env.TOKEN);
