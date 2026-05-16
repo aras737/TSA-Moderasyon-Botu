@@ -100,77 +100,19 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 MODERN V14 TÜM KANALLARI TARAYAN KÜFÜR ENGELLEME MOTORU (RAM TABANLI)
+// 🛡️ KÜFÜR ENGEL SİSTEMİ — RAM BELLEĞİ
+// =========================================================================
+// Küfür engelleme motoru artık events/kufurengel.js dosyasında çalışıyor.
+// Bu bellek, /küfür-engel slash komutu tarafından yönetilir.
+// Açma: /küfür-engel aç  |  Kapatma: /küfür-engel kapat
 // =========================================================================
 const sistemBellegi = new Map();
-
-client.on('messageCreate', async (message) => {
-    if (!message.guild || message.author.bot) return;
-
-    // RAM Bellekten sunucu kontrolü yap
-    const sunucuAyari = sistemBellegi.get(message.guild.id);
-    if (!sunucuAyari || !sunucuAyari.durum) return;
-
-    // Yönetici ve Mesajları Yönet yetkisi olan yetkilileri es geç
-    if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
-
-    // Gelişmiş küfür ve argo kelime listesi
-    const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç', 'orospuçocuğu', 'oc'];
-    
-    const hamMesaj = message.content.toLowerCase();
-    
-    // Boşlukları, noktaları ve özel karakterleri eritir (Örn: "a.m.k" veya "a m k" -> "amk")
-    const birlesikMesaj = hamMesaj.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
-
-    // Harf uzatmalarını teke indirir (Örn: "amkkkkkk" -> "amk")
-    const temizMesaj = birlesikMesaj.replace(/(.)\1+/g, '$1');
-
-    // Saniyede filtre kontrolü
-    const kufurYakalandi = kufurler.some(kufur => 
-        hamMesaj.includes(kufur) || 
-        birlesikMesaj.includes(kufur) || 
-        temizMesaj.includes(kufur)
-    );
-
-    if (kufurYakalandi) {
-        try {
-            // 1. Mesajı saniyesinde siler
-            await message.delete();
-            
-            // 2. Kanala uyarı mesajı gönderir
-            const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür etmek yasaktır! Filtre saniyede yakalar.**`);
-            setTimeout(() => uyari.delete().catch(() => {}), 4000);
-
-            // 3. Log kanalına detaylı embed gönderir
-            let logKanali = message.guild.channels.cache.get(sunucuAyari.logKanalId) || 
-                            message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
-            
-            if (logKanali) {
-                const embed = new EmbedBuilder()
-                    .setColor('#ff3333')
-                    .setTitle('🤬 Küfür Filtresi Yakaladı')
-                    .addFields(
-                        { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-                        { name: 'Kanal:', value: `${message.channel}`, inline: true },
-                        { name: 'Engellenen Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
-                    )
-                    .setTimestamp()
-                    .setFooter({ text: 'TSA Otomatik Küfür Filtre Sistemi' });
-
-                await logKanali.send({ embeds: [embed] }).catch(() => {});
-            }
-        } catch (err) {
-            console.error('Küfür temizleme motorunda hata:', err);
-        }
-    }
-});
-
-// Slash komut dosyasının RAM belleğe erişebilmesi için dışa aktarıyoruz
 client.sistemBellegi = sistemBellegi;
 
 // =========================================================================
 // 🔥 DIŞ DOSYA BAĞLANTILARI
 // =========================================================================
 require('./events/gelismislog')(client);
+require('./events/kufurengel')(client);  // ← Gelişmiş küfür engel motoru v2
 
 client.login(process.env.TOKEN);
