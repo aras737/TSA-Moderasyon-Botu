@@ -100,7 +100,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 YEREL VERİTABANLI KÜFÜR ENGELLEME MOTORU (KOMUT ENTEGRELİ)
+// 🔥 GELİŞMİŞ TÜM MESAJLARI SANİYESİNDE TARAYAN KÜFÜR ENGELLEME MOTORU
 // =========================================================================
 const dbDosyaYolu = './kufur_ayarlar.json';
 function dbOku() {
@@ -118,20 +118,39 @@ client.on('messageCreate', async (message) => {
     // Sunucuda sistem kapalıysa veya pasifse geç
     if (!sunucuAyari || !sunucuAyari.durum) return; 
 
-    // Yetkilileri es geç
+    // Yetkilileri ve mesaj silme yetkisi olanları es geç
     if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
 
-    const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç'];
-    const temizMesaj = message.content.toLowerCase().replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
-    const kuralIhlali = kufurler.some(kufur => message.content.toLowerCase().includes(kufur) || temizMesaj.includes(kufur));
+    // Genişletilmiş ve optimize edilmiş küfür listesi
+    const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç', 'orospuçocuğu', 'oc'];
+    
+    // 1. ADIM: Tamamen küçük harfe çevir
+    const hamMesaj = message.content.toLowerCase();
+
+    // 2. ADIM: Nokta, sembol, emoji ve tüm boşlukları temizle (Her şeyi yapıştırır)
+    // Örn: "a.m.k" ya da "a m k" yazılırsa direkt "amk" olur.
+    const birlesikMesaj = hamMesaj.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
+
+    // 3. ADIM: Yan yana uzatılan harfleri teke indir (Harf uzatma hilesini bozar)
+    // Örn: "amkkkkkk" veya "aaammmkkk" yazılırsa "amk" olur.
+    const temizMesaj = birlesikMesaj.replace(/(.)\1+/g, '$1');
+
+    // TARAMA MOTORU: Mesajın her varyasyonunu kelime kelime değil, saniyede baştan sona tarar
+    const kuralIhlali = kufurler.some(kufur => 
+        hamMesaj.includes(kufur) || 
+        birlesikMesaj.includes(kufur) || 
+        temizMesaj.includes(kufur)
+    );
 
     if (kuralIhlali) {
         try {
+            // Mesajı saniyesinde yok et
             await message.delete();
-            const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür engelleme sistemi aktiftir!**`);
+            
+            const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda kelimelerine dikkat etmelisin! Küfür filtresi aktiftir.**`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
 
-            // Komutla ayarlanan özel log kanalını bul, yoksa otomatik isim taraması yap
+            // Komutla ayarlanan log kanalını kontrol et, yoksa sunucuda otomatik isim taraması yap
             let logKanali = message.guild.channels.cache.get(sunucuAyari.logKanalId) || 
                             message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
             
@@ -142,13 +161,13 @@ client.on('messageCreate', async (message) => {
                     .addFields(
                         { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
                         { name: 'Kanal:', value: `${message.channel}`, inline: true },
-                        { name: 'Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
+                        { name: 'Yazılan Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
                     )
                     .setTimestamp();
                 await logKanali.send({ embeds: [embed] }).catch(() => {});
             }
         } catch (err) {
-            console.error('Küfür silme hatası:', err);
+            console.error('Küfür silme işleminde hata oluştu:', err);
         }
     }
 });
