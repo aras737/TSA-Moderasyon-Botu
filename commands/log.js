@@ -35,8 +35,8 @@ module.exports = {
             fs.writeFileSync('./ayarlar/gelismisLog.json', JSON.stringify(logAyari, null, 4));
 
             const embed = new EmbedBuilder()
-                .setTitle('⚙️ TSA | Log Sistemi Aktif!')
-                .setDescription(`✅ Harika! Sunucudaki tüm mesaj, rol, kanal, ses ve ban hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
+                .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
+                .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses ve ban hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
                 .setColor('#2ecc71')
                 .setTimestamp();
 
