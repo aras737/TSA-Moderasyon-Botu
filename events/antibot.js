@@ -1,140 +1,157 @@
 const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { ayarGetir } = require('../utils/db');
+const { ayarGetir, ayarKaydet } = require('../utils/db');
 
 module.exports = (client) => {
 
     client.on('guildMemberAdd', async (member) => {
-        // Eğer katılan üye bir kullanıcıysa sistemi çalıştırma, sadece botları denetle
+        // Gelen üye bot değilse işlem yapma kanka
         if (!member.user.bot) return;
 
         const guild = member.guild;
         const owner = await guild.fetchOwner();
 
+        // 🛡️ Veritabanından güvenli (izin verilmiş) botlar listesini çek kanka
+        let guvenliBotlar = ayarGetir(guild.id, 'guvenliBotlar', []);
+        if (guvenliBotlar.includes(member.user.id)) return; // Eğer bot daha önce onaylandıysa engelleme yapma
+
         // ⏱️ Denetim kaydından bu botu kimin davet ettiğini buluyoruz
         const logs = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.BotAdd }).catch(() => null);
         const entry = logs?.entries.first();
-        const davet Eden = entry?.executor;
+        const davetEden = entry?.executor;
 
-        // Eğer botu direkt sunucu sahibi davet ettiyse, kontrol etmeye gerek yok kanka
+        // Botu direkt sunucu sahibi eklediyse muaf tut kanka
         if (davetEden && davetEden.id === guild.ownerId) return;
 
         try {
-            // 🚨 GÜVENLİK ÖNLEMİ 1: Botu tehlike geçene kadar ANINDA sunucudan tekmeliyoruz!
-            await member.kick('🚨 TSA Anti-Bot: Sunucu sahibi onayı bekleniyor.');
+            // 🚨 ADIM 1: Yabancı botu tehlike yaratmaması için ANINDA sunucudan tekmeliyoruz
+            await member.kick('🚨 TSA Anti-Bot: Sunucu sahibi DM onayı bekleniyor.');
 
-            // 📩 SUNUCU SAHİBİNİN DM KUTUSUNA GİDECEK EMBED TASARIMI
+            // 📝 ADIM 2: Gelişmiş Log kanalına ihbarı fırlatıyoruz
+            const logKanalId = ayarGetir(guild.id, 'logKanal', null);
+            const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+            
+            if (logChan) {
+                const kanalLogEmbed = new EmbedBuilder()
+                    .setTitle('🤖 ŞÜPHELİ BOT SIZMA GİRİŞİMİ!')
+                    .setDescription(`Sunucuya izinsiz bir bot eklenmeye çalışıldı kanka. Bot güvenlik amacıyla anında dışarı atıldı ve karar verilmesi için sunucu sahibinin DM kutusuna gönderildi.`)
+                    .addFields(
+                        { name: '🤖 Atılan Bot', value: `**${member.user.tag}**\n\`ID: ${member.user.id}\``, inline: true },
+                        { name: '👤 Davet Eden Yetkili', value: `${davetEden ? davetEden : 'Bilinmiyor'}\n\`ID: ${davetEden ? davetEden.id : '---'}\``, inline: true }
+                    )
+                    .setColor('#e67e22')
+                    .setTimestamp();
+                logChan.send({ embeds: [kanalLogEmbed] }).catch(() => {});
+            }
+
+            // 📩 ADIM 3: Sunucu sahibine DM'den "Kalsın mı, Gitsin mi?" Sorgusu Gönderiyoruz
             const dmEmbed = new EmbedBuilder()
-                .setTitle('🚨 SUNUCUYA YABANCI BOT EKLEME GİRİŞİMİ!')
+                .setTitle('🛡️ TSA Otomatik Moderasyon: Bot Karar Merkezi')
                 .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
-                .setDescription(`Sunucunuza bir yetkili tarafından yabancı bir bot eklenmeye çalışıldı. İstismar (Abuse) ihtimaline karşı bot anında sunucudan uzaklaştırıldı ve onayınıza sunuldu kanka.`)
+                .setDescription(`⚠️ Sunucunuzda yetkili bir hesap tarafından bot eklendi. Sistem botu geçici olarak dışarı attı.\n\n**Bu bot sunucuda kalsın mı, yoksa kalıcı olarak gitsin mi kanka?**`)
                 .addFields(
-                    { name: '🤖 Eklenmek İsteyen Bot', value: `${member.user.tag}\n\`ID: ${member.user.id}\``, inline: true },
-                    { name: '👤 Davet Eden Yetkili', value: `${davetEden ? davetEden : 'Bilinmiyor'}\n\`ID: ${davetEden ? davetEden.id : '---'}\``, inline: true },
-                    { name: '🛡️ Güvenlik Durumu', value: '⚠️ Bot şu an sunucudan atıldı. Aşağıdaki butonlardan kalıcı karar verebilirsin.' }
+                    { name: '🤖 Eklenmek İstenen Bot', value: `${member.user.tag}\n\`ID: ${member.user.id}\``, inline: true },
+                    { name: '👤 Ekleyen Yetkili', value: `${davetEden ? davetEden : 'Bilinmiyor'}\n\`ID: ${davetEden ? davetEden.id : '---'}\``, inline: true }
                 )
                 .setColor('#f1c40f')
-                .setFooter({ text: 'TSA İstismar Önleme Sistemi', iconURL: client.user.displayAvatarURL() })
+                .setFooter({ text: 'Seçimini aşağıdaki butonlarla yap kanka.', iconURL: client.user.displayAvatarURL() })
                 .setTimestamp();
 
-            // Onay ve İptal Butonları
+            // Karar Butonları
             const butonlar = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`bot_onay_${member.user.id}_${davetEden?.id}`)
-                    .setLabel('✅ Botu Onayla (İçeri Al)')
+                    .setCustomId(`antibot_kalsin_${member.user.id}_${guild.id}`)
+                    .setLabel('✅ Kalsın (Onayla)')
                     .setStyle(ButtonStyle.Success),
                 new ButtonBuilder()
-                    .setCustomId(`bot_red_${member.user.id}_${davetEden?.id}`)
-                    .setLabel('❌ Reddet & Yetkiyi Al')
+                    .setCustomId(`antibot_gitsin_${member.user.id}_${guild.id}_${davetEden?.id}`)
+                    .setLabel('❌ Gitsin (Reddet & Yetki Al)')
                     .setStyle(ButtonStyle.Danger)
             );
 
-            // Sunucu sahibine DM fırlatıyoruz
-            const dmMesaj = await owner.send({ embeds: [dmEmbed], components: [butonlar] }).catch(() => null);
-
-            // Eğer sahibinin DM'si kapalıysa log kanalına acil durum mesajı at kanka
-            if (!dmMesaj) {
-                const logKanalId = ayarGetir(guild.id, 'logKanal', null);
-                const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+            await owner.send({ embeds: [dmEmbed], components: [butonlar] }).catch(() => {
+                // Sahibinin DM kapalıysa kanala acil uyarı geç kanka
                 if (logChan) {
-                    logChan.send(`⚠️ @everyone **KUSURAT!** Sunucu sahibinin DM kutusu kapalı olduğu için Anti-Bot onay mesajı gönderilemedi! Bot güvenlik amacıyla dışarıda tutuluyor.`);
+                    logChan.send(`⚠️ @everyone **KUSURAT!** Sunucu sahibinin DM kutusu kapalı olduğu için bot onay paneli gönderilemedi! Bot güvenlik sebebiyle sunucuya alınmıyor.`);
                 }
-            }
+            });
 
         } catch (err) {
-            console.error('Anti-bot hatası:', err);
+            console.error('Anti-bot koruma motoru hatası:', err);
         }
     });
 
     // =========================================================================
-    // 🎛️ BUTON ETKİLEŞİM MERKEZİ (ONAY / RED İŞLEMLERİ)
+    // 🎛️ DM BUTON ETKİLEŞİM YÖNETİMİ
     // =========================================================================
     client.on('interactionCreate', async (interaction) => {
         if (!interaction.isButton()) return;
 
-        const [islem, tip, botId, yetkiliId] = interaction.customId.split('_');
-        if (islem !== 'bot' || !botId) return;
+        const parcalar = interaction.customId.split('_');
+        if (parcalar[0] !== 'antibot') return;
 
-        // Sadece sunucu sahibi butonlara basabilir, başkası basarsa hata ver
-        const guildId = interaction.message.author.id; // DM olduğu için guild'i botların ortak olduğu yerden bulacağız
-        // Güvenlik için işlemi yapan kişinin sunucu sahipliğini doğrula
+        const [, karar, botId, guildId, yetkiliId] = parcalar;
         await interaction.deferUpdate();
 
-        if (tip === 'onay') {
-            // Siteden veya Discord'dan bota onay verildiğinde sahibine bilgi ver
-            const basariliEmbed = new EmbedBuilder()
-                .setTitle('✅ Bot Onaylandı!')
-                .setDescription(`\`${botId}\` ID'li botun sunucuya girmesine izin verdin kanka. Artık yetkililer botu tekrar davet ettiğinde sistem onu atmayacak.`)
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return;
+
+        // 🟢 SEÇENEK 1: KALSIN (ONAY)
+        if (karar === 'kalsin') {
+            // Botu güvenli listeye (data) ekle kanka
+            let guvenliBotlar = ayarGetir(guildId, 'guvenliBotlar', []);
+            if (!guvenliBotlar.includes(botId)) {
+                guvenliBotlar.push(botId);
+                ayarKaydet(guildId, 'guvenliBotlar', guvenliBotlar);
+            }
+
+            const onayEmbed = new EmbedBuilder()
+                .setTitle('✅ Bot Onaylandı kanka!')
+                .setDescription(`\`${botId}\` ID'li bot güvenli listeye eklendi. Yetkililer botu tekrar davet ettiğinde artık otomatik olarak atılmayacak.`)
                 .setColor('#2ecc71')
                 .setTimestamp();
 
-            // Onaylanan bot bilgisini merkezi veritabanına "Güvenli Botlar" listesi olarak ekle kanka
-            // Not: Davet linki sunucu sahibine DM üzerinden hatırlatılabilir.
-            await interaction.editReply({ embeds: [basariliEmbed], components: [] });
-            
-            // Buraya ileride istersen otomatik davet linki oluşturucu koyabilirsin kanka.
+            await interaction.editReply({ embeds: [onayEmbed], components: [] });
+
+            // Log kanalına bilgi ver
+            const logKanalId = ayarGetir(guildId, 'logKanal', null);
+            const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+            if (logChan) {
+                logChan.send(`✅ Sunucu sahibi DM üzerinden onay verdi: \`${botId}\` ID'li botun sunucuya katılmasına izin verildi.`);
+            }
         } 
         
-        else if (tip === 'red') {
-            // REDDEDİLİRSE: Davet eden hainin tüm yetkilerini alıyoruz!
-            const sunucular = client.guilds.cache;
+        // 🔴 SEÇENEK 2: GİTSİN (REDDET & ABUSE ENGELLE)
+        else if (karar === 'gitsin') {
+            const yetkiliUye = await guild.members.fetch(yetkiliId).catch(() => null);
             
-            for (const [id, guild] of sunucular) {
-                const owner = await guild.fetchOwner();
-                if (owner.id !== interaction.user.id) continue; // Sadece o sahibin sunucusunda işlem yap
-
-                const yetkiliUye = await guild.members.fetch(yetkiliId).catch(() => null);
-                
-                if (yetkiliUye) {
-                    try {
-                        // ✂️ Yetkilinin tüm rollerini siliyoruz (Abuse önleme)
-                        const alinmayacakRoller = guild.roles.everyone;
-                        await yetkiliUye.roles.set([], '🚨 Anti-Bot: İzinsiz bot ekleyerek sunucuyu riske atmak!');
-                        
-                        // Log kanalına bombayı bırak kanka
-                        const logKanalId = ayarGetir(guild.id, 'logKanal', null);
-                        const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
-                        
-                        if (logChan) {
-                            const logEmbed = new EmbedBuilder()
-                                .setTitle('🚨 SQUASHED: ABUSER YETKİLİ ENGELLENDİ!')
-                                .setDescription(`👤 **İşlemi Yapan Yetkili:** ${yetkiliUye} (\`${yetkiliUye.id}\`)\n🤖 **Eklemeye Çalıştığı Bot:** \`${botId}\`\n\n❌ Sunucu sahibi daveti **REDDETTİ** ve güvenlik gereği yetkilinin **TÜM ROLLERİ ALINDI!**`)
-                                .setColor('#960018')
-                                .setTimestamp();
-                            logChan.send({ embeds: [logEmbed] });
-                        }
-                    } catch (e) {
-                        console.error('Yetki alma hatası:', e);
-                    }
+            if (yetkiliUye) {
+                try {
+                    // Yetkilinin tüm rollerini sıfırlıyoruz kanka (Abuse önleme duvarı)
+                    await yetkiliUye.roles.set([], '🚨 Anti-Bot: Sunucu sahibinin reddettiği botu izinsiz eklemek.');
+                } catch (e) {
+                    console.error('Yetkili rolleri sökülürken hata çıktı:', e);
                 }
             }
 
-            const reddedildiEmbed = new EmbedBuilder()
-                .setTitle('❌ Giriş Reddedildi & Yetki Sıfırlandı!')
-                .setDescription(`İstisari bot daveti başarıyla engellendi kanka. Botu davet eden \`${yetkiliId}\` ID'li yetkilinin sunucudaki tüm rolleri güvenlik amacıyla söküldü!`)
-                .setColor('#e74c3c')
+            const redEmbed = new EmbedBuilder()
+                .setTitle('❌ İstek Reddedildi & Güvenlik Sağlandı!')
+                .setDescription(`Botun girişi kalıcı olarak engellendi kanka. Botu sunucuya sızdırmaya çalışan \`${yetkiliId}\` ID'li yetkilinin tüm rolleri istismar (abuse) ihtimaline karşı söküldü!`)
+                .setColor('#da373c')
                 .setTimestamp();
 
-            await interaction.editReply({ embeds: [reddedildiEmbed], components: [] });
+            await interaction.editReply({ embeds: [redEmbed], components: [] });
+
+            // Log kanalına haini ifşalıyoruz kanka
+            const logKanalId = ayarGetir(guildId, 'logKanal', null);
+            const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+            if (logChan) {
+                const ifsaEmbed = new EmbedBuilder()
+                    .setTitle('🚨 RECON: İZİNSİZ BOT DAVETİ REDDEDİLDİ!')
+                    .setDescription(`👤 **Davet Eden Hain:** ${yetkiliUye ? yetkiliUye : `\`ID: ${yetkiliId}\``}\n🤖 **Eklemek İstediği Bot:** \`${botId}\`\n\n❌ Sunucu sahibi DM üzerinden **REDDİ** bastı! Sızmaya çalışan bot engellendi ve davet eden yetkilinin tüm rolleri sıfırlandı.`)
+                    .setColor('#960018')
+                    .setTimestamp();
+                logChan.send({ embeds: [ifsaEmbed] }).catch(() => {});
+            }
         }
     });
 };
