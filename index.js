@@ -100,7 +100,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 YEREL VERİTABANLI KÜFÜR ENGELLEME MOTORU (EKSTRA PAKET GEREKTİRMEZ)
+// 🔥 YEREL VERİTABANLI KÜFÜR ENGELLEME MOTORU (KOMUT ENTEGRELİ)
 // =========================================================================
 const dbDosyaYolu = './kufur_ayarlar.json';
 function dbOku() {
@@ -113,12 +113,15 @@ client.on('messageCreate', async (message) => {
 
     // Ayarları dosyadan oku
     const ayarlar = dbOku();
-    if (!ayarlar[message.guild.id]) return; // Sunucuda sistem kapalıysa geç
+    const sunucuAyari = ayarlar[message.guild.id];
+    
+    // Sunucuda sistem kapalıysa veya pasifse geç
+    if (!sunucuAyari || !sunucuAyari.durum) return; 
 
     // Yetkilileri es geç
     if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
 
-    const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir'];
+    const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç'];
     const temizMesaj = message.content.toLowerCase().replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
     const kuralIhlali = kufurler.some(kufur => message.content.toLowerCase().includes(kufur) || temizMesaj.includes(kufur));
 
@@ -128,8 +131,10 @@ client.on('messageCreate', async (message) => {
             const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür engelleme sistemi aktiftir!**`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
 
-            // Eğer sunucuda log kanalı otomatik taranacaksa (isime göre otomatik bulma):
-            let logKanali = message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
+            // Komutla ayarlanan özel log kanalını bul, yoksa otomatik isim taraması yap
+            let logKanali = message.guild.channels.cache.get(sunucuAyari.logKanalId) || 
+                            message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
+            
             if (logKanali) {
                 const embed = new EmbedBuilder()
                     .setColor('#ff3333')
@@ -140,7 +145,7 @@ client.on('messageCreate', async (message) => {
                         { name: 'Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
                     )
                     .setTimestamp();
-                await logKanali.send({ embeds: [embed] });
+                await logKanali.send({ embeds: [embed] }).catch(() => {});
             }
         } catch (err) {
             console.error('Küfür silme hatası:', err);
