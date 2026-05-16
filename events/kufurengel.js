@@ -5,70 +5,120 @@ const path = require('path');
 const LOG_YOLU = path.join(__dirname, '../ayarlar/gelismisLog.json');
 
 module.exports = (client) => {
-    // Yardımcı Fonksiyon: Gelişmiş Log kanalını çekme
+
+    // Log Kanalı Çek
     const logKanalGetir = (guildId) => {
         if (!fs.existsSync(LOG_YOLU)) return null;
-        const ayarlar = JSON.parse(fs.readFileSync(LOG_YOLU, 'utf8'));
-        return ayarlar[guildId] ? client.channels.cache.get(ayarlar[guildId]) : null;
+
+        try {
+            const ayarlar = JSON.parse(fs.readFileSync(LOG_YOLU, 'utf8'));
+            return ayarlar[guildId]
+                ? client.channels.cache.get(ayarlar[guildId])
+                : null;
+        } catch (err) {
+            console.error('Log JSON okunamadı:', err);
+            return null;
+        }
     };
 
-    // Genişletilebilir Küfür Listesi kanka, istediğini ekle/çıkar
-    const kufurler = ['amk', 'aq', 'piç', 'orospu', 'sik', 'yarrak', 'pezevenk', 'göt', 'sktir'];
-    // Profesyonel Link/Reklam yakalama regex'i
-    const linkRegex = /(https?:\/\/[^\s]+)/g;
+    // Küfür Listesi
+    const kufurler = [
+        'amk',
+        'aq',
+        'piç',
+        'orospu',
+        'sik',
+        'yarrak',
+        'pezevenk',
+        'göt',
+        'sktir'
+    ];
+
+    // Link Regex
+    const linkRegex = /(https?:\/\/[^\s]+|discord\.gg\/[^\s]+)/i;
 
     client.on('messageCreate', async (message) => {
-        // Mesajı atan botsa veya sunucu dışı (DM) ise es geç
+
+        // Bot veya DM
         if (message.author.bot || !message.guild) return;
 
-        // Yönetici yetkisi olanları engellemesin, adminler rahat takılsın
-        if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return;
+        // Admin bypass
+        if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+
+        // Botun yetkisi var mı?
+        if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ManageMessages)) return;
 
         const icerik = message.content.toLowerCase();
-        let tetiklendi = false;
-        let sebep = '';
 
-        // 1. Küfür Kontrolü
-        if (kufurler.some(kufur => icerik.includes(kufur))) {
-            tetiklendi = true;
-            sebep = 'Küfürlü İçerik';
+        let sebepler = [];
+
+        // Küfür kontrolü
+        const kufurBulundu = kufurler.some(kelime => {
+            const regex = new RegExp(`\\b${kelime}\\b`, 'i');
+            return regex.test(icerik);
+        });
+
+        if (kufurBulundu) {
+            sebepler.push('Küfürlü İçerik');
         }
 
-        // 2. Link/Reklam Kontrolü
+        // Link kontrolü
         if (linkRegex.test(message.content)) {
-            tetiklendi = true;
-            sebep = 'Link / Reklam Paylaşımı';
+            sebepler.push('Link / Reklam');
         }
 
-        // Eğer filtreye takıldıysa operasyon başlasın:
-        if (tetiklendi) {
-            try {
-                // Mesajı saniyesinde haritadan siliyoruz
-                await message.delete();
+        // Hiçbir şey yoksa çık
+        if (sebepler.length === 0) return;
 
-                // Kullanıcıya şık bir uyarı mesajı gönderip 5 saniye sonra uyarısını siliyoruz kanka (sohbet kirletmesin)
-                const uyariMsg = await message.channel.send(`<a:uyari:1505166167189487757> ${message.author}, bu sunucuda **${sebep}** kullanımı yasaktır kanka!`);
-                setTimeout(() => uyariMsg.delete().catch(() => {}), 5000);
+        try {
 
-                // Gelişmiş Log kanalına raporu uçuruyoruz
-                const logChan = logKanalGetir(message.guild.id);
-                if (logChan) {
-                    const embed = new EmbedBuilder()
-                        .setTitle('<:koruma1:1505143174190989352> Sohbet Koruması: Mesaj Engellendi!')
-                        .addFields(
-                            { name: 'Söyleyen Üye', value: `${message.author} \`(${message.author.id})\``, inline: true },
-                            { name: 'Yazıldığı Kanal', value: `${message.channel}`, inline: true },
-                            { name: 'Engellenme Nedeni', value: `\`${sebep}\`` },
-                            { name: 'Silinen İçerik', value: `\`\`\`${message.content}\`\`\`` }
-                        )
-                        .setColor('#e74c3c')
-                        .setTimestamp();
-                    
-                    logChan.send({ embeds: [embed] }).catch(() => {});
-                }
-            } catch (err) {
-                console.error('Küfür/Link engelleme ve silme hatası:', err);
+            // Mesajı sil
+            await message.delete().catch(() => {});
+
+            // Uyarı mesajı
+            const uyari = await message.channel.send({
+                content: `⚠️ ${message.author}, bu sunucuda \`${sebepler.join(', ')}\` yasak oğlum.`
+            });
+
+            setTimeout(() => {
+                uyari.delete().catch(() => {});
+            }, 5000);
+
+            // Log kanalı
+            const logChan = logKanalGetir(message.guild.id);
+
+            if (logChan) {
+
+                const embed = new EmbedBuilder()
+                    .setTitle('🛡️ Sohbet Koruması')
+                    .setColor('#ff0000')
+                    .addFields(
+                        {
+                            name: 'Kullanıcı',
+                            value: `${message.author} (${message.author.id})`,
+                            inline: true
+                        },
+                        {
+                            name: 'Kanal',
+                            value: `${message.channel}`,
+                            inline: true
+                        },
+                        {
+                            name: 'Sebep',
+                            value: sebepler.join(', ')
+                        },
+                        {
+                            name: 'Mesaj',
+                            value: `\`\`\`${message.content.slice(0, 1000)}\`\`\``
+                        }
+                    )
+                    .setTimestamp();
+
+                await logChan.send({ embeds: [embed] }).catch(() => {});
             }
+
+        } catch (err) {
+            console.error('Koruma sistemi hatası:', err);
         }
     });
 };
