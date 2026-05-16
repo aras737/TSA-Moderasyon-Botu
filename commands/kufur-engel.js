@@ -1,11 +1,18 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const fs = require('node:fs');
 
-// Basit bir geçici veritabanı (Sunucu kapatılıp açılırsa sıfırlanır)
-// Kalıcı olmasını isterseniz quick.db veya mongoose gibi bir DB entegre edebilirsiniz.
-const kufurSistemiDB = new Map();
+const dbDosyaYolu = './kufur_ayarlar.json';
 
-// Engellenecek küfürlerin listesi (Buraya istediğiniz kelimeleri ekleyebilirsiniz)
-const yasakliKelimeler = ["küfür1", "küfür2", "piç", "orospu", "sik", "amk", "pç"];
+// Veritabanı okuma fonksiyonu
+function dbOku() {
+    if (!fs.existsSync(dbDosyaYolu)) fs.writeFileSync(dbDosyaYolu, JSON.stringify({}));
+    return JSON.parse(fs.readFileSync(dbDosyaYolu, 'utf-8'));
+}
+
+// Veritabanı yazma fonksiyonu
+function dbYaz(veri) {
+    fs.writeFileSync(dbDosyaYolu, JSON.stringify(veri, null, 2));
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -31,19 +38,21 @@ module.exports = {
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
+        const ayarlar = dbOku();
 
         if (subcommand === 'ayarla') {
             const logKanal = interaction.options.getChannel('kanal');
 
-            // Ayarları veritabanına kaydet
-            kufurSistemiDB.set(guildId, {
+            // Ayarları JSON dosyasına kaydet
+            ayarlar[guildId] = {
                 durum: true,
                 logKanalId: logKanal.id
-            });
+            };
+            dbYaz(ayarlar);
 
             const embed = new EmbedBuilder()
-                .setTitle('✅ Sistem Aktif Edildi')
-                .setDescription(`Küfür engel sistemi başarıyla açıldı.\n**Log Kanalı:** ${logKanal}`)
+                .setTitle('✅ Küfür Engelleme Aktif')
+                .setDescription(`Sistem başarıyla açıldı.\n**Log Kanalı:** ${logKanal}`)
                 .setColor('Green')
                 .setTimestamp();
 
@@ -51,62 +60,18 @@ module.exports = {
         }
 
         if (subcommand === 'kapat') {
-            kufurSistemiDB.delete(guildId);
+            if (ayarlar[guildId]) {
+                delete ayarlar[guildId];
+                dbYaz(ayarlar);
+            }
 
             const embed = new EmbedBuilder()
-                .setTitle('❌ Sistem Kapatıldı')
-                .setDescription('Küfür engel sistemi bu sunucuda devre dışı bırakıldı.')
+                .setTitle('❌ Küfür Engelleme Kapatıldı')
+                .setDescription('Küfür engel sistemi bu sunucuda tamamen devre dışı bırakıldı.')
                 .setColor('Red')
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed] });
-        }
-    },
-
-    // --- HER ŞEY İÇİNDE OLSUN DEDİĞİNİZ İÇİN OLAY DİNLEYİCİSİ (MESSAGE CREATE) BURADA ---
-    // Bu fonksiyonu index.js dosyanızdaki client.on('messageCreate') kısmına bağlamanız gerekir.
-    // Eğer index.js içinde otomatik bir event handler'ınız varsa, bu fonksiyonu oradan çağırabilirsiniz.
-    async handleMessage(message) {
-        if (!message.guild || message.author.bot) return;
-
-        const sunucuAyari = kufurSistemiDB.get(message.guild.id);
-        if (!sunucuAyari || !sunucuAyari.durum) return; // Sistem kapalıysa işlem yapma
-
-        // Mesajı küçük harfe çevirip kelimeleri kontrol etme
-        const mesajIcerik = message.content.toLowerCase();
-        const kufurVarMi = yasakliKelimeler.some(kufur => mesajIcerik.includes(kufur));
-
-        if (kufurVarMi) {
-            // Yetkilileri es geçmek isterseniz (Yönetici yetkisi olanlar küfür edebilsin diye):
-            if (message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
-
-            // 1. Mesajı Sil
-            try {
-                await message.delete();
-            } catch (err) {
-                console.log("Mesaj silme yetkim yok veya mesaj zaten silinmiş.");
-            }
-
-            // 2. Kullanıcıyı Uyar (Kanala geçici mesaj)
-            const uyariMesaji = await message.channel.send(`⚠️ ${message.author}, lütfen kelimelerine dikkat et! Bu sunucuda küfür etmek yasaktır.`);
-            setTimeout(() => uyariMesaji.delete().catch(() => {}), 5000); // 5 saniye sonra uyarıyı sil
-
-            // 3. Log Kanalına Bildir
-            const logKanal = message.guild.channels.cache.get(sunucuAyari.logKanalId);
-            if (logKanal) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('🤬 Küfür Yakalandı!')
-                    .setColor('Orange')
-                    .addFields(
-                        { name: 'Kullanıcı', value: `${message.author} (${message.author.id})`, inline: true },
-                        { name: 'Kanal', value: `${message.channel}`, inline: true },
-                        { name: 'Silinen Mesaj', value: `\`\`\`${message.content}\`\`\`` }
-                    )
-                    .setTimestamp()
-                    .setFooter({ text: 'TSA Moderasyon Küfür Engel Sistemi' });
-
-                logKanal.send({ embeds: [logEmbed] }).catch(err => console.log("Log kanalına mesaj atılamadı: " + err));
-            }
         }
     }
 };
