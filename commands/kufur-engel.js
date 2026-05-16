@@ -1,9 +1,39 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+    SlashCommandBuilder,
+    PermissionFlagsBits
+} = require('discord.js');
+
+const fs = require('fs');
+const path = require('path');
+
+const AYAR_DOSYA = path.join(__dirname, '../ayarlar/kufurEngel.json');
+
+// DOSYA YOKSA OLUŞTUR
+if (!fs.existsSync(AYAR_DOSYA)) {
+    fs.writeFileSync(AYAR_DOSYA, JSON.stringify({}));
+}
+
+// KÜFÜR LİSTESİ
+const kufurler = [
+    'amk',
+    'aq',
+    'orospu',
+    'piç',
+    'sik',
+    'yarrak',
+    'göt',
+    'ananı',
+    'amına',
+    'ibne',
+    'salak',
+    'gerizekalı'
+];
 
 module.exports = {
+
     data: new SlashCommandBuilder()
         .setName('küfürengel')
-        .setDescription('Küfür engelleme sistemini açar veya kapatır.')
+        .setDescription('Küfür engel sistemini açar veya kapatır.')
         .addStringOption(option =>
             option
                 .setName('durum')
@@ -14,83 +44,103 @@ module.exports = {
                     { name: 'Kapat', value: 'kapat' }
                 )
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDefaultMemberPermissions(
+            PermissionFlagsBits.Administrator
+        ),
 
     async execute(interaction, client) {
 
-        // Küfür listesi
-        const kufurler = [
-            "amk",
-            "aq",
-            "orospu",
-            "piç",
-            "sik",
-            "yarrak",
-            "göt",
-            "ananı",
-            "amına",
-            "ibne",
-            "salak",
-            "gerizekalı"
-        ];
+        let data = JSON.parse(
+            fs.readFileSync(AYAR_DOSYA)
+        );
 
-        // Sistem durumu
-        if (!client.kufurEngel) client.kufurEngel = new Map();
+        const durum =
+            interaction.options.getString('durum');
 
-        const durum = interaction.options.getString('durum');
-
+        // AÇ
         if (durum === 'ac') {
-            client.kufurEngel.set(interaction.guild.id, true);
 
-            await interaction.reply({
-                content: '<a:tik:1505164671081123840> Küfür engelleme sistemi açıldı.',
+            data[interaction.guild.id] = true;
+
+            fs.writeFileSync(
+                AYAR_DOSYA,
+                JSON.stringify(data, null, 2)
+            );
+
+            return interaction.reply({
+                content: '✅ Küfür engeli açıldı.',
                 ephemeral: true
             });
         }
 
+        // KAPAT
         if (durum === 'kapat') {
-            client.kufurEngel.set(interaction.guild.id, false);
 
-            await interaction.reply({
-                content: '<a:baarsz:1505146967817326675> Küfür engelleme sistemi kapatıldı.',
+            data[interaction.guild.id] = false;
+
+            fs.writeFileSync(
+                AYAR_DOSYA,
+                JSON.stringify(data, null, 2)
+            );
+
+            return interaction.reply({
+                content: '❌ Küfür engeli kapatıldı.',
                 ephemeral: true
             });
         }
+    },
 
-        // Event sadece 1 kere çalışsın
-        if (client.kufurEventKurulu) return;
-        client.kufurEventKurulu = true;
+    // MESAJ EVENTİ
+    async messageCreate(message) {
 
-        client.on('messageCreate', async (message) => {
+        try {
 
             if (!message.guild) return;
             if (message.author.bot) return;
 
-            const aktifMi = client.kufurEngel.get(message.guild.id);
+            let data = JSON.parse(
+                fs.readFileSync(AYAR_DOSYA)
+            );
 
-            if (!aktifMi) return;
+            // SİSTEM KAPALIYSA DUR
+            if (!data[message.guild.id]) return;
 
-            // Admin bypass
-            if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+            // ADMİN BYPASS
+            if (
+                message.member.permissions.has(
+                    PermissionFlagsBits.Administrator
+                )
+            ) return;
 
-            const mesaj = message.content.toLowerCase();
+            const mesaj =
+                message.content.toLowerCase();
 
             const kufurVar = kufurler.some(kelime =>
                 mesaj.includes(kelime)
             );
 
+            // KÜFÜR VARSA
             if (kufurVar) {
 
                 await message.delete().catch(() => {});
 
-                const uyari = await message.channel.send({
-                    content: `<a:alarme:1505209430319300718> ${message.author}, küfür etmek yasak.`
-                });
+                const uyari =
+                    await message.channel.send({
+                        content:
+                            `🚫 ${message.author}, küfür yasak.`
+                    });
 
                 setTimeout(() => {
                     uyari.delete().catch(() => {});
                 }, 5000);
             }
-        });
+
+        } catch (err) {
+
+            console.error(
+                'Küfür engel sistemi hata:',
+                err
+            );
+        }
     }
 };
