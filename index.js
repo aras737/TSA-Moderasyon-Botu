@@ -100,34 +100,32 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🔥 ERENSI STİLİ GELİŞMİŞ KÜFÜR ENGELLEME MOTORU (TÜM KANALLAR İÇİN)
+// 🔥 MODERN V14 TÜM KANALLARI TARAYAN KÜFÜR ENGELLEME MOTORU (RAM TABANLI)
 // =========================================================================
-// Sistem ayarlarını RAM üzerinde tutuyoruz, ekstra dosya okuma yükü yapmaz ve saniyesinde yanıt verir.
 const sistemBellegi = new Map();
 
 client.on('messageCreate', async (message) => {
-    // Mesaj sunucudan gelmediyse veya bot attıysa direkt iptal et
     if (!message.guild || message.author.bot) return;
 
-    // Sunucuda sistemin açık olup olmadığını kontrol et
+    // RAM Bellekten sunucu kontrolü yap
     const sunucuAyari = sistemBellegi.get(message.guild.id);
     if (!sunucuAyari || !sunucuAyari.durum) return;
 
-    // Sunucu sahiplerini, Adminleri ve Mesaj Silme yetkisi olan yetkilileri koru (Filtreye takılmazlar)
+    // Yönetici ve Mesajları Yönet yetkisi olan yetkilileri es geç
     if (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageMessages')) return;
 
-    // Geniş filtre listesi
+    // Gelişmiş küfür ve argo kelime listesi
     const kufurler = ['amk', 'aq', 'orospu', 'piç', 'sik', 'yarrak', 'göt', 'amcık', 'meme', 'fuck', 'bitch', 'sktir', 'pç', 'orospuçocuğu', 'oc'];
     
     const hamMesaj = message.content.toLowerCase();
     
-    // Boşlukları ve özel karakterleri eritme aşaması (Örn: "a.m.k" -> "amk" olur)
+    // Boşlukları, noktaları ve özel karakterleri eritir (Örn: "a.m.k" veya "a m k" -> "amk")
     const birlesikMesaj = hamMesaj.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ]/g, '');
 
-    // Harf uzatmalarını teke düşürme aşaması (Örn: "amkkkkkk" -> "amk" olur)
+    // Harf uzatmalarını teke indirir (Örn: "amkkkkkk" -> "amk")
     const temizMesaj = birlesikMesaj.replace(/(.)\1+/g, '$1');
 
-    // Bütün varyasyonlarda küfür taraması yapılıyor
+    // Saniyede filtre kontrolü
     const kufurYakalandi = kufurler.some(kufur => 
         hamMesaj.includes(kufur) || 
         birlesikMesaj.includes(kufur) || 
@@ -136,14 +134,14 @@ client.on('messageCreate', async (message) => {
 
     if (kufurYakalandi) {
         try {
-            // 1. Saniyede mesajı ortadan kaldır
+            // 1. Mesajı saniyesinde siler
             await message.delete();
             
-            // 2. Kanala küfür yasak uyarısı geç
+            // 2. Kanala uyarı mesajı gönderir
             const uyari = await message.channel.send(`⚠️ ${message.author}, **Bu sunucuda küfür etmek yasaktır! Filtre saniyede yakalar.**`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
 
-            // 3. Erensi stili log sistemine gönder
+            // 3. Log kanalına detaylı embed gönderir
             let logKanali = message.guild.channels.cache.get(sunucuAyari.logKanalId) || 
                             message.guild.channels.cache.find(c => c.name.includes('mod-log') || c.name.includes('bot-log') || c.name.includes('log'));
             
@@ -154,10 +152,10 @@ client.on('messageCreate', async (message) => {
                     .addFields(
                         { name: 'Kullanıcı:', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
                         { name: 'Kanal:', value: `${message.channel}`, inline: true },
-                        { name: 'Engellenen İçerik:', value: `\`\`\`${message.content}\`\`\`` }
+                        { name: 'Engellenen Mesaj:', value: `\`\`\`${message.content}\`\`\`` }
                     )
                     .setTimestamp()
-                    .setFooter({ text: 'TSA Otomatik Koruma Sistemi' });
+                    .setFooter({ text: 'TSA Otomatik Küfür Filtre Sistemi' });
 
                 await logKanali.send({ embeds: [embed] }).catch(() => {});
             }
@@ -167,7 +165,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Komut dosyasının RAM belleğe erişebilmesi için export ediyoruz
+// Slash komut dosyasının RAM belleğe erişebilmesi için dışa aktarıyoruz
 client.sistemBellegi = sistemBellegi;
 
 // =========================================================================
