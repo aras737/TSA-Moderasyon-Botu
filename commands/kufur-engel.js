@@ -1,58 +1,36 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const fs = require('node:fs');
-
-const dbDosyaYolu = './kufur_ayarlar.json';
-
-// Veritabanı okuma fonksiyonu
-function dbOku() {
-    if (!fs.existsSync(dbDosyaYolu)) fs.writeFileSync(dbDosyaYolu, JSON.stringify({}));
-    return JSON.parse(fs.readFileSync(dbDosyaYolu, 'utf-8'));
-}
-
-// Veritabanı yazma fonksiyonu
-function dbYaz(veri) {
-    fs.writeFileSync(dbDosyaYolu, JSON.stringify(veri, null, 2));
-}
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('küfür-engel')
-        .setDescription('Küfür engelleyici sistemini yönetir.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // Sadece sunucuyu yönet yetkisi olanlar
+        .setDescription('Erensi stili tüm kanalları tarayan küfür engel sistemini yönetir.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // Sadece sunucuyu yönet yetkisi olan adminler görebilir/kullanabilir
         .addSubcommand(subcommand =>
             subcommand
-                .setName('ayarla')
-                .setDescription('Küfür engel sistemini aktif eder ve log kanalını belirler.')
-                .addChannelOption(option => 
-                    option.setName('kanal')
-                        .setDescription('Küfür loglarının atılacağı kanal')
-                        .setRequired(true)
-                )
+                .setName('aç')
+                .setDescription('Küfür engel sistemini aktif eder (Komutu kullandığınız kanal log kanalı olur).')
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kapat')
-                .setDescription('Küfür engel sistemini devre dışı bırakır.')
+                .setDescription('Küfür engel sistemini kapatır.')
         ),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
-        const ayarlar = dbOku();
+        const client = interaction.client;
 
-        if (subcommand === 'ayarla') {
-            const logKanal = interaction.options.getChannel('kanal');
-
-            // Ayarları JSON dosyasına kaydet
-            ayarlar[guildId] = {
+        if (subcommand === 'aç') {
+            // Ayarı direkt index.js'deki canlı belleğe fırlatıyoruz
+            client.sistemBellegi.set(guildId, {
                 durum: true,
-                logKanalId: logKanal.id
-            };
-            dbYaz(ayarlar);
+                logKanalId: interaction.channel.id
+            });
 
             const embed = new EmbedBuilder()
-                .setTitle('✅ Küfür Engelleme Aktif')
-                .setDescription(`Sistem başarıyla açıldı.\n**Log Kanalı:** ${logKanal}`)
+                .setTitle('✅ Küfür Engel Sistemi Aktif')
+                .setDescription(`Sistem bu sunucudaki **bütün kanallar** için başarıyla açıldı!\n\n📢 **Log Kanalı:** ${interaction.channel}\n⚠️ *Yetkililer hariç herkes saniyede filtrelenir.*`)
                 .setColor('Green')
                 .setTimestamp();
 
@@ -60,14 +38,11 @@ module.exports = {
         }
 
         if (subcommand === 'kapat') {
-            if (ayarlar[guildId]) {
-                delete ayarlar[guildId];
-                dbYaz(ayarlar);
-            }
+            client.sistemBellegi.delete(guildId);
 
             const embed = new EmbedBuilder()
-                .setTitle('❌ Küfür Engelleme Kapatıldı')
-                .setDescription('Küfür engel sistemi bu sunucuda tamamen devre dışı bırakıldı.')
+                .setTitle('❌ Küfür Engel Sistemi Kapatıldı')
+                .setDescription('Sistem devre dışı bırakıldı. Artık kanallar taranmayacak.')
                 .setColor('Red')
                 .setTimestamp();
 
