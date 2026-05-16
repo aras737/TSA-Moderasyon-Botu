@@ -1,146 +1,112 @@
-const {
-    SlashCommandBuilder,
-    PermissionFlagsBits
-} = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
-const fs = require('fs');
-const path = require('path');
+// Basit bir geçici veritabanı (Sunucu kapatılıp açılırsa sıfırlanır)
+// Kalıcı olmasını isterseniz quick.db veya mongoose gibi bir DB entegre edebilirsiniz.
+const kufurSistemiDB = new Map();
 
-const AYAR_DOSYA = path.join(__dirname, '../ayarlar/kufurEngel.json');
-
-// DOSYA YOKSA OLUŞTUR
-if (!fs.existsSync(AYAR_DOSYA)) {
-    fs.writeFileSync(AYAR_DOSYA, JSON.stringify({}));
-}
-
-// KÜFÜR LİSTESİ
-const kufurler = [
-    'amk',
-    'aq',
-    'orospu',
-    'piç',
-    'sik',
-    'yarrak',
-    'göt',
-    'ananı',
-    'amına',
-    'ibne',
-    'salak',
-    'gerizekalı'
-];
+// Engellenecek küfürlerin listesi (Buraya istediğiniz kelimeleri ekleyebilirsiniz)
+const yasakliKelimeler = ["küfür1", "küfür2", "piç", "orospu", "sik", "amk", "pç"];
 
 module.exports = {
-
     data: new SlashCommandBuilder()
-        .setName('küfürengel')
-        .setDescription('Küfür engel sistemini açar veya kapatır.')
-        .addStringOption(option =>
-            option
-                .setName('durum')
-                .setDescription('Aç veya kapat')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Aç', value: 'ac' },
-                    { name: 'Kapat', value: 'kapat' }
+        .setName('küfür-engel')
+        .setDescription('Küfür engelleyici sistemini yönetir.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // Sadece sunucuyu yönet yetkisi olanlar
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('ayarla')
+                .setDescription('Küfür engel sistemini aktif eder ve log kanalını belirler.')
+                .addChannelOption(option => 
+                    option.setName('kanal')
+                        .setDescription('Küfür loglarının atılacağı kanal')
+                        .setRequired(true)
                 )
         )
-        .setDefaultMemberPermissions(
-            PermissionFlagsBits.Administrator
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('kapat')
+                .setDescription('Küfür engel sistemini devre dışı bırakır.')
         ),
 
-    async execute(interaction, client) {
+    async execute(interaction) {
+        const subcommand = interaction.options.getSubcommand();
+        const guildId = interaction.guild.id;
 
-        let data = JSON.parse(
-            fs.readFileSync(AYAR_DOSYA)
-        );
+        if (subcommand === 'ayarla') {
+            const logKanal = interaction.options.getChannel('kanal');
 
-        const durum =
-            interaction.options.getString('durum');
-
-        // AÇ
-        if (durum === 'ac') {
-
-            data[interaction.guild.id] = true;
-
-            fs.writeFileSync(
-                AYAR_DOSYA,
-                JSON.stringify(data, null, 2)
-            );
-
-            return interaction.reply({
-                content: '✅ Küfür engeli açıldı.',
-                ephemeral: true
+            // Ayarları veritabanına kaydet
+            kufurSistemiDB.set(guildId, {
+                durum: true,
+                logKanalId: logKanal.id
             });
+
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Sistem Aktif Edildi')
+                .setDescription(`Küfür engel sistemi başarıyla açıldı.\n**Log Kanalı:** ${logKanal}`)
+                .setColor('Green')
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [embed] });
         }
 
-        // KAPAT
-        if (durum === 'kapat') {
+        if (subcommand === 'kapat') {
+            kufurSistemiDB.delete(guildId);
 
-            data[interaction.guild.id] = false;
+            const embed = new EmbedBuilder()
+                .setTitle('❌ Sistem Kapatıldı')
+                .setDescription('Küfür engel sistemi bu sunucuda devre dışı bırakıldı.')
+                .setColor('Red')
+                .setTimestamp();
 
-            fs.writeFileSync(
-                AYAR_DOSYA,
-                JSON.stringify(data, null, 2)
-            );
-
-            return interaction.reply({
-                content: '❌ Küfür engeli kapatıldı.',
-                ephemeral: true
-            });
+            return interaction.reply({ embeds: [embed] });
         }
     },
 
-    // MESAJ EVENTİ
-    async messageCreate(message) {
+    // --- HER ŞEY İÇİNDE OLSUN DEDİĞİNİZ İÇİN OLAY DİNLEYİCİSİ (MESSAGE CREATE) BURADA ---
+    // Bu fonksiyonu index.js dosyanızdaki client.on('messageCreate') kısmına bağlamanız gerekir.
+    // Eğer index.js içinde otomatik bir event handler'ınız varsa, bu fonksiyonu oradan çağırabilirsiniz.
+    async handleMessage(message) {
+        if (!message.guild || message.author.bot) return;
 
-        try {
+        const sunucuAyari = kufurSistemiDB.get(message.guild.id);
+        if (!sunucuAyari || !sunucuAyari.durum) return; // Sistem kapalıysa işlem yapma
 
-            if (!message.guild) return;
-            if (message.author.bot) return;
+        // Mesajı küçük harfe çevirip kelimeleri kontrol etme
+        const mesajIcerik = message.content.toLowerCase();
+        const kufurVarMi = yasakliKelimeler.some(kufur => mesajIcerik.includes(kufur));
 
-            let data = JSON.parse(
-                fs.readFileSync(AYAR_DOSYA)
-            );
+        if (kufurVarMi) {
+            // Yetkilileri es geçmek isterseniz (Yönetici yetkisi olanlar küfür edebilsin diye):
+            if (message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
 
-            // SİSTEM KAPALIYSA DUR
-            if (!data[message.guild.id]) return;
-
-            // ADMİN BYPASS
-            if (
-                message.member.permissions.has(
-                    PermissionFlagsBits.Administrator
-                )
-            ) return;
-
-            const mesaj =
-                message.content.toLowerCase();
-
-            const kufurVar = kufurler.some(kelime =>
-                mesaj.includes(kelime)
-            );
-
-            // KÜFÜR VARSA
-            if (kufurVar) {
-
-                await message.delete().catch(() => {});
-
-                const uyari =
-                    await message.channel.send({
-                        content:
-                            `🚫 ${message.author}, küfür yasak.`
-                    });
-
-                setTimeout(() => {
-                    uyari.delete().catch(() => {});
-                }, 5000);
+            // 1. Mesajı Sil
+            try {
+                await message.delete();
+            } catch (err) {
+                console.log("Mesaj silme yetkim yok veya mesaj zaten silinmiş.");
             }
 
-        } catch (err) {
+            // 2. Kullanıcıyı Uyar (Kanala geçici mesaj)
+            const uyariMesaji = await message.channel.send(`⚠️ ${message.author}, lütfen kelimelerine dikkat et! Bu sunucuda küfür etmek yasaktır.`);
+            setTimeout(() => uyariMesaji.delete().catch(() => {}), 5000); // 5 saniye sonra uyarıyı sil
 
-            console.error(
-                'Küfür engel sistemi hata:',
-                err
-            );
+            // 3. Log Kanalına Bildir
+            const logKanal = message.guild.channels.cache.get(sunucuAyari.logKanalId);
+            if (logKanal) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('🤬 Küfür Yakalandı!')
+                    .setColor('Orange')
+                    .addFields(
+                        { name: 'Kullanıcı', value: `${message.author} (${message.author.id})`, inline: true },
+                        { name: 'Kanal', value: `${message.channel}`, inline: true },
+                        { name: 'Silinen Mesaj', value: `\`\`\`${message.content}\`\`\`` }
+                    )
+                    .setTimestamp()
+                    .setFooter({ text: 'TSA Moderasyon Küfür Engel Sistemi' });
+
+                logKanal.send({ embeds: [logEmbed] }).catch(err => console.log("Log kanalına mesaj atılamadı: " + err));
+            }
         }
     }
 };
