@@ -121,4 +121,4 @@ module.exports = (client) => {
             console.error('Koruma sistemi hatası:', err);
         }
     });
-};
+}; 
