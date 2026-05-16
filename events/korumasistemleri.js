@@ -19,7 +19,7 @@ module.exports = (client) => {
         if (message.author.bot || !message.guild) return;
 
         // Yönetici yetkisi olanları engellemesin kanka rahat takılsınlar
-        if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+        if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return;
 
         const icerik = message.content.toLowerCase();
         let tetiklendi = false;
@@ -64,71 +64,75 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // ⚡ KORUMA 3: ANTİ-RAİD / SAĞ-TIK KORUMASI (Rol Silme & Ban Koruması)
+    // 🚨 KORUMA 3: ULTRA ANTİ-RAİD / ANINDA BANLAMA SİSTEMİ (Geliştirildi)
     // =========================================================================
-    // Bir yetkili 10 saniye içinde birden fazla kritik işlem yaparsa patlatacağız
     const limits = new Map();
 
-    const limitKontrol = async (guild, executorId, islemTipi) => {
-        if (executorId === client.user.id) return false; // Botun kendisiyse geç
-
-        const member = await guild.members.fetch(executorId).catch(() => null);
-        if (!member || member.id === guild.ownerId) return false; // Sunucu sahibiyse geç
+    const acilMudahele = async (guild, executorId, islemTipi) => {
+        if (executorId === client.user.id) return; // Botun kendisiyse es geç
+        if (executorId === guild.ownerId) return;  // Sunucu sahibiyse es geç
 
         const key = `${executorId}-${islemTipi}`;
         const simdi = Date.now();
-        
+
         if (!limits.has(key)) {
             limits.set(key, [simdi]);
-            return false;
+            return;
         }
 
-        const gecmis = limits.get(key).filter(zaman => simdi - zaman < 10000); // 10 saniyelik pencere
+        // Güvenlik duvarını daralttık: 5 saniye içindeki işlemleri sayıyoruz kanka
+        const gecmis = limits.get(key).filter(zaman => simdi - zaman < 5000);
         gecmis.push(simdi);
         limits.set(key, gecmis);
 
-        // 10 saniyede 3'ten fazla kritik işlem yaparsa alarm ver kanka!
+        // 5 saniye içinde 3 veya daha fazla kritik işlem algılanırsa ACIMAK YOK, ANINDA BAN!
         if (gecmis.length >= 3) {
             try {
-                // Yetkilinin tüm rollerini elinden al (Yönetici yetkisini kırmak için)
-                const alinacakRoller = member.roles.cache.filter(role => role.id !== guild.id && !role.managed);
-                if (alinacakRoller.size > 0) {
-                    await member.roles.remove(alinacakRoller, 'Anti-Raid: Şüpheli Sağ-tık Aktivitesi!');
-                }
+                // Zaman kaybettiren rol silme aşamasını atlayıp, saldırganı kökten BANLIYORUZ!
+                await guild.members.ban(executorId, { reason: `🚨 Anti-Raid: Üst üste çok hızlı ${islemTipi} işlemi yapıldı!` });
 
                 const logChan = logKanalGetir(guild.id);
                 if (logChan) {
                     const embed = new EmbedBuilder()
-                        .setTitle('<a:alarme:1505209430319300718> ACİL DURUM: Sunucu Saldırı Altında Olabilir!')
-                        .setDescription(`**Yetkili:** <@${executorId}> \`(${executorId})\` kısa süre içinde çok fazla sağ-tık işlemi (**${islemTipi}**) gerçekleştirdi!\n\n<:koruma1:1505143174190989352> **Alınan Önlem:** Kullanıcının tüm rolleri elinden alındı ve yetkileri sıfırlandı.`)
+                        .setTitle('<a:alarme:1505209430319300718> REKOR HIZDA MÜDAHALE: Sunucu Korundu!')
+                        .setDescription(`**Saldırgan Yetkili ID:** \`${executorId}\`\n**Gerçekleştirdiği Eylem:** 5 saniye içinde birden fazla **${islemTipi}**!\n\n<:koruma1:1505143174190989352> **Alınan Önlem:** Kullanıcı daha fazla zarar veremeden **DİREKT SUNUCUDAN BANLANDI!**`)
                         .setColor('#960018').setTimestamp();
-                    logChan.send({ content: '@everyone <a:alarme:1505209430319300718> Güvenlik İhlali!', embeds: [embed] }).catch(() => {});
+                    logChan.send({ content: '@everyone <a:alarme:1505209430319300718> Sunucuya yapılan saldırı engellendi ve saldırgan banlandı!', embeds: [embed] }).catch(() => {});
                 }
-                return true;
             } catch (err) {
-                console.error('Anti-raid müdahale hatası:', err);
+                console.error('Anında anti-raid banlama hatası:', err);
             }
         }
-        return false;
     };
 
-    // Sağ-tık Rol Silme Takibi
+    // 1. Sağ-tık Rol Silme Takibi
     client.on('roleDelete', async (role) => {
         const fetchedLogs = await role.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.RoleDelete }).catch(() => null);
         if (!fetchedLogs) return;
         const logEntry = fetchedLogs.entries.first();
         if (!logEntry) return;
 
-        await limitKontrol(role.guild, logEntry.executorId, 'Rol Silme');
+        await acilMudahele(role.guild, logEntry.executorId, 'Rol Silme');
     });
 
-    // Sağ-tık Üye Banlama Takibi
+    // 2. Sağ-tık Kanal/Kategori Silme Takibi (Bunu da ekledim, kanalları uçuramasınlar kanka)
+    client.on('channelDelete', async (channel) => {
+        if (!channel.guild) return;
+        const fetchedLogs = await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete }).catch(() => null);
+        if (!fetchedLogs) return;
+        const logEntry = fetchedLogs.entries.first();
+        if (!logEntry) return;
+
+        await acilMudahele(channel.guild, logEntry.executorId, 'Kanal/Kategori Silme');
+    });
+
+    // 3. Sağ-tık Üye Banlama Takibi (Yetkili önüne geleni sağ tıkla banlıyorsa)
     client.on('guildBanAdd', async (ban) => {
         const fetchedLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null);
         if (!fetchedLogs) return;
         const logEntry = fetchedLogs.entries.first();
         if (!logEntry) return;
 
-        await limitKontrol(ban.guild, logEntry.executorId, 'Sağ-tık Banlama');
+        await acilMudahele(ban.guild, logEntry.executorId, 'Sağ-tık Banlama');
     });
 };
