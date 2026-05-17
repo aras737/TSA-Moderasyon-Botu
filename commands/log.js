@@ -1,8 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ChannelType } = require('discord.js');
-const fs = require('fs');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const Storage = require('../services/storage');
 
 module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.Administrator], // Sadece kurucular görebilir
+    requiredPerms: [PermissionFlagsBits.Administrator],
 
     data: new SlashCommandBuilder()
         .setName('log')
@@ -16,6 +16,14 @@ module.exports = {
                         .addChannelTypes(ChannelType.GuildText)
                         .setRequired(true)
                 )
+        )
+        .addSubcommand(subcommand =>
+            subcommand.setName('göster')
+                .setDescription('Şu anda ayarlı olan log kanalını gösterir.')
+        )
+        .addSubcommand(subcommand =>
+            subcommand.setName('kapat')
+                .setDescription('Log sistemini bu sunucu için kapatır.')
         ),
 
     async execute(interaction) {
@@ -24,20 +32,49 @@ module.exports = {
         if (subcommand === 'kanalı-ayarla') {
             const kanal = interaction.options.getChannel('kanal');
 
-            if (!fs.existsSync('./ayarlar')) fs.mkdirSync('./ayarlar');
-            
-            let logAyari = {};
-            if (fs.existsSync('./ayarlar/gelismisLog.json')) {
-                logAyari = JSON.parse(fs.readFileSync('./ayarlar/gelismisLog.json', 'utf8'));
-            }
-
-            logAyari[interaction.guild.id] = kanal.id;
-            fs.writeFileSync('./ayarlar/gelismisLog.json', JSON.stringify(logAyari, null, 4));
+            // Storage'a kaydet
+            Storage.set(`guild_${interaction.guild.id}_logKanal`, kanal.id);
 
             const embed = new EmbedBuilder()
                 .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
                 .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses ve ban hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
                 .setColor('#2ecc71')
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (subcommand === 'göster') {
+            const logKanalId = Storage.get(`guild_${interaction.guild.id}_logKanal`);
+
+            if (!logKanalId) {
+                return interaction.reply({ 
+                    content: '<a:uyari:1505166167189487757> Henüz hiç log kanalı ayarlanmamış kanka! `/log kanalı-ayarla` kullan.', 
+                    ephemeral: true 
+                });
+            }
+
+            const logKanal = interaction.guild.channels.cache.get(logKanalId);
+
+            const embed = new EmbedBuilder()
+                .setTitle('<:Paper:1505146388596391977> Log Kanalı Bilgisi')
+                .setDescription(`Log kanalı: ${logKanal || '`Kanal silindi!`'}`)
+                .addFields(
+                    { name: 'Kanal ID', value: `\`${logKanalId}\`` }
+                )
+                .setColor('#3498db')
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (subcommand === 'kapat') {
+            Storage.delete(`guild_${interaction.guild.id}_logKanal`);
+
+            const embed = new EmbedBuilder()
+                .setTitle('<a:baarsz:1505146967817326675> Log Sistemi Kapatıldı')
+                .setDescription('Log sistemi bu sunucu için devre dışı bırakıldı.')
+                .setColor('#e74c3c')
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed] });
