@@ -32,7 +32,7 @@ module.exports = {
         const logKanali = interaction.options.getChannel('log-kanali');
         const rolIDleri = rollerInput.match(/\d+/g); 
 
-        if (!rolIDleri) return interaction.reply({ content: "❌ Geçerli roller girmelisin!", ephemeral: true });
+        if (!rolIDleri) return interaction.reply({ content: "<a:baarsz:1505146967817326675> Geçerli roller girmelisin!", ephemeral: true });
 
         const anaEmbed = new EmbedBuilder()
             .setTitle('Turkish Armed Forces | Destek')
@@ -45,11 +45,11 @@ module.exports = {
             new ButtonBuilder()
                 .setCustomId(`tsa_setup_${rolIDleri.join('-')}_${logKanali.id}`)
                 .setLabel('Destek Talebi Oluştur')
-                .setEmoji('📩')
+                .setEmoji('<:bilet:1505453733969006602>')
                 .setStyle(ButtonStyle.Primary)
         );
 
-        await interaction.reply({ content: `✅ **TSA Destek Sistemi** başarıyla kuruldu.`, ephemeral: true });
+        await interaction.reply({ content: `<a:tik:1505164671081123840> **TSA Destek Sistemi** başarıyla kuruldu.`, ephemeral: true });
         await interaction.channel.send({ embeds: [anaEmbed], components: [row] });
     },
 
@@ -65,10 +65,10 @@ module.exports = {
                     .setCustomId(`tsa_create_${roller}_${logID}`)
                     .setPlaceholder('Bilet Kategorisi Seçin...')
                     .addOptions([
-                        { label: 'Moderatör Bileti', value: 'Moderatör', emoji: '🔄' },
-                        { label: 'General Bileti', value: 'General', emoji: '🎖️' },
-                        { label: 'Gamepass Bileti', value: 'Gamepass', emoji: '💰' },
-                        { label: 'Yönetim Bileti', value: 'Yönetim', emoji: '🚨' },
+                        { label: 'Moderatör Bileti', value: 'Moderatör', emoji: '<:koruma1:1505143174190989352>' },
+                        { label: 'General Bileti', value: 'General', emoji: '<:Yetkili:1505192912680390827>' },
+                        { label: 'Gamepass Bileti', value: 'Gamepass', emoji: '<a:Logo_Boosts:1505158932270813254>' },
+                        { label: 'Yönetim Bileti', value: 'Yönetim', emoji: '<a:alarme:1505209430319300718>' },
                     ])
             );
 
@@ -100,25 +100,25 @@ module.exports = {
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .setDescription(`Selam ${interaction.user}, **${kategori}** birimi için talebin oluşturuldu.\n\nYetkililerimiz talebini üstlendiğinde burada bilgi göreceksin. Lütfen sorununuzu detaylıca yazın.`)
                 .addFields(
-                    { name: '👤 Kullanıcı', value: `${interaction.user.tag}`, inline: true },
-                    { name: '📂 Kategori', value: `${kategori}`, inline: true }
+                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Kullanıcı', value: `${interaction.user.tag}`, inline: true },
+                    { name: '<:appEmoji_kategori:1505159567879966811> Kategori', value: `${kategori}`, inline: true }
                 )
                 .setColor('Blue')
                 .setTimestamp();
 
             const biletButonlar = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('tsa_claim').setLabel('Bileti Üstlen').setStyle(ButtonStyle.Success).setEmoji('🙋‍♂️'),
-                new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+                new ButtonBuilder().setCustomId('tsa_claim').setLabel('Bileti Üstlen').setStyle(ButtonStyle.Success).setEmoji('<a:alarme:1505209430319300718>'),
+                new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('<:riva_kilit:1505203119427162192>')
             );
 
             await kanal.send({ content: `${roller.map(r => `<@&${r}>`).join(' ')} | ${interaction.user}`, embeds: [hosgeldin], components: [biletButonlar] });
-            await interaction.update({ content: `✅ Kanalın başarıyla açıldı: ${kanal}`, components: [], ephemeral: true });
+            await interaction.update({ content: `<a:tik:1505164671081123840> Kanalın başarıyla açıldı: ${kanal}`, components: [], ephemeral: true });
 
             // Log Gönder
             const logKanal = interaction.guild.channels.cache.get(logID);
             if (logKanal) {
                 const logEmbed = new EmbedBuilder()
-                    .setTitle('📩 Yeni Bilet Açıldı')
+                    .setTitle('<:bilet:1505453733969006602> Yeni Bilet Açıldı')
                     .addFields(
                         { name: 'Kullanıcı', value: `${interaction.user.tag} (${interaction.user.id})` },
                         { name: 'Kategori', value: kategori },
@@ -132,16 +132,16 @@ module.exports = {
         // --- 3. BİLETİ ÜSTLENME ---
         if (interaction.isButton() && interaction.customId === 'tsa_claim') {
             const claimEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                .addFields({ name: '🛠️ Üstlenen Yetkili', value: `${interaction.user.tag}`, inline: false })
+                .addFields({ name: '<:yetkili:1505454683706097664> Üstlenen Yetkili', value: `${interaction.user.tag}`, inline: false })
                 .setColor('Yellow');
 
             const disabledRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('tsa_claimed').setLabel('Bilet Üstlenildi').setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
-                new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+                new ButtonBuilder().setCustomId('tsa_claimed').setLabel('Bilet Üstlenildi').setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('<a:tik:1505164671081123840>'),
+                new ButtonBuilder().setCustomId('tsa_fast_close').setLabel('Bileti Kapat').setStyle(ButtonStyle.Danger).setEmoji('<:riva_kilit:1505203119427162192>')
             );
 
             await interaction.update({ embeds: [claimEmbed], components: [disabledRow] });
-            await interaction.followUp({ content: `📢 **${interaction.user.tag}** bu biletle ilgilenmeye başladı!`, ephemeral: false });
+            await interaction.followUp({ content: `<a:megafon:1505454906176176241> **${interaction.user.tag}** bu biletle ilgilenmeye başladı!`, ephemeral: false });
         }
 
         // --- 4. HIZLI KAPATMA VE LOGLAMA ---
@@ -153,7 +153,7 @@ module.exports = {
             const logKanal = interaction.guild.channels.cache.get(logID);
             if (logKanal) {
                 const logEmbed = new EmbedBuilder()
-                    .setTitle('🔒 Bilet Kapatıldı')
+                    .setTitle('<:riva_kilit:1505203119427162192> Bilet Kapatıldı')
                     .addFields(
                         { name: 'Kanal', value: `\`${interaction.channel.name}\``, inline: true },
                         { name: 'Açan Kişi', value: `<@${acanID}>`, inline: true },
