@@ -1,12 +1,11 @@
-const { EmbedBuilder, AuditLogEvent } = require('discord.js');
-const fs = require('fs');
+const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
+const { ayarGetir } = require('../utils/db');
 
 module.exports = (client) => {
     // Yardımcı Fonksiyon: Kanala güvenli veri gönderme ve kontrolü
     const logKanalGetir = (guildId) => {
-        if (!fs.existsSync('./ayarlar/gelismisLog.json')) return null;
-        const ayarlar = JSON.parse(fs.readFileSync('./ayarlar/gelismisLog.json', 'utf8'));
-        return ayarlar[guildId] ? client.channels.cache.get(ayarlar[guildId]) : null;
+        const kanalId = ayarGetir(guildId, 'logKanal', null);
+        return kanalId ? client.channels.cache.get(kanalId) : null;
     };
 
     // =========================================================================
@@ -22,7 +21,7 @@ module.exports = (client) => {
             .addFields(
                 { name: 'Yazan Üye', value: `${message.author} \`(${message.author.id})\``, inline: true },
                 { name: 'Kanal', value: `${message.channel}`, inline: true },
-                { name: 'Silinen İçerik', value: message.content ? `\`\`\`${message.content}\`\`\`` : '*İçerik boş veya görsel.*' }
+                { name: 'Silinen İçerik', value: message.content ? `\`\`\`${message.content.substring(0, 1000)}\`\`\`` : '*İçerik boş veya görsel.*' }
             )
             .setColor('#e74c3c').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
@@ -38,8 +37,8 @@ module.exports = (client) => {
             .addFields(
                 { name: 'Yazan Üye', value: `${oldMessage.author}`, inline: true },
                 { name: 'Kanal', value: `${oldMessage.channel}`, inline: true },
-                { name: 'Eski İçerik', value: `\`\`\`${oldMessage.content || 'Boş'}\`\`\`` },
-                { name: 'Yeni İçerik', value: `\`\`\`${newMessage.content || 'Boş'}\`\`\`` }
+                { name: 'Eski İçerik', value: `\`\`\`${oldMessage.content?.substring(0, 500) || 'Boş'}\`\`\`` },
+                { name: 'Yeni İçerik', value: `\`\`\`${newMessage.content?.substring(0, 500) || 'Boş'}\`\`\`` }
             )
             .setColor('#f39c12').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
@@ -72,6 +71,27 @@ module.exports = (client) => {
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 
+    client.on('channelUpdate', async (oldChannel, newChannel) => {
+        if (oldChannel.name === newChannel.name && oldChannel.topic === newChannel.topic) return;
+        const logChan = logKanalGetir(newChannel.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<a:acs_ayarlar:1505165015127162994> Kanal Güncellendi!')
+            .setDescription(`**Kanal:** ${newChannel}`)
+            .setColor('#3498db');
+
+        if (oldChannel.name !== newChannel.name) {
+            embed.addFields({ name: '<:change:1505202806666170501> Adı Değiştirildi', value: `\`${oldChannel.name}\` → \`${newChannel.name}\`` });
+        }
+        if (oldChannel.topic !== newChannel.topic) {
+            embed.addFields({ name: '📌 Konusu Değiştirildi', value: `\`${oldChannel.topic || 'Boş'}\` → \`${newChannel.topic || 'Boş'}\`` });
+        }
+
+        embed.setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
     // =========================================================================
     // 👑 3. ROL LOGLARI (Oluşturma, Silme, Üyeye Rol Ekleme/Çıkarma)
     // =========================================================================
@@ -94,6 +114,27 @@ module.exports = (client) => {
             .setTitle('<:rol:1505201454615629845> Bir Rol <:sil:1505147967907037275> Silindi!')
             .setDescription(`**Silinen Rol Adı:** \`${role.name}\` \`(${role.id})\``)
             .setColor('#9b59b6').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    client.on('roleUpdate', async (oldRole, newRole) => {
+        if (oldRole.name === newRole.name && oldRole.color === newRole.color) return;
+        const logChan = logKanalGetir(newRole.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:yeni:1505201065476362325> Rol Güncellendi!')
+            .setDescription(`**Rol:** ${newRole}`)
+            .setColor('#e67e22');
+
+        if (oldRole.name !== newRole.name) {
+            embed.addFields({ name: '<:rol:1505201454615629845> Adı Değiştirildi', value: `\`${oldRole.name}\` → \`${newRole.name}\`` });
+        }
+        if (oldRole.color !== newRole.color) {
+            embed.addFields({ name: '🎨 Rengi Değiştirildi', value: `\`${oldRole.hexColor}\` → \`${newRole.hexColor}\`` });
+        }
+
+        embed.setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 
@@ -138,6 +179,17 @@ module.exports = (client) => {
                 .setColor('#2ecc71').setTimestamp();
             logChan.send({ embeds: [embed] }).catch(() => {});
         }
+
+        // --- NİCKNAME DEĞIŞIMI ---
+        if (oldMember.nickname !== newMember.nickname) {
+            const embed = new EmbedBuilder()
+                .setTitle('<:rol:1505201454615629845> Takma Ad Değiştirildi!')
+                .setDescription(`**Üye:** ${newMember.user}`)
+                .addFields({ name: 'Eski Takma Ad', value: `\`${oldMember.nickname || 'Yok'}\`` })
+                .addFields({ name: 'Yeni Takma Ad', value: `\`${newMember.nickname || 'Yok'}\`` })
+                .setColor('#1abc9c').setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
     });
 
     // =========================================================================
@@ -171,6 +223,24 @@ module.exports = (client) => {
                 .setColor('#3498db').setTimestamp();
             logChan.send({ embeds: [embed] }).catch(() => {});
         }
+
+        // --- MUTE/UNMUTE LOGLARI ---
+        if (oldState.selfMute !== newState.selfMute) {
+            const embed = new EmbedBuilder()
+                .setDescription(`${newState.selfMute ? '<:Ses:1505164439505342484> Mikrofon Kapatıldı' : '<:Ses:1505164439505342484> Mikrofon Açıldı'}: ${üye}`)
+                .setColor(newState.selfMute ? '#e74c3c' : '#2ecc71')
+                .setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
+
+        // --- DEAFEN LOGLARI ---
+        if (oldState.selfDeaf !== newState.selfDeaf) {
+            const embed = new EmbedBuilder()
+                .setDescription(`${newState.selfDeaf ? '<:music:1505171382483550258> Kulaklıklar Kapatıldı' : '<:music:1505171382483550258> Kulaklıklar Açıldı'}: ${üye}`)
+                .setColor(newState.selfDeaf ? '#e74c3c' : '#2ecc71')
+                .setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
     });
 
     // =========================================================================
@@ -197,6 +267,138 @@ module.exports = (client) => {
             .setDescription(`<:uzaybot_kullanicilar:1505146190973505567> **Banı Kaldırılan:** **${ban.user.tag}** \`(${ban.user.id})\``)
             .setThumbnail(ban.user.displayAvatarURL())
             .setColor('#27ae60').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    // =========================================================================
+    // 👤 6. ÜYE LOGLARI (Giriş, Çıkış)
+    // =========================================================================
+    client.on('guildMemberAdd', async (member) => {
+        if (member.user.bot) return;
+        const logChan = logKanalGetir(member.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<a:join_join:1505202309343215717> Yeni Üye Sunucuya Katıldı!')
+            .setDescription(`**Üye:** ${member.user}\n**Hesap Açılış Tarihi:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
+            .setThumbnail(member.user.displayAvatarURL())
+            .setColor('#2ecc71').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    client.on('guildMemberRemove', async (member) => {
+        if (member.user.bot) return;
+        const logChan = logKanalGetir(member.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<a:Leave_Leave:1505202549706195004> Bir Üye Sunucudan Ayrıldı!')
+            .setDescription(`**Üye:** ${member.user.tag}\n**ID:** \`${member.user.id}\``)
+            .setThumbnail(member.user.displayAvatarURL())
+            .setColor('#e74c3c').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    // =========================================================================
+    // ⚙️ 7. SUNUCU LOGLARI (Ayarlar, Düzenleme)
+    // =========================================================================
+    client.on('guildUpdate', async (oldGuild, newGuild) => {
+        const logChan = logKanalGetir(newGuild.id);
+        if (!logChan) return;
+
+        if (oldGuild.name !== newGuild.name) {
+            const embed = new EmbedBuilder()
+                .setTitle('<:Ranch_Sunucu:1505442356000985239> Sunucu Adı Değiştirildi!')
+                .addFields(
+                    { name: 'Eski Adı', value: `\`${oldGuild.name}\`` },
+                    { name: 'Yeni Adı', value: `\`${newGuild.name}\`` }
+                )
+                .setColor('#3498db').setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
+
+        if (oldGuild.icon !== newGuild.icon) {
+            const embed = new EmbedBuilder()
+                .setTitle('<:Ranch_Sunucu:1505442356000985239> Sunucu İkonu Değiştirildi!')
+                .setThumbnail(newGuild.iconURL())
+                .setColor('#9b59b6').setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
+    });
+
+    // =========================================================================
+    // 🎤 8. İNVİTE LOGLARI (İnvite Oluşturma/Silme)
+    // =========================================================================
+    client.on('inviteCreate', async (invite) => {
+        const logChan = logKanalGetir(invite.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:Discord_Link:1505166617426923661> Yeni İnvite Oluşturuldu!')
+            .setDescription(`**İnvite Linki:** \`${invite.code}\`\n**Oluşturan:** ${invite.inviter || 'Bilinmiyor'}`)
+            .setColor('#3498db').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    client.on('inviteDelete', async (invite) => {
+        const logChan = logKanalGetir(invite.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:Discord_Link:1505166617426923661> İnvite Silindi!')
+            .setDescription(`**Silinen İnvite:** \`${invite.code}\``)
+            .setColor('#e74c3c').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    // =========================================================================
+    // 🎯 9. EMOJI LOGLARI (Emoji Oluşturma/Silme)
+    // =========================================================================
+    client.on('emojiCreate', async (emoji) => {
+        const logChan = logKanalGetir(emoji.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:yeni:1505201065476362325> Yeni Emoji Oluşturuldu!')
+            .setDescription(`**Emoji:** ${emoji} \`(${emoji.id})\`\n**İsim:** \`${emoji.name}\``)
+            .setColor('#2ecc71').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    client.on('emojiDelete', async (emoji) => {
+        const logChan = logKanalGetir(emoji.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:yeni:1505201065476362325> Emoji Silindi!')
+            .setDescription(`**Emoji İsmi:** \`${emoji.name}\` \`(${emoji.id})\``)
+            .setColor('#e74c3c').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    // =========================================================================
+    // 🏷️ 10. STICKER LOGLARI (Sticker Oluşturma/Silme)
+    // =========================================================================
+    client.on('stickerCreate', async (sticker) => {
+        const logChan = logKanalGetir(sticker.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:blurple_sticker:1505441457941512346> Yeni Sticker Oluşturuldu!')
+            .setDescription(`**Sticker İsmi:** \`${sticker.name}\` \`(${sticker.id})\``)
+            .setThumbnail(sticker.url)
+            .setColor('#2ecc71').setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    client.on('stickerDelete', async (sticker) => {
+        const logChan = logKanalGetir(sticker.guild.id);
+        if (!logChan) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('<:blurple_sticker:1505441457941512346> Sticker Silindi!')
+            .setDescription(`**Sticker İsmi:** \`${sticker.name}\` \`(${sticker.id})\``)
+            .setColor('#e74c3c').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 };
