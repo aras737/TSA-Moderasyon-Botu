@@ -36,7 +36,7 @@ module.exports = {
 
             // Üye sunucuda varsa banlanmadan önce DM atmayı dene
             const dmEmbed = new EmbedBuilder()
-                .setTitle('🚫 TSA | Sunucudan Yasaklandınız')
+                .setTitle('<:yasaklandi:1505146022588842095> TSA | Sunucudan Yasaklandınız')
                 .setDescription(`**${interaction.guild.name}** sunucusundan kalıcı olarak uzaklaştırıldınız.`)
                 .addFields(
                     { name: '<:Paper:1505146388596391977> Sebep', value: `\`${reason}\`` },
