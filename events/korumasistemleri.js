@@ -1,73 +1,73 @@
 const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
 const { ayarGetir } = require('../utils/db');
 
-const HAFIZA_YOLU = path.join(__dirname, '../ayarlar/guardHafiza.json');
-
 module.exports = (client) => {
+    const userActions = new Map();
+    const WINDOW = 1000; // 1 saniye
+    const THRESHOLD = 3; // 3 işlem = saldırı
+
     const guardKontrol = async (guild, executorId, eylem) => {
         if (!executorId || executorId === client.user.id || executorId === guild.ownerId) return;
+        if (!ayarGetir(guild.id, 'guardAktif', true)) return;
 
-        // Merkezi veritabanından guard durumunu kontrol et kanka (Varsayılan olarak true yaptık!)
-        const guardDurum = ayarGetir(guild.id, 'guardAktif', true);
-        if (!guardDurum) return; 
+        const key = `${guild.id}-${executorId}`;
+        const now = Date.now();
 
-        const simdi = Date.now();
-        let hafiza = fs.existsSync(HAFIZA_YOLU) ? JSON.parse(fs.readFileSync(HAFIZA_YOLU, 'utf8')) : {};
-        if (!hafiza[executorId]) hafiza[executorId] = [];
-
-        const islemler = hafiza[executorId].filter(zaman => simdi - zaman < 5000);
-        islemler.push(simdi);
+        if (!userActions.has(key)) userActions.set(key, []);
         
-        hafiza[executorId] = islemler;
-        fs.writeFileSync(HAFIZA_YOLU, JSON.stringify(hafiza, null, 2));
+        let actions = userActions.get(key).filter(t => now - t < WINDOW);
+        actions.push(now);
+        userActions.set(key, actions);
 
-        if (islemler.length >= 2) {
-            try {
-                await guild.members.ban(executorId, { reason: `🚨 GUARD: Peş peşe işlem ihlali (${eylem})` });
+        if (actions.length >= THRESHOLD) {
+            await lockdown(guild, executorId, eylem, actions.length);
+            userActions.delete(key);
+        }
+    };
 
-                const everyoneRole = guild.roles.everyone;
-                if (everyoneRole.permissions.has(PermissionFlagsBits.SendMessages)) {
-                    await everyoneRole.setPermissions(everyoneRole.permissions.missing(PermissionFlagsBits.SendMessages), '🚨 GUARD LOCKDOWN');
-                }
+    const lockdown = async (guild, executorId, eylem, count) => {
+        try {
+            await guild.members.ban(executorId, { reason: `🚨 GUARD: ${count}x ${eylem}` }).catch(() => {});
 
-                delete hafiza[executorId];
-                fs.writeFileSync(HAFIZA_YOLU, JSON.stringify(hafiza, null, 2));
+            const role = guild.roles.everyone;
+            await role.setPermissions(role.permissions.remove(PermissionFlagsBits.SendMessages), '🚨 GUARD');
 
-                // Merkezi veritabanından log kanalını çekiyoruz kanka
-                const logKanalId = ayarGetir(guild.id, 'logKanal', null);
-                const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+            const logId = ayarGetir(guild.id, 'logKanal', null);
+            const log = logId ? client.channels.cache.get(logId) : null;
 
-                if (logChan) {
-                    const embed = new EmbedBuilder()
-                        .setTitle('<a:alarme:1505209430319300718> GUARD MÜDAHALESİ')
-                        .setDescription(`⚠️ **Saldırgan ID:** \`${executorId}\`\n**Eylem:** Kalıcı hafızada peş peşe **${eylem}** tespiti!\n\nHain kullanıcı banlandı ve sunucu kilitlendi.`)
-                        .setColor('#960018').setTimestamp();
-                    logChan.send({ content: '@everyone 🚨 **SUNUCU KORUNDU!**', embeds: [embed] }).catch(() => {});
-                }
-            } catch (err) {
-                console.error(err);
+            if (log) {
+                const embed = new EmbedBuilder()
+                    .setTitle('🚨 GUARD MÜDAHALESİ')
+                    .setDescription(`**Saldırgan:** \`${executorId}\`\n**İşlem:** ${count}x ${eylem}\n**Aksiyon:** BAN + LOCKDOWN`)
+                    .setColor('#960018').setTimestamp();
+                log.send({ content: '@everyone 🚨 SALDIRI ENGELLENDI!', embeds: [embed] }).catch(() => {});
             }
+
+            setTimeout(() => role.setPermissions(role.permissions.add(PermissionFlagsBits.SendMessages), '✅ AUTO'), 300000);
+        } catch (err) {
+            console.error('Guard Error:', err);
         }
     };
 
     client.on('roleDelete', async (role) => {
-        const logs = await role.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.RoleDelete }).catch(() => null);
-        const entry = logs?.entries.first();
-        if (entry) await guardKontrol(role.guild, entry.executorId, 'Rol Silme');
+        const entry = (await role.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.RoleDelete }).catch(() => null))?.entries.first();
+        if (entry?.executorId) await guardKontrol(role.guild, entry.executorId, 'Rol Silme');
     });
 
     client.on('channelDelete', async (channel) => {
         if (!channel.guild) return;
-        const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete }).catch(() => null);
-        const entry = logs?.entries.first();
-        if (entry) await guardKontrol(channel.guild, entry.executorId, 'Kanal Silme');
+        const entry = (await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete }).catch(() => null))?.entries.first();
+        if (entry?.executorId) await guardKontrol(channel.guild, entry.executorId, 'Kanal Silme');
     });
 
     client.on('guildBanAdd', async (ban) => {
-        const logs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null);
-        const entry = logs?.entries.first();
-        if (entry) await guardKontrol(ban.guild, entry.executorId, 'Sağ-tık Üye Banlama');
+        const entry = (await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null))?.entries.first();
+        if (entry?.executorId) await guardKontrol(ban.guild, entry.executorId, 'Üye Banlama');
+    });
+
+    client.on('webhookUpdate', async (channel) => {
+        if (!channel.guild) return;
+        const entry = (await channel.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.WebhookDelete }).catch(() => null))?.entries.first();
+        if (entry?.executorId) await guardKontrol(channel.guild, entry.executorId, 'Webhook Silme');
     });
 };
