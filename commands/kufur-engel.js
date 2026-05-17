@@ -1,132 +1,69 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { ayarGetir } = require('../utils/db');
 
-module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('küfür-engel')
-        .setDescription('TSA Gelişmiş küfür engel sistemini yönetir.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('aç')
-                .setDescription('Küfür engel sistemini aktif eder. Komutu kullandığınız kanal log kanalı olur.')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('kapat')
-                .setDescription('Küfür engel sistemini kapatır.')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('durum')
-                .setDescription('Küfür engel sisteminin mevcut durumunu gösterir.')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('sıfırla')
-                .setDescription('Bir kullanıcının küfür uyarı sayısını sıfırlar.')
-                .addUserOption(option =>
-                    option
-                        .setName('kullanıcı')
-                        .setDescription('Uyarısı sıfırlanacak kullanıcı')
-                        .setRequired(true)
-                )
-        ),
+module.exports = (client) => {
+    const kufurler = ['amk', 'aq', 'piç', 'orospu', 'sik', 'yarrak', 'pezevenk', 'göt', 'sktir', 'sg'];
+    const linkRegex = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,})/gi;
 
-    async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
-        const guildId = interaction.guild.id;
-        const client = interaction.client;
+    client.on('messageCreate', async (message) => {
+        if (message.author.bot || !message.guild) return;
 
-        // ── /küfür-engel aç ──
-        if (subcommand === 'aç') {
-            client.sistemBellegi.set(guildId, {
-                durum: true,
-                logKanalId: interaction.channel.id
-            });
-
-            const embed = new EmbedBuilder()
-                .setTitle('✅ Küfür Engel Sistemi Aktif')
-                .setDescription(
-                    `Sistem bu sunucudaki **bütün kanallar** için başarıyla açıldı!\n\n` +
-                    `📢 **Log Kanalı:** ${interaction.channel}\n` +
-                    `🛡️ **Koruma:** Mesaj yazma + Mesaj düzenleme\n` +
-                    `⚡ **Filtre:** Leet speak, harf uzatma, sembol atlatma\n` +
-                    `⚠️ **Otomatik Mute:** 5 uyarıda 10 dakika susturma\n` +
-                    `👤 **Muaf:** Yönetici ve Mesajları Yönet yetkilileri`
-                )
-                .setColor('Green')
-                .setTimestamp()
-                .setFooter({ text: 'TSA Gelişmiş Küfür Filtre Sistemi v2' });
-
-            return interaction.reply({ embeds: [embed] });
+        // 🛡️ YETKİ KONTROL: Bot'un gerekli yetkilerine sahip mi?
+        if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ManageMessages)) {
+            return;
         }
 
-        // ── /küfür-engel kapat ──
-        if (subcommand === 'kapat') {
-            client.sistemBellegi.delete(guildId);
-
-            const embed = new EmbedBuilder()
-                .setTitle('❌ Küfür Engel Sistemi Kapatıldı')
-                .setDescription('Sistem devre dışı bırakıldı. Artık kanallar taranmayacak.')
-                .setColor('Red')
-                .setTimestamp()
-                .setFooter({ text: 'TSA Gelişmiş Küfür Filtre Sistemi v2' });
-
-            return interaction.reply({ embeds: [embed] });
+        // 🛡️ KORUMA KONTROL: Admin/Moderatör ve Yetki Sahibi Kullanıcıları Atla
+        if (message.member.permissions.has(PermissionFlagsBits.ManageMessages) || 
+            message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return;
         }
 
-        // ── /küfür-engel durum ──
-        if (subcommand === 'durum') {
-            const ayar = client.sistemBellegi.get(guildId);
-            const aktifMi = ayar?.durum || false;
-            const logKanali = ayar?.logKanalId
-                ? `<#${ayar.logKanalId}>`
-                : 'Ayarlanmamış';
+        const icerik = message.content.toLowerCase();
+        let tetiklendi = false;
+        let sebep = '';
 
-            const embed = new EmbedBuilder()
-                .setTitle('📊 Küfür Engel Sistemi — Durum Raporu')
-                .setColor(aktifMi ? 'Green' : 'Red')
-                .addFields(
-                    { name: 'Durum', value: aktifMi ? '🟢 **Aktif**' : '🔴 **Kapalı**', inline: true },
-                    { name: 'Log Kanalı', value: logKanali, inline: true },
-                    { name: 'Filtre Özellikleri', value: 'Leet speak, harf uzatma, sembol atlatma, Türkçe karakter varyantları', inline: false },
-                    { name: 'Otomatik Mute', value: '5 uyarıda 10 dakika susturma', inline: false },
-                    { name: 'Muaf Yetkiler', value: 'Yönetici, Mesajları Yönet', inline: false }
-                )
-                .setTimestamp()
-                .setFooter({ text: 'TSA Gelişmiş Küfür Filtre Sistemi v2' });
-
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+        if (kufurler.some(kufur => icerik.includes(kufur))) {
+            tetiklendi = true;
+            sebep = 'Küfür / Argo Kullanımı';
         }
 
-        // ── /küfür-engel sıfırla ──
-        if (subcommand === 'sıfırla') {
-            const hedefKullanici = interaction.options.getUser('kullanıcı');
-
-            // Uyarı sıfırlama — events/kufurengel.js ile aynı Map referansını kullanmamız lazım
-            // Bunun için client üzerinden erişim sağlıyoruz
-            if (client.kufurUyariTakibi) {
-                const anahtar = `${guildId}-${hedefKullanici.id}`;
-                const onceki = client.kufurUyariTakibi.get(anahtar);
-                client.kufurUyariTakibi.delete(anahtar);
-
-                const embed = new EmbedBuilder()
-                    .setTitle('🔄 Uyarı Sıfırlandı')
-                    .setDescription(
-                        `**${hedefKullanici.tag}** kullanıcısının küfür uyarıları sıfırlandı.\n` +
-                        `Önceki uyarı sayısı: **${onceki?.sayi || 0}**`
-                    )
-                    .setColor('Blue')
-                    .setTimestamp()
-                    .setFooter({ text: 'TSA Gelişmiş Küfür Filtre Sistemi v2' });
-
-                return interaction.reply({ embeds: [embed] });
-            } else {
-                return interaction.reply({
-                    content: '⚠️ Uyarı takip sistemi henüz yüklenmemiş. Botu yeniden başlatın.',
-                    ephemeral: true
-                });
-            }
+        if (linkRegex.test(message.content)) {
+            tetiklendi = true;
+            sebep = 'Link / Reklam Paylaşımı';
         }
-    }
+
+        if (tetiklendi) {
+            try {
+                await message.delete();
+
+                const uyariEmbed = new EmbedBuilder()
+                    .setColor('#ff0000')
+                    .setDescription(`<a:alarme:1505209430319300718> **${message.author}**, bu sunucuda **${sebep}** kesinlikle yasaktır!\n*Kurallar herkes için geçerlidir.*`);
+                
+                const uyariMsg = await message.channel.send({ embeds: [uyariEmbed] });
+                setTimeout(() => uyariMsg.delete().catch(() => {}), 7000);
+
+                // Merkezi veritabanından log kanalını çekiyoruz kanka
+                const logKanalId = ayarGetir(message.guild.id, 'logKanal', null);
+                const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
+
+                if (logChan) {
+                    const silinenMesaj = message.content.length > 1000 ? message.content.substring(0, 1000) + '...' : message.content;
+                    const logEmbed = new EmbedBuilder()
+                        .setAuthor({ name: 'Sohbet Koruması', iconURL: message.guild.iconURL() })
+                        .setTitle('<:koruma1:1505143174190989352> İhlal Temizlendi')
+                        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '<:uzaybot_kullanicilar:1505146190973505567> Kullanıcı', value: `${message.author}\n\`ID: ${message.author.id}\``, inline: true },
+                            { name: '<:uzaybot_kanal:1505159120074833931> Kanal', value: `${message.channel}`, inline: true },
+                            { name: '<:uzaybot_mesaj:1505162349026344970> Mesaj', value: `\`\`\`${silinenMesaj}\`\`\`` }
+                        )
+                        .setColor('#960018').setTimestamp();
+                    
+                    logChan.send({ embeds: [logEmbed] }).catch(() => {});
+                }
+            } catch (err) {}
+        }
+    });
 };
