@@ -4,8 +4,8 @@ const { ayarKaydet, ayarGetir } = require('../utils/db');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('giriscikis')
-        .setDescription('Erensi tarzı resimli giriş-çıkış ve Anti-Bot sistemini yönet kanka.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Sadece adminler görsün
+        .setDescription('Erensi tarzı resimli anlık sayaç sistemini yönet kanka.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand.setName('ayarla')
                 .setDescription('Sistemin aktif olacağı log kanalını seç kanka.')
@@ -32,11 +32,23 @@ module.exports = {
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand.setName('test')
-                .setDescription('Resimli sistemi denemek için kanala test mesajı fırlatır.')),
+                .setDescription('Resimli sistemi denemek için kanala anlık test mesajı fırlatır.')),
 
     async execute(interaction) {
         const guildId = interaction.guild.id;
         const altKomut = interaction.options.getSubcommand();
+        const client = interaction.client;
+
+        if (!client.girisCikisCache) client.girisCikisCache = new Map();
+        if (!client.girisCikisCache.has(guildId)) {
+            client.girisCikisCache.set(guildId, {
+                kanalId: ayarGetir(guildId, 'girisCikisKanal', null),
+                durum: ayarGetir(guildId, 'girisCikisDurum', false),
+                guvenliListe: ayarGetir(guildId, 'botGuvenliListe', [])
+            });
+        }
+
+        const sunucuHafizasi = client.girisCikisCache.get(guildId);
 
         // 🟢 1. ALT KOMUT: AYARLAMA
         if (altKomut === 'ayarla') {
@@ -44,10 +56,13 @@ module.exports = {
             
             ayarKaydet(guildId, 'girisCikisKanal', kanal.id);
             ayarKaydet(guildId, 'girisCikisDurum', true);
+            
+            sunucuHafizasi.kanalId = kanal.id;
+            sunucuHafizasi.durum = true;
 
             const embed = new EmbedBuilder()
                 .setTitle('<:yeni:1505201065476362325> ERENSI RESİMLİ LOG AKTİF!')
-                .setDescription(`<a:tik:1505164671081123840> Resimli giriş-çıkış sistemi başarıyla ${kanal} kanalına bağlandı ve **data klasörüne işlendi** kanka.\n\n*Artık yeni biri geldiğinde veya çıktığında resimli mesaj göreceksin.*`)
+                .setDescription(`<a:tik:1505164671081123840> Sayaç log sistemi başarıyla ${kanal} kanalına bağlandı kanka.\n\n*Artık yeni biri geldiğinde veya çıktığında anlık sayaç tetiklenecek.*`)
                 .setColor('#2ecc71')
                 .setTimestamp();
 
@@ -57,10 +72,11 @@ module.exports = {
         // 🔴 2. ALT KOMUT: KAPATMA
         if (altKomut === 'kapat') {
             ayarKaydet(guildId, 'girisCikisDurum', false);
+            sunucuHafizasi.durum = false;
 
             const embed = new EmbedBuilder()
                 .setTitle('<:riva_kilit:1505203119427162192> SİSTEM DEVRE DIŞI')
-                .setDescription(`<a:baarsz:1505146967817326675> Resimli giriş-çıkış takip sistemi bu sunucu için kalıcı olarak **kapatıldı kanka**. Ayarlar sıfırlanmadı, tekrar açtığında kaldığı yerden devam edecek.`)
+                .setDescription(`<a:baarsz:1505146967817326675> Anlık takip sistemi bu sunucu için kapatıldı kanka.`)
                 .setColor('#e74c3c')
                 .setTimestamp();
 
@@ -70,19 +86,17 @@ module.exports = {
         // 🛡️ 3. ALT KOMUT: GÜVENLİ LİSTEYE EKLEME
         if (altKomut === 'guvenli-ekle') {
             const kullanici = interaction.options.getUser('kullanici');
-            // Mevcut listeyi alıyoruz, yoksa boş array dönüyor
-            let guvenliListe = ayarGetir(guildId, 'botGuvenliListe', []);
-
-            if (guvenliListe.includes(kullanici.id)) {
+            
+            if (sunucuHafizasi.guvenliListe.includes(kullanici.id)) {
                 return interaction.reply({ content: `<a:uyari:1505166167189487757> Kanka ${kullanici} zaten güvenli listede ekli!`, ephemeral: true });
             }
 
-            guvenliListe.push(kullanici.id);
-            ayarKaydet(guildId, 'botGuvenliListe', guvenliListe);
+            sunucuHafizasi.guvenliListe.push(kullanici.id);
+            ayarKaydet(guildId, 'botGuvenliListe', sunucuHafizasi.guvenliListe);
 
             const embed = new EmbedBuilder()
                 .setTitle('<:yeni:1505201065476362325> GÜVENLİ LİSTEYE EKLENDİ')
-                .setDescription(`<a:tik:1505164671081123840> ${kullanici} kullanıcısı güvenli listeye alındı kanka. Artık sunucuya bot eklemesine izin verilecek.`)
+                .setDescription(`<a:tik:1505164671081123840> ${kullanici} kullanıcısı güvenli listeye alındı kanka.`)
                 .setColor('#2ecc71')
                 .setTimestamp();
 
@@ -92,34 +106,31 @@ module.exports = {
         // 🛡️ 4. ALT KOMUT: GÜVENLİ LİSTEDEN ÇIKARMA
         if (altKomut === 'guvenli-cikar') {
             const kullanici = interaction.options.getUser('kullanici');
-            let guvenliListe = ayarGetir(guildId, 'botGuvenliListe', []);
 
-            if (!guvenliListe.includes(kullanici.id)) {
+            if (!sunucuHafizasi.guvenliListe.includes(kullanici.id)) {
                 return interaction.reply({ content: `<a:uyari:1505166167189487757> Kanka ${kullanici} zaten güvenli listede bulunmuyor!`, ephemeral: true });
             }
 
-            // Kullanıcıyı array içinden siliyoruz
-            guvenliListe = guvenliListe.filter(id => id !== kullanici.id);
-            ayarKaydet(guildId, 'botGuvenliListe', guvenliListe);
+            sunucuHafizasi.guvenliListe = sunucuHafizasi.guvenliListe.filter(id => id !== kullanici.id);
+            ayarKaydet(guildId, 'botGuvenliListe', sunucuHafizasi.guvenliListe);
 
             const embed = new EmbedBuilder()
                 .setTitle('<:riva_kilit:1505203119427162192> GÜVENLİ LİSTEDEN ÇIKARILDI')
-                .setDescription(`<a:baarsz:1505146967817326675> ${kullanici} kullanıcısı güvenli listeden şutlandı kanka. Artık bot eklemeye çalışırsa eklediği bot anında banlanacak!`)
+                .setDescription(`<a:baarsz:1505146967817326675> ${kullanici} kullanıcısı güvenli listeden çıkarıldı kanka.`)
                 .setColor('#e74c3c')
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed] });
         }
 
-        // 🟡 5. ALT KOMUT: TEST ETME
+        // 🟡 5. ALT KOMUT: SİSTEMİ TEST ETME
         if (altKomut === 'test') {
-            const kanalId = ayarGetir(guildId, 'girisCikisKanal', null);
-            const durum = ayarGetir(guildId, 'girisCikisDurum', false);
-            const logChan = kanalId ? interaction.guild.channels.cache.get(kanalId) : null;
-
-            if (!logChan || !durum) {
-                return interaction.reply({ content: '<a:uyari:1505166167189487757> Kanka önce `/giriscikis ayarla` komutuyla bir kanal seçip sistemi aktif etmen lazım!', ephemeral: true });
+            if (!sunucuHafizasi.durum || !sunucuHafizasi.kanalId) {
+                return interaction.reply({ content: '<a:uyari:1505166167189487757> Kanka önce `/giriscikis ayarla` komutuyla sistemi aktif etmen lazım!', ephemeral: true });
             }
+
+            const logChan = interaction.guild.channels.cache.get(sunucuHafizasi.kanalId);
+            if (!logChan) return interaction.reply({ content: 'Kanal bulunamadı kanka.', ephemeral: true });
 
             const avatar = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
             const username = encodeURIComponent(interaction.user.username);
@@ -129,15 +140,15 @@ module.exports = {
 
             const testEmbed = new EmbedBuilder()
                 .setTitle(`<a:join_join:1505202309343215717> [TEST] Sunucuya Yeni Bir Kan Katıldı!`)
-                .setDescription(`Aramıza hoş geldin ${interaction.user}! Resimli sistem canavar gibi çalışıyor kanka.`)
+                .setDescription(`Aramıza hoş geldin ${interaction.user}! Resimli sistem ve anlık sayaç canavar gibi çalışıyor kanka.`)
                 .setThumbnail(avatar)
                 .setImage(testResimUrl)
                 .setColor('#5865f2')
                 .setTimestamp();
 
-            await logChan.send({ content: `🧪 **TSA Sistem Testi:**`, embeds: [testEmbed] });
+            await logChan.send({ content: `🧪 **TSA Sistem Sayaç Testi:**`, embeds: [testEmbed] });
             
-            return interaction.reply({ content: `<a:tik:1505164671081123840> Test afişi başarıyla ${logChan} kanalına fırlatıldı kanka!`, ephemeral: true });
+            return interaction.reply({ content: `<a:tik:1505164671081123840> Test afişi anlık üye sayısı olan **${memberCount}** değeriyle ${logChan} kanalına fırlatıldı!`, ephemeral: true });
         }
     },
 };
