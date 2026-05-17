@@ -11,7 +11,6 @@ const {
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 
 module.exports = {
-    // Merkezi yetki kontrolü (Sadece Adminler kurabilir)
     requiredPerms: [PermissionsBitField.Flags.Administrator],
 
     data: new SlashCommandBuilder()
@@ -46,7 +45,6 @@ module.exports = {
                 return interaction.reply({ content: "<a:baarsz:1505146967817326675> Geçerli roller girmelisin! Örn: @Rol1 @Rol2", ephemeral: true });
             }
 
-            // Rolleri Storage'a kaydet
             ayarKaydet(interaction.guild.id, 'destekRolleri', rolIDleri);
             ayarKaydet(interaction.guild.id, 'logKanaliDestek', logKanali.id);
 
@@ -54,7 +52,7 @@ module.exports = {
                 .setTitle('<:tac:1505158450538352670> TSA MODERASYON | DESTEK SİSTEMİ')
                 .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz.\n\nTalebiniz en kısa sürede TSA yetkililerimiz tarafından yanıtlanacaktır.')
                 .addFields(
-                    { name: '<:koruma1:1505143174190989352> MODERATÖRLÜk ÇÖZÜMLERİ', value: '`Discord içi sorunlar, moderasyon desteği ve disiplin konuları`', inline: false },
+                    { name: '<:koruma1:1505143174190989352> MODERATÖRLÜK ÇÖZÜMLERİ', value: '`Discord içi sorunlar, moderasyon desteği và disiplin konuları`', inline: false },
                     { name: '<:uzaybot_kullanicilar:1505146190973505567> GENEL DESTEK', value: '`Oyun içi sorunlar, hesap sorunları ve genel danışmanlık`', inline: false },
                     { name: '<:takviye:1505157853994815530> VIP/GAMEPASS', value: '`Rütbe satın alma, Gamepass sorunları ve özel yetkilendirmeler`', inline: false },
                     { name: '<a:uyari:1505166167189487757> ÜST YÖNETİM', value: '`Ciddi şikayetler, gizli konular ve yönetim sorunları`', inline: false }
@@ -98,25 +96,25 @@ module.exports = {
                         .setPlaceholder('Bilet Kategorisi Seçiniz...')
                         .addOptions([
                             { 
-                                label: '<:koruma1:1505143174190989352> Moderatörlük Destek', 
+                                label: 'Moderatörlük Destek', 
                                 value: 'Moderatörlük', 
                                 description: 'Discord içi sorunlar ve moderasyon',
                                 emoji: '<:koruma1:1505143174190989352>'
                             },
                             { 
-                                label: '<:uzaybot_kullanicilar:1505146190973505567> Genel Destek', 
+                                label: 'Genel Destek', 
                                 value: 'Genel', 
                                 description: 'Oyun içi sorunlar ve genel konular',
                                 emoji: '<:uzaybot_kullanicilar:1505146190973505567>'
                             },
                             { 
-                                label: '<:takviye:1505157853994815530> VIP/Gamepass', 
+                                label: 'VIP/Gamepass', 
                                 value: 'Gamepass', 
                                 description: 'Rütbe ve özel yetkilendirme sorunları',
                                 emoji: '<:takviye:1505157853994815530>'
                             },
                             { 
-                                label: '<a:uyari:1505166167189487757> Üst Yönetim', 
+                                label: 'Üst Yönetim', 
                                 value: 'Yönetim', 
                                 description: 'Ciddi konular ve gizli şikayetler',
                                 emoji: '<a:uyari:1505166167189487757>'
@@ -146,7 +144,6 @@ module.exports = {
                 const logID = data[3];
                 const kategori = interaction.values[0];
 
-                // Kategori emojileri ve renkleri
                 const kategoriBilgisi = {
                     'Moderatörlük': { emoji: '<:koruma1:1505143174190989352>', renk: '#ff6b6b', prefix: 'mod' },
                     'Genel': { emoji: '<:uzaybot_kullanicilar:1505146190973505567>', renk: '#4ecdc4', prefix: 'gen' },
@@ -157,13 +154,11 @@ module.exports = {
                 const info = kategoriBilgisi[kategori];
                 const kanalAdi = `${info.prefix}-${interaction.user.username.substring(0, 10)}`.toLowerCase();
 
-                // İzinler - Önce herkese kapat
                 const izinler = [
                     { 
                         id: interaction.guild.id, 
                         deny: [PermissionsBitField.Flags.ViewChannel] 
                     },
-                    // Kullanıcı görsün
                     { 
                         id: interaction.user.id, 
                         allow: [
@@ -176,7 +171,6 @@ module.exports = {
                     }
                 ];
 
-                // Yetkili rolleri ekle
                 roller.forEach(r => {
                     izinler.push({ 
                         id: r, 
@@ -191,7 +185,6 @@ module.exports = {
                     });
                 });
 
-                // Kanal oluştur
                 const kanal = await interaction.guild.channels.create({
                     name: kanalAdi,
                     type: ChannelType.GuildText,
@@ -199,7 +192,6 @@ module.exports = {
                     topic: `Açan: ${interaction.user.id} | Kategori: ${kategori} | Zaman: ${new Date().toLocaleString('tr-TR')} | Log: ${logID}`
                 });
 
-                // Hoşgeldin mesajı
                 const hosgeldin = new EmbedBuilder()
                     .setTitle(`${info.emoji} TSA DESTEK SİSTEMİ - BİLET AÇILDI`)
                     .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 512 }))
@@ -232,13 +224,12 @@ module.exports = {
                         .setEmoji('<:riva_kilit:1505203119427162192>')
                 );
 
-                const yetkiliMesaj = await kanal.send({ 
+                await kanal.send({ 
                     content: `${roller.map(r => `<@&${r}>`).join(' ')} | ${interaction.user}`,
                     embeds: [hosgeldin], 
                     components: [biletButonlar] 
                 });
 
-                // Log Gönder
                 const logKanal = interaction.guild.channels.cache.get(logID);
                 if (logKanal) {
                     const logEmbed = new EmbedBuilder()
@@ -259,14 +250,12 @@ module.exports = {
 
                 await interaction.editReply({ 
                     content: `<a:tik:1505164671081123840> **Bilet başarıyla oluşturuldu!**\n\n<:uzaybot_kanal:1505159120074833931> Bilet Kanalı: ${kanal}\n📂 Kategori: ${info.emoji} ${kategori}`, 
-                    components: [],
-                    ephemeral: true 
+                    components: []
                 });
             }
 
             // --- 3. BİLETİ ÜSTLENME ---
             if (interaction.isButton() && interaction.customId === 'tsa_claim') {
-                // Yetki kontrolü
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
@@ -305,7 +294,6 @@ module.exports = {
                     ephemeral: false 
                 });
 
-                // Log
                 const topicData = interaction.channel.topic;
                 const logID = topicData.split('Log: ')[1];
                 const logKanal = interaction.guild.channels.cache.get(logID);
@@ -325,7 +313,6 @@ module.exports = {
 
             // --- 4. HIZLI KAPATMA VE LOGLAMA ---
             if (interaction.isButton() && interaction.customId === 'tsa_fast_close') {
-                // Yetki kontrolü
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages) && 
                     !interaction.message.mentions.has(interaction.user.id)) {
                     return interaction.reply({ 
@@ -339,7 +326,6 @@ module.exports = {
                 const acanID = topicData.split('Açan: ')[1].split(' |')[0];
                 const kategori = topicData.split('Kategori: ')[1].split(' |')[0];
 
-                // Kapatma embed'i
                 const kapanisEmbed = new EmbedBuilder()
                     .setTitle('<:riva_kilit:1505203119427162192> BİLET KAPATILIYOR...')
                     .setDescription(`Bu bilet **${interaction.user.tag}** tarafından kapatılıyor.\n\n⏱️ Kanal 5 saniye içinde siliniyor...`)
@@ -348,7 +334,6 @@ module.exports = {
 
                 await interaction.reply({ embeds: [kapanisEmbed] });
 
-                // Log Gönder
                 const logKanal = interaction.guild.channels.cache.get(logID);
                 if (logKanal) {
                     const logEmbed = new EmbedBuilder()
@@ -367,7 +352,6 @@ module.exports = {
                     await logKanal.send({ embeds: [logEmbed] });
                 }
 
-                // Kanal sil
                 setTimeout(async () => {
                     await interaction.channel.delete().catch(() => {
                         console.log('<a:baarsz:1505146967817326675> Bilet kanalı silinemedi');
@@ -418,10 +402,17 @@ module.exports = {
         } catch (error) {
             console.error('<a:baarsz:1505146967817326675> Destek sistemi hatası:', error);
             try {
-                await interaction.reply({ 
-                    content: '<a:baarsz:1505146967817326675> Bir hata oluştu! Lütfen daha sonra tekrar deneyiniz.', 
-                    ephemeral: true 
-                });
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ 
+                        content: '<a:baarsz:1505146967817326675> Bir hata oluştu! Lütfen daha sonra tekrar deneyiniz.', 
+                        ephemeral: true 
+                    });
+                } else {
+                    await interaction.followUp({ 
+                        content: '<a:baarsz:1505146967817326675> Bir hata oluştu! Lütfen daha sonra tekrar deneyiniz.', 
+                        ephemeral: true 
+                    });
+                }
             } catch (e) {
                 console.error('Hata yanıtı gönderilemedi:', e);
             }
