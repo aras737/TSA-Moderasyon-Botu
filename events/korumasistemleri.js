@@ -27,23 +27,23 @@ module.exports = (client) => {
 
     const lockdown = async (guild, executorId, eylem, count) => {
         try {
-            await guild.members.ban(executorId, { reason: `🚨 GUARD: ${count}x ${eylem}` }).catch(() => {});
+            await guild.members.ban(executorId, { reason: `<a:alarme:1505209430319300718> GUARD: ${count}x ${eylem}` }).catch(() => {});
 
             const role = guild.roles.everyone;
-            await role.setPermissions(role.permissions.remove(PermissionFlagsBits.SendMessages), '🚨 GUARD');
+            await role.setPermissions(role.permissions.remove(PermissionFlagsBits.SendMessages), '<a:alarme:1505209430319300718> GUARD');
 
             const logId = ayarGetir(guild.id, 'logKanal', null);
             const log = logId ? client.channels.cache.get(logId) : null;
 
             if (log) {
                 const embed = new EmbedBuilder()
-                    .setTitle('🚨 GUARD MÜDAHALESİ')
+                    .setTitle('<a:alarme:1505209430319300718> GUARD MÜDAHALESİ')
                     .setDescription(`**Saldırgan:** \`${executorId}\`\n**İşlem:** ${count}x ${eylem}\n**Aksiyon:** BAN + LOCKDOWN`)
                     .setColor('#960018').setTimestamp();
-                log.send({ content: '@everyone 🚨 SALDIRI ENGELLENDI!', embeds: [embed] }).catch(() => {});
+                log.send({ content: '@everyone <a:alarme:1505209430319300718> SALDIRI ENGELLENDI!', embeds: [embed] }).catch(() => {});
             }
 
-            setTimeout(() => role.setPermissions(role.permissions.add(PermissionFlagsBits.SendMessages), '✅ AUTO'), 300000);
+            setTimeout(() => role.setPermissions(role.permissions.add(PermissionFlagsBits.SendMessages), '<a:tik:1505164671081123840> AUTO'), 300000);
         } catch (err) {
             console.error('Guard Error:', err);
         }
