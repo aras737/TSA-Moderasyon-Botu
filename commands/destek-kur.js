@@ -67,7 +67,7 @@ module.exports = {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`tsa_setup_${rolIDleri.join('-')}_${logKanali.id}`)
-                    .setLabel('<:Paper:1505146388596391977> DESTEK OLAYI BAŞLAT')
+                    .setLabel('DESTEK OLAYI BAŞLAT')
                     .setStyle(ButtonStyle.Primary)
                     .setEmoji('<:bilet:1505453733969006602>')
             );
