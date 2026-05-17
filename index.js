@@ -1,8 +1,8 @@
 const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder } = require('discord.js');
 const fs = require('node:fs');
 const express = require('express'); 
-require('dotenv').config();
 const Storage = require('./services/storage');
+require('dotenv').config();
 
 // --- 1. RENDER'I İKNA ETME SİSTEMİ (WEB SERVER) ---
 const app = express();
@@ -33,18 +33,29 @@ const client = new Client({
     ]
 });
 
-// --- STORAGE BAĞLANTISI ---
+// --- STORAGE ENTEGRASYONU ---
 client.storage = Storage;
 
 client.commands = new Collection();
 const slashCommands = [];
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 
-for (const file of commandFiles) {
-    const command = require(`./commands/${file}`);
-    if (command.data && command.execute) {
-        client.commands.set(command.data.name, command);
-        slashCommands.push(command.data.toJSON());
+// Commands klasörü var mı kontrol et
+if (!fs.existsSync('./commands')) {
+    console.warn('⚠️ ./commands klasörü bulunamadı!');
+    fs.mkdirSync('./commands', { recursive: true });
+} else {
+    const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+
+    for (const file of commandFiles) {
+        try {
+            const command = require(`./commands/${file}`);
+            if (command.data && command.execute) {
+                client.commands.set(command.data.name, command);
+                slashCommands.push(command.data.toJSON());
+            }
+        } catch (error) {
+            console.error(`❌ Komut yükleme hatası (${file}):`, error);
+        }
     }
 }
 
@@ -60,7 +71,6 @@ process.on('uncaughtException', (error) => {
 // --- 4. READY EVENT ---
 client.once('ready', async () => {
     console.log(`🚀 [TSA] ${client.user.tag} Aktif!`);
-    console.log('💾 [STORAGE] Veri sistemi hazırlandı');
     
     setInterval(() => {
         console.log(`[TSA DURUM] Sistem Stabil | Saat: ${new Date().toLocaleTimeString('tr-TR')}`);
@@ -105,11 +115,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🛡️ KÜFÜR ENGEL SİSTEMİ — KALICI DEPOLAMA
-// =========================================================================
-// Küfür engelleme motoru artık events/kufurengel.js dosyasında çalışıyor.
-// Veriler Storage sistemi aracılığıyla kalıcı olarak kaydediliyor.
-// Açma: /küfür-engel aç  |  Kapatma: /küfür-engel kapat
+// 🛡️ KÜFÜR ENGEL SİSTEMİ — RAM BELLEĞİ
 // =========================================================================
 const sistemBellegi = new Map();
 client.sistemBellegi = sistemBellegi;
@@ -117,7 +123,15 @@ client.sistemBellegi = sistemBellegi;
 // =========================================================================
 // 🔥 DIŞ DOSYA BAĞLANTILARI
 // =========================================================================
-require('./events/gelismislog')(client);
-require('./events/kufurengel')(client);  // ← Gelişmiş küfür engel motoru v2
+if (fs.existsSync('./events/gelismislog.js')) {
+    require('./events/gelismislog')(client);
+}
+if (fs.existsSync('./events/kufurengel.js')) {
+    require('./events/kufurengel')(client);
+}
 
-client.login(process.env.TOKEN);
+// --- BOT GİRİŞİ ---
+client.login(process.env.TOKEN).catch(error => {
+    console.error('❌ Bot giriş hatası:', error.message);
+    process.exit(1);
+});
