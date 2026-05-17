@@ -22,16 +22,16 @@ module.exports = {
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
         const member = interaction.guild.members.cache.get(user.id);
 
-        if (!member) return interaction.reply({ content: '❌ Bu kullanıcı sunucuda yok.', ephemeral: true });
-        if (!member.kickable) return interaction.reply({ content: '❌ Yetkim bu üyeyi atmaya yetmiyor.', ephemeral: true });
+        if (!member) return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bu kullanıcı sunucuda yok.', ephemeral: true });
+        if (!member.kickable) return interaction.reply({ content: '<a:baarsz:1505146967817326675> Yetkim bu üyeyi atmaya yetmiyor.', ephemeral: true });
 
         // --- 1. ÖZEL DM EMBED MESAJI ---
         const dmEmbed = new EmbedBuilder()
             .setTitle('TSA | Sunucudan Atıldınız')
             .setDescription(`**${interaction.guild.name}** sunucusundan uzaklaştırıldınız.`)
             .addFields(
-                { name: '📄 Sebep', value: `\`${reason}\`` },
-                { name: '🛡️ Atan Yetkili', value: `${interaction.user.tag}` }
+                { name: '<:Paper:1505146388596391977> Sebep', value: `\`${reason}\`` },
+                { name: '<:koruma1:1505143174190989352> Atan Yetkili', value: `${interaction.user.tag}` }
             )
             .setColor('#e67e22')
             .setTimestamp()
@@ -49,12 +49,12 @@ module.exports = {
             await member.kick(reason);
 
             const kickEmbed = new EmbedBuilder()
-                .setTitle('👢 TSA | İşlem Başarılı')
+                .setTitle('<:icons_kick:1505438748035518464> TSA | İşlem Başarılı')
                 .setDescription(`**${user.tag}** sunucudan atıldı.`)
                 .addFields(
                     { name: 'Kullanıcı', value: `${user.tag}`, inline: true },
                     { name: 'Sebep', value: `\`${reason}\``, inline: true },
-                    { name: 'DM Durumu', value: '✅ Gönderildi (DM kapalıysa iletilemez)', inline: false }
+                    { name: 'DM Durumu', value: '<a:tik:1505164671081123840> Gönderildi (DM kapalıysa iletilemez)', inline: false }
                 )
                 .setColor('#f1c40f')
                 .setTimestamp();
@@ -62,7 +62,7 @@ module.exports = {
             await interaction.reply({ embeds: [kickEmbed] });
         } catch (error) {
             console.error(error);
-            await interaction.reply({ content: '❌ Kick işlemi sırasında bir hata oluştu!', ephemeral: true });
+            await interaction.reply({ content: '<a:baarsz:1505146967817326675> Kick işlemi sırasında bir hata oluştu!', ephemeral: true });
         }
     }
 };
