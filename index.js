@@ -43,8 +43,8 @@ const client = new Client({
 // =========================================================================
 // 3. STORAGE & KOLEKSİYON
 // =========================================================================
-client.storage     = Storage;
-client.commands    = new Collection();
+client.storage       = Storage;
+client.commands      = new Collection();
 client.sistemBellegi = new Map();
 
 const slashCommands = [];
@@ -76,9 +76,7 @@ if (!fs.existsSync('./commands')) {
 // 5. KRİTİK HATA KORUMALARI
 // =========================================================================
 process.on('unhandledRejection', (err) => {
-    // 10062 = Unknown interaction (süresi dolmuş), 40060 = Already acknowledged
-    // Bunlar beklenen hatalar, konsolu kirletmesin
-    if (err?.code === 10062 || err?.code === 40060) return;
+    if (err?.code === 10062 || err?.code === 40060) return; // Beklenen interaction hataları
     console.error('❌ [UNHANDLED REJECTION]:', err);
 });
 
@@ -92,12 +90,10 @@ process.on('uncaughtException', (err) => {
 client.once('ready', async () => {
     console.log(`🚀 [TSA] ${client.user.tag} Aktif!`);
 
-    // Durum log'u (her dakika)
     setInterval(() => {
         console.log(`[TSA DURUM] Sistem Stabil | Saat: ${new Date().toLocaleTimeString('tr-TR')}`);
     }, 60000);
 
-    // Slash komutlarını kaydet
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
@@ -110,9 +106,7 @@ client.once('ready', async () => {
 // =========================================================================
 // 7. ETKİLEŞİM YÖNETİMİ
 // =========================================================================
-
-// Interaction süre dolmuş mu kontrolü
-const isInteractionExpired = (err) => err?.code === 10062 || err?.code === 40060;
+const isExpired = (err) => err?.code === 10062 || err?.code === 40060;
 
 client.on('interactionCreate', async (interaction) => {
 
@@ -127,7 +121,7 @@ client.on('interactionCreate', async (interaction) => {
             if (!hasPerms) {
                 return interaction.reply({
                     content: '⚠️ Bu komutu kullanmak için yetkin yok kanka.',
-                    flags: MessageFlags.Ephemeral  // ephemeral: true artık deprecated
+                    flags: MessageFlags.Ephemeral
                 }).catch(() => {});
             }
         }
@@ -136,7 +130,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
             await interaction.deferReply();
         } catch (err) {
-            if (isInteractionExpired(err)) return; // Süresi dolmuş, sessizce çık
+            if (isExpired(err)) return;
             console.error('❌ Defer hatası:', err);
             return;
         }
@@ -145,7 +139,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
             await command.execute(interaction);
         } catch (err) {
-            if (isInteractionExpired(err)) return;
+            if (isExpired(err)) return;
             console.error(`❌ Komut hatası [${interaction.commandName}]:`, err);
             await interaction.editReply({ content: '❌ Bir hata oluştu kanka.' }).catch(() => {});
         }
@@ -160,10 +154,8 @@ client.on('interactionCreate', async (interaction) => {
         try {
             await biletKomutu.interactionHandler(interaction);
         } catch (err) {
-            if (isInteractionExpired(err)) return; // Sessizce geç
+            if (isExpired(err)) return;
             console.error('❌ Button/Select hatası:', err);
-
-            // Henüz yanıtlanmadıysa hata mesajı gönder
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: '❌ İşlem sırasında bir hata oluştu.',
@@ -177,11 +169,8 @@ client.on('interactionCreate', async (interaction) => {
 // =========================================================================
 // 8. DIŞ DOSYA BAĞLANTILARI
 // =========================================================================
-const eventler = ['./events/gelismislog.js', './events/kufurengel.js'];
-for (const event of eventler) {
-    if (fs.existsSync(event)) {
-        require(event)(client);
-    }
+for (const event of ['./events/gelismislog.js', './events/kufurengel.js']) {
+    if (fs.existsSync(event)) require(event)(client);
 }
 
 // =========================================================================
