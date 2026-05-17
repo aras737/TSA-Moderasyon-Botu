@@ -28,7 +28,7 @@ module.exports = (client) => {
 
                 const uyariEmbed = new EmbedBuilder()
                     .setColor('#ff0000')
-                    .setDescription(`<a:uyari:1505166167189487757> **${message.author}**, bu sunucuda **${sebep}** kesinlikle yasaktır!\n*Kurallar herkes için geçerlidir.*`);
+                    .setDescription(`<a:alarme:1505209430319300718> **${message.author}**, bu sunucuda **${sebep}** kesinlikle yasaktır!\n*Kurallar herkes için geçerlidir.*`);
                 
                 const uyariMsg = await message.channel.send({ embeds: [uyariEmbed] });
                 setTimeout(() => uyariMsg.delete().catch(() => {}), 7000);
@@ -44,9 +44,9 @@ module.exports = (client) => {
                         .setTitle('<:koruma1:1505143174190989352> İhlal Temizlendi')
                         .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
                         .addFields(
-                            { name: '👤 Kullanıcı', value: `${message.author}\n\`ID: ${message.author.id}\``, inline: true },
-                            { name: '📍 Kanal', value: `${message.channel}`, inline: true },
-                            { name: '🗑️ Mesaj', value: `\`\`\`${silinenMesaj}\`\`\`` }
+                            { name: '<:uzaybot_kullanicilar:1505146190973505567> Kullanıcı', value: `${message.author}\n\`ID: ${message.author.id}\``, inline: true },
+                            { name: '<:uzaybot_kanal:1505159120074833931> Kanal', value: `${message.channel}`, inline: true },
+                            { name: '<:uzaybot_mesaj:1505162349026344970> Mesaj', value: `\`\`\`${silinenMesaj}\`\`\`` }
                         )
                         .setColor('#960018').setTimestamp();
                     
