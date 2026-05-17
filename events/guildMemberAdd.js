@@ -5,7 +5,7 @@ module.exports = (client) => {
     client.on('guildMemberAdd', async (member) => {
         const guild = member.guild;
 
-        // 🧠 CANLI HAFIZA SİSTEMİ — taze veri okuma
+        // 🧠 CANLI HAFIZA SİSTEMİ — Saliselik taze veri okuma
         if (!client.girisCikisCache) client.girisCikisCache = new Map();
 
         const tazeKanalId = ayarGetir(guild.id, 'girisCikisKanal', null);
@@ -20,75 +20,69 @@ module.exports = (client) => {
 
         const hafiza = client.girisCikisCache.get(guild.id);
 
-        // 🛡️ OTO MODERASYON: ANINDA SIFIR GECİKME BOT BANLAMA
+        // 🛡️ OTO MODERASYON: 1 SALİSEDE ANINDA BANLAMA VE TARAMA
         if (member.user.bot) {
             try {
-                // 1. ÖNLEM: Önce botu sunucudan anında şutluyoruz ki sunucuya zarar veremesin!
-                await member.ban({ reason: `🛡️ Oto-Moderasyon: Güvenlik taraması yapılıyor...` }).catch(() => null);
+                // ⚡ İLK SALİSE: Bot daha sunucu listesine düşmeden direkt banı vur kanka!
+                await member.ban({ reason: `🛡️ TSA Oto-Moderasyon: Anında Bot Koruması!` }).catch(() => null);
 
-                // 2. ÖNLEM: Şimdi arka planda rahat rahat logları tarayıp suçluyu arıyoruz
+                // ⚡ AYNI SALİSE: Gecikme olmadan direkt güncel denetim kaydını çek
+                const fetchedLogs = await guild.fetchAuditLogs({
+                    limit: 3, // En son 3 kayda bak, hızlıca tara
+                    type: AuditLogEvent.BotAdd
+                }).catch(() => null);
+
                 let botiEkleyen = null;
-                
-                // Logların düşmesi için max 3 kez döngüyle kontrol ediyoruz
-                for (let i = 0; i < 3; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // Her denemede 1.5 sn bekle
-                    
-                    const fetchedLogs = await guild.fetchAuditLogs({
-                        limit: 10, // Son 10 logu çek ki arada kaynamasın
-                        type: AuditLogEvent.BotAdd
-                    }).catch(() => null);
 
-                    if (fetchedLogs) {
-                        const dogruEntry = fetchedLogs.entries.find(entry => entry.target && entry.target.id === member.id);
-                        if (dogruEntry) {
-                            botiEkleyen = dogruEntry.executor;
-                            break; // Logu bulduysak döngüden çık kanka
-                        }
+                if (fetchedLogs) {
+                    // Eklenen botun ID'si ile loglardaki hedef bot ID'sini salisesinde eşleştir
+                    const dogruEntry = fetchedLogs.entries.find(entry => entry.target && entry.target.id === member.id);
+                    if (dogruEntry) {
+                        botiEkleyen = dogruEntry.executor;
                     }
                 }
 
-                // Log kanalını bulalım
                 const logChan = hafiza.kanalId ? guild.channels.cache.get(hafiza.kanalId) : null;
 
-                // Eğer botu ekleyen kişi bulunduysa ve güvenli listedeyse (Sunucu sahibi veya whitelist)
+                // Eğer botu ekleyen kişi o salise yakalandıysa ve GÜVENLİ LİSTEDEYSE
                 if (botiEkleyen && (botiEkleyen.id === guild.ownerId || hafiza.guvenliListe.includes(botiEkleyen.id))) {
-                    // Kanka botu güvenli biri eklemiş ama biz acele edip banladık! Geri banını açıyoruz.
-                    await guild.members.unban(member.id, "Güvenli yetkili tarafından eklenen yasal bot.").catch(() => null);
+                    // Bizim yetkililerden biriyse banı salisesinde kaldırıp içeri al kanka
+                    await guild.members.unban(member.id, "Güvenli yetkili tarafından eklenen onaylı bot.").catch(() => null);
                     
                     if (logChan) {
                         const guvenliEmbed = new EmbedBuilder()
-                            .setTitle('🟢 GÜVENLİ BOT GİRİŞİ')
-                            .setDescription(`✅ ${botiEkleyen} tarafından sunucuya eklenen **${member.user.tag}** botu güvenli listede onaylandı ve sunucuya alındı kanka.`)
+                            .setTitle('🟢 ONAYLI BOT GİRİŞİ')
+                            .setDescription(`✅ ${botiEkleyen} tarafından eklenen **${member.user.tag}** botu güvenli listede olduğu için banı kaldırıldı ve içeri alındı kanka.`)
                             .setColor('#2ecc71')
                             .setTimestamp();
                         await logChan.send({ embeds: [guvenliEmbed] }).catch(() => null);
                     }
-                    return; // Onaylı bot olduğu için hoş geldin mesajına geçebilir
+                    return;
                 }
 
-                // Eğer ekleyen kişi güvenli listede değilse veya hiç bulunamadıysa (Kaçak giriş)
+                // Eğer ekleyen kişi yabancıysa veya o salise Discord logu yetiştiremediyse (Göz açtırmıyoruz)
                 if (logChan) {
                     const korumaEmbed = new EmbedBuilder()
-                        .setTitle('🛡️ OTO-MODERASYON TETİKLENDİ!')
+                        .setTitle('🛡️ ANINDA OTO-MODERASYON TETİKLENDİ!')
                         .setDescription(
-                            `⚠️ Sunucuya izinsiz bir bot sokuldu ve sistem tarafından infaz edildi kanka!\n\n` +
-                            `**Banlanan Zararlı Bot:** ${member.user.tag} (\`${member.id}\`)\n` +
-                            `**Sokan Yetkili:** ${botiEkleyen ? `${botiEkleyen} (\`${botiEkleyen.id}\`)` : '`Tespit Edilemedi (Discord Log Hatası)`'}\n\n` +
-                            `*Sistem botu algıladığı salise sunucudan kalıcı olarak uzaklaştırdı!*`
+                            `⚠️ Sunucuya sızmaya çalışan yabancı bot 1 salisede infaz edildi kanka!\n\n` +
+                            `**Banlanan Bot:** ${member.user.tag} (\`${member.id}\`)\n` +
+                            `**Eklemeye Çalışan:** ${botiEkleyen ? `${botiEkleyen} (\`${botiEkleyen.id}\`)` : '`Gecikmeli Giriş / Kaçak İstek`'}\n\n` +
+                            `*Sistem botu algıladığı an sunucu düzenini bozmasına fırsat vermeden kalıcı olarak banladı!*`
                         )
                         .setColor('#e74c3c')
                         .setTimestamp();
 
                     await logChan.send({ embeds: [korumaEmbed] }).catch(() => null);
                 }
-                return; // İzinsiz bot olduğu için aşağıya inip hoş geldin mesajı fırlatmasın
-                
+                return; // Kaçak botsa giriş logunu çalıştırma, işlemi kes kanka.
+
             } catch (err) {
-                console.error('Oto-moderasyon ana hata:', err);
+                console.error('Saliselik oto-moderasyon hatası kanka:', err);
             }
         }
 
-        // 🖼️ NORMAL ÜYELER İÇİN SAYAÇLI GİRİŞ LOGU (Eğer bot değilse burası çalışır)
+        // 🖼️ NORMAL ÜYELER İÇİN SAYAÇLI GİRİŞ LOGU (Eğer giren bot değilse burası çalışır)
         if (hafiza.durum && hafiza.kanalId) {
             const logChan = guild.channels.cache.get(hafiza.kanalId);
             if (!logChan) return;
