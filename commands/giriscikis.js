@@ -33,8 +33,8 @@ module.exports = {
             ayarKaydet(guildId, 'girisCikisDurum', true);
 
             const embed = new EmbedBuilder()
-                .setTitle('🖼️ ERENSI RESİMLİ LOG AKTİF!')
-                .setDescription(`✅ Resimli giriş-çıkış sistemi başarıyla ${kanal} kanalına bağlandı ve **data klasörüne işlendi** kanka.\n\n*Artık yeni biri geldiğinde veya çıktığında bu kanala otomatik afiş fırlatılacak.*`)
+                .setTitle('<:yeni:1505201065476362325> ERENSI RESİMLİ LOG AKTİF!')
+                .setDescription(`<a:tik:1505164671081123840> Resimli giriş-çıkış sistemi başarıyla ${kanal} kanalına bağlandı ve **data klasörüne işlendi** kanka.\n\n*Artık yeni biri geldiğinde veya çıktığında resimli mesaj göreceksin.*`)
                 .setColor('#2ecc71')
                 .setTimestamp();
 
@@ -47,8 +47,8 @@ module.exports = {
             ayarKaydet(guildId, 'girisCikisDurum', false);
 
             const embed = new EmbedBuilder()
-                .setTitle('🔓 SİSTEM DEVRE DIŞI')
-                .setDescription(`❌ Resimli giriş-çıkış takip sistemi bu sunucu için kalıcı olarak **kapatıldı kanka**. Ayarlar sıfırlanmadı, tekrar açtığında kaldığı yerden devam eder.`)
+                .setTitle('<:riva_kilit:1505203119427162192> SİSTEM DEVRE DIŞI')
+                .setDescription(`<a:baarsz:1505146967817326675> Resimli giriş-çıkış takip sistemi bu sunucu için kalıcı olarak **kapatıldı kanka**. Ayarlar sıfırlanmadı, tekrar açtığında kaldığı yerden devam edecek.`)
                 .setColor('#e74c3c')
                 .setTimestamp();
 
@@ -62,7 +62,7 @@ module.exports = {
             const logChan = kanalId ? interaction.guild.channels.cache.get(kanalId) : null;
 
             if (!logChan || !durum) {
-                return interaction.reply({ content: '⚠️ Kanka önce `/giriscikis ayarla` komutuyla bir kanal seçip sistemi aktif etmen lazım!', ephemeral: true });
+                return interaction.reply({ content: '<a:uyari:1505166167189487757> Kanka önce `/giriscikis ayarla` komutuyla bir kanal seçip sistemi aktif etmen lazım!', ephemeral: true });
             }
 
             // Test için komutu yazan kişinin bilgilerini kullanıyoruz kanka
@@ -72,7 +72,7 @@ module.exports = {
             const testResimUrl = `https://dummyimage.com/800x350/2b2d31/f2f3f5.png&text=TEST+BAŞARILI+KANKA!%0A${username}%0A%0ASunucu:+${guildName}`;
 
             const testEmbed = new EmbedBuilder()
-                .setTitle(`📥 [TEST] Sunucuya Yeni Bir Kan Katıldı!`)
+                .setTitle(`<a:join_join:1505202309343215717> [TEST] Sunucuya Yeni Bir Kan Katıldı!`)
                 .setDescription(`Aramıza hoş geldin ${interaction.user}! Resimli sistem canavar gibi çalışıyor kanka.`)
                 .setThumbnail(avatar)
                 .setImage(testResimUrl)
@@ -82,7 +82,7 @@ module.exports = {
             // Belirlenen log kanalına test mesajını yolluyoruz
             await logChan.send({ content: `🧪 **TSA Sistem Testi:**`, embeds: [testEmbed] });
             
-            return interaction.reply({ content: `✅ Test afişi başarıyla ${logChan} kanalına fırlatıldı kanka!`, ephemeral: true });
+            return interaction.reply({ content: `<a:tik:1505164671081123840> Test afişi başarıyla ${logChan} kanalına fırlatıldı kanka!`, ephemeral: true });
         }
     },
 };
