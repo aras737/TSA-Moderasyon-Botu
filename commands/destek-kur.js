@@ -95,7 +95,7 @@ module.exports = {
                 const menuRow = new ActionRowBuilder().addComponents(
                     new StringSelectMenuBuilder()
                         .setCustomId(`tsa_create_${roller}_${logID}`)
-                        .setPlaceholder('<:appEmoji_kategori:1505159567879966811> Bilet Kategorisi Seçiniz...')
+                        .setPlaceholder('Bilet Kategorisi Seçiniz...')
                         .addOptions([
                             { 
                                 label: '<:koruma1:1505143174190989352> Moderatörlük Destek', 
