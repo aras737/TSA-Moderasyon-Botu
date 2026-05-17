@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuil
 const fs = require('node:fs');
 const express = require('express'); 
 require('dotenv').config();
+const Storage = require('./services/storage');
 
 // --- 1. RENDER'I İKNA ETME SİSTEMİ (WEB SERVER) ---
 const app = express();
@@ -32,6 +33,9 @@ const client = new Client({
     ]
 });
 
+// --- STORAGE BAĞLANTISI ---
+client.storage = Storage;
+
 client.commands = new Collection();
 const slashCommands = [];
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
@@ -56,6 +60,7 @@ process.on('uncaughtException', (error) => {
 // --- 4. READY EVENT ---
 client.once('ready', async () => {
     console.log(`🚀 [TSA] ${client.user.tag} Aktif!`);
+    console.log('💾 [STORAGE] Veri sistemi hazırlandı');
     
     setInterval(() => {
         console.log(`[TSA DURUM] Sistem Stabil | Saat: ${new Date().toLocaleTimeString('tr-TR')}`);
@@ -100,10 +105,10 @@ client.on('interactionCreate', async interaction => {
 });
 
 // =========================================================================
-// 🛡️ KÜFÜR ENGEL SİSTEMİ — RAM BELLEĞİ
+// 🛡️ KÜFÜR ENGEL SİSTEMİ — KALICI DEPOLAMA
 // =========================================================================
 // Küfür engelleme motoru artık events/kufurengel.js dosyasında çalışıyor.
-// Bu bellek, /küfür-engel slash komutu tarafından yönetilir.
+// Veriler Storage sistemi aracılığıyla kalıcı olarak kaydediliyor.
 // Açma: /küfür-engel aç  |  Kapatma: /küfür-engel kapat
 // =========================================================================
 const sistemBellegi = new Map();
