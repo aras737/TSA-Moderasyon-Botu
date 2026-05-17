@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const Storage = require('../services/storage');
+const { ayarKaydet, ayarGetir } = require('../utils/db');
 
 module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
@@ -32,52 +32,68 @@ module.exports = {
         if (subcommand === 'kanalı-ayarla') {
             const kanal = interaction.options.getChannel('kanal');
 
-            // Storage'a kaydet
-            Storage.set(`guild_${interaction.guild.id}_logKanal`, kanal.id);
+            try {
+                // Database'e kaydet
+                ayarKaydet(interaction.guild.id, 'logKanal', kanal.id);
 
-            const embed = new EmbedBuilder()
-                .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
-                .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses ve ban hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
-                .setColor('#2ecc71')
-                .setTimestamp();
+                const embed = new EmbedBuilder()
+                    .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
+                    .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses, üye, ban, emoji, sticker ve invite hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
+                    .setColor('#2ecc71')
+                    .setTimestamp();
 
-            return interaction.reply({ embeds: [embed] });
+                return interaction.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error('<a:baarsz:1505146967817326675> Log kanalı ayar hatası:', error);
+                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
+            }
         }
 
         if (subcommand === 'göster') {
-            const logKanalId = Storage.get(`guild_${interaction.guild.id}_logKanal`);
+            try {
+                const logKanalId = ayarGetir(interaction.guild.id, 'logKanal', null);
 
-            if (!logKanalId) {
-                return interaction.reply({ 
-                    content: '<a:uyari:1505166167189487757> Henüz hiç log kanalı ayarlanmamış kanka! `/log kanalı-ayarla` kullan.', 
-                    ephemeral: true 
-                });
+                if (!logKanalId) {
+                    return interaction.reply({ 
+                        content: '<a:uyari:1505166167189487757> Henüz hiç log kanalı ayarlanmamış kanka! `/log kanalı-ayarla` kullan.', 
+                        ephemeral: true 
+                    });
+                }
+
+                const logKanal = interaction.guild.channels.cache.get(logKanalId);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('<:Paper:1505146388596391977> Log Kanalı Bilgisi')
+                    .setDescription(`Log kanalı: ${logKanal || '`Kanal silindi!`'}`)
+                    .addFields(
+                        { name: 'Kanal ID', value: `\`${logKanalId}\`` },
+                        { name: 'Durum', value: logKanal ? '<a:tik:1505164671081123840> Aktif' : '<:sil:1505147967907037275> Kanal Silinmiş' }
+                    )
+                    .setColor('#3498db')
+                    .setTimestamp();
+
+                return interaction.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error('<a:baarsz:1505146967817326675> Log göster hatası:', error);
+                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
             }
-
-            const logKanal = interaction.guild.channels.cache.get(logKanalId);
-
-            const embed = new EmbedBuilder()
-                .setTitle('<:Paper:1505146388596391977> Log Kanalı Bilgisi')
-                .setDescription(`Log kanalı: ${logKanal || '`Kanal silindi!`'}`)
-                .addFields(
-                    { name: 'Kanal ID', value: `\`${logKanalId}\`` }
-                )
-                .setColor('#3498db')
-                .setTimestamp();
-
-            return interaction.reply({ embeds: [embed] });
         }
 
         if (subcommand === 'kapat') {
-            Storage.delete(`guild_${interaction.guild.id}_logKanal`);
+            try {
+                ayarKaydet(interaction.guild.id, 'logKanal', null);
 
-            const embed = new EmbedBuilder()
-                .setTitle('<a:baarsz:1505146967817326675> Log Sistemi Kapatıldı')
-                .setDescription('Log sistemi bu sunucu için devre dışı bırakıldı.')
-                .setColor('#e74c3c')
-                .setTimestamp();
+                const embed = new EmbedBuilder()
+                    .setTitle('<a:baarsz:1505146967817326675> Log Sistemi Kapatıldı')
+                    .setDescription('Log sistemi bu sunucu için devre dışı bırakıldı.')
+                    .setColor('#e74c3c')
+                    .setTimestamp();
 
-            return interaction.reply({ embeds: [embed] });
+                return interaction.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error('<a:baarsz:1505146967817326675> Log kapatma hatası:', error);
+                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
+            }
         }
     }
 };
