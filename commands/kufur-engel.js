@@ -1,112 +1,97 @@
-const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { ayarGetir } = require('../utils/db');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { ayarGetir, ayarKaydet } = require('../utils/db');
 
-module.exports = (client) => {
-    const kufurler = ['amk', 'aq', 'piç', 'orospu', 'sik', 'yarrak', 'pezevenk', 'göt', 'sktir', 'sg'];
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('kufurengel')
+        .setDescription('Küfür ve link engel sistemini yönet.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Sadece adminler görebilir
+        .addSubcommand(sub =>
+            sub.setName('ac')
+                .setDescription('Küfür/link engelini açar.')
+                .addStringOption(opt =>
+                    opt.setName('tur')
+                        .setDescription('Ne engellensin?')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: '🤬 Küfür Engeli', value: 'kufur' },
+                            { name: '🔗 Link Engeli',  value: 'link'  },
+                            { name: '✅ İkisi Birden', value: 'hepsi' }
+                        )
+                )
+        )
+        .addSubcommand(sub =>
+            sub.setName('kapat')
+                .setDescription('Küfür/link engelini kapatır.')
+                .addStringOption(opt =>
+                    opt.setName('tur')
+                        .setDescription('Ne kapatılsın?')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: '🤬 Küfür Engeli', value: 'kufur' },
+                            { name: '🔗 Link Engeli',  value: 'link'  },
+                            { name: '❌ İkisi Birden', value: 'hepsi' }
+                        )
+                )
+        )
+        .addSubcommand(sub =>
+            sub.setName('durum')
+                .setDescription('Mevcut engel durumunu gösterir.')
+        ),
 
-    // ⚠️ linkRegex her test() çağrısında yeniden oluşturulmalı!
-    // Regex'i sabit tanımlayıp .test() ile kullanmak lastIndex sorununa yol açar.
-    const getLinkRegex = () => /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,})/gi;
+    // Sadece bu yetkiye sahip olanlar çalıştırabilir
+    requiredPerms: [PermissionFlagsBits.Administrator],
 
-    // Uyarı sayacı (RAM'de tutuluyor, bot yeniden başlarsa sıfırlanır)
-    // Map<userId, uyariSayisi>
-    const uyariSayaci = client.sistemBellegi ?? new Map();
-
-    client.on('messageCreate', async (message) => {
-        if (message.author.bot || !message.guild) return;
-
-        // 🛡️ Bot'un ManageMessages yetkisi var mı?
-        if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ManageMessages)) return;
-
-        // 🛡️ Sunucu sahibi, yönetici veya moderatörleri atla
-        if (
-            message.author.id === message.guild.ownerId ||
-            message.member.permissions.has(PermissionFlagsBits.Administrator) ||
-            message.member.permissions.has(PermissionFlagsBits.ManageMessages)
-        ) return;
-
-        // ✅ Ayarları async olarak çek (ayarGetir async ise await gerekli)
-        const kufurDurum = await ayarGetir(message.guild.id, 'kufurEngelDurum', true);
-        const linkDurum  = await ayarGetir(message.guild.id, 'linkEngelDurum', true);
-        const logKanalId = await ayarGetir(message.guild.id, 'logKanal', null);
-
-        const icerik = message.content.toLowerCase();
-        let tetiklendi = false;
-        let sebep = '';
-
-        // Küfür kontrolü
-        if (kufurDurum && kufurler.some(kufur => icerik.includes(kufur))) {
-            tetiklendi = true;
-            sebep = 'Küfür / Argo Kullanımı';
+    async execute(interaction) {
+        // Çift güvenlik: yetki kontrolü
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.editReply({
+                content: '❌ Bu komutu kullanmak için **Yönetici** yetkisine sahip olman gerekiyor kanka.'
+            });
         }
 
-        // Link kontrolü — her seferinde yeni regex örneği (lastIndex sıfır olur)
-        if (!tetiklendi && linkDurum && getLinkRegex().test(message.content)) {
-            tetiklendi = true;
-            sebep = 'Link / Reklam Paylaşımı';
+        const sub     = interaction.options.getSubcommand();
+        const tur     = interaction.options.getString('tur');
+        const guildId = interaction.guildId;
+
+        // ── DURUM ─────────────────────────────────────────────────────────
+        if (sub === 'durum') {
+            const kufurDurum = await ayarGetir(guildId, 'kufurEngelDurum', false);
+            const linkDurum  = await ayarGetir(guildId, 'linkEngelDurum',  false);
+
+            const embed = new EmbedBuilder()
+                .setTitle('<:koruma1:1505143174190989352> Engel Sistemi Durumu')
+                .addFields(
+                    { name: '🤬 Küfür Engeli', value: kufurDurum ? '`✅ Açık`' : '`❌ Kapalı`', inline: true },
+                    { name: '🔗 Link Engeli',  value: linkDurum  ? '`✅ Açık`' : '`❌ Kapalı`', inline: true }
+                )
+                .setColor('#3498db')
+                .setTimestamp();
+
+            return interaction.editReply({ embeds: [embed] });
         }
 
-        if (!tetiklendi) return;
+        // ── AÇ / KAPAT ────────────────────────────────────────────────────
+        const yeniDurum = sub === 'ac';
 
-        // Mesajı sil
-        await message.delete().catch(() => {});
-
-        // Uyarı sayacını artır
-        const userId     = message.author.id;
-        const mevcutUyari = (uyariSayaci.get(userId) ?? 0) + 1;
-        uyariSayaci.set(userId, mevcutUyari);
-
-        // Uyarı embed'i
-        const uyariEmbed = new EmbedBuilder()
-            .setColor('#ff0000')
-            .setDescription(
-                `<a:alarme:1505209430319300718> **${message.author}**, bu sunucuda **${sebep}** kesinlikle yasaktır!\n` +
-                `*Kurallar herkes için geçerlidir.* | Uyarı sayısı: **${mevcutUyari}**`
-            );
-
-        const uyariMsg = await message.channel.send({ embeds: [uyariEmbed] }).catch(() => null);
-        if (uyariMsg) setTimeout(() => uyariMsg.delete().catch(() => {}), 7000);
-
-        // 3 uyarıda timeout uygula
-        if (mevcutUyari >= 3) {
-            const timeoutSuresi = 10 * 60 * 1000; // 10 dakika
-            await message.member.timeout(timeoutSuresi, `Oto-Moderasyon: ${mevcutUyari} uyarı — ${sebep}`)
-                .catch(() => {});
-
-            const timeoutEmbed = new EmbedBuilder()
-                .setColor('#e67e22')
-                .setDescription(
-                    `<a:alarme:1505209430319300718> **${message.author}**, ${mevcutUyari} uyarı aldığın için **10 dakika** susturuldun!`
-                );
-
-            const timeoutMsg = await message.channel.send({ embeds: [timeoutEmbed] }).catch(() => null);
-            if (timeoutMsg) setTimeout(() => timeoutMsg.delete().catch(() => {}), 10000);
-
-            uyariSayaci.set(userId, 0); // Sayacı sıfırla
+        if (tur === 'kufur' || tur === 'hepsi') {
+            await ayarKaydet(guildId, 'kufurEngelDurum', yeniDurum);
+        }
+        if (tur === 'link' || tur === 'hepsi') {
+            await ayarKaydet(guildId, 'linkEngelDurum', yeniDurum);
         }
 
-        // Log kanalına gönder
-        const logChan = logKanalId ? client.channels.cache.get(logKanalId) : null;
-        if (!logChan) return;
+        const turYazi = tur === 'hepsi' ? 'Küfür & Link Engeli' : tur === 'kufur' ? 'Küfür Engeli' : 'Link Engeli';
+        const renk    = yeniDurum ? '#2ecc71' : '#e74c3c';
+        const icon    = yeniDurum ? '✅' : '❌';
 
-        const silinenMesaj = message.content.length > 1000
-            ? message.content.substring(0, 1000) + '...'
-            : message.content;
-
-        const logEmbed = new EmbedBuilder()
-            .setAuthor({ name: 'Sohbet Koruması', iconURL: message.guild.iconURL() })
-            .setTitle('<:koruma1:1505143174190989352> İhlal Temizlendi')
-            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: '<:uzaybot_kullanicilar:1505146190973505567> Kullanıcı', value: `${message.author}\n\`ID: ${message.author.id}\``, inline: true },
-                { name: '<:uzaybot_kanal:1505159120074833931> Kanal', value: `${message.channel}`, inline: true },
-                { name: '<a:alarme:1505209430319300718> İhlal Sebebi', value: `\`${sebep}\``, inline: true },
-                { name: '<a:uyari:1505166167189487757> Uyarı Sayısı', value: `\`${mevcutUyari}\``, inline: true },
-                { name: '<:uzaybot_mesaj:1505162349026344970> Silinen Mesaj', value: `\`\`\`${silinenMesaj}\`\`\`` }
-            )
-            .setColor('#960018')
+        const embed = new EmbedBuilder()
+            .setTitle('<:koruma1:1505143174190989352> Engel Sistemi Güncellendi!')
+            .setDescription(`${icon} **${turYazi}** başarıyla **${yeniDurum ? 'açıldı' : 'kapatıldı'}** kanka.`)
+            .addFields({ name: '<:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan', value: `${interaction.user}` })
+            .setColor(renk)
             .setTimestamp();
 
-        logChan.send({ embeds: [logEmbed] }).catch(() => {});
-    });
+        return interaction.editReply({ embeds: [embed] });
+    }
 };
