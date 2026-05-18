@@ -1,4 +1,5 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder } = require('discord.js');
+// İlk satıra WebhookClient eklendi kanka, gözden kaçırma 
+const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient } = require('discord.js');
 const fs = require('node:fs');
 const express = require('express'); 
 const Storage = require('./services/storage');
