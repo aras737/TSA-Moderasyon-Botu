@@ -43,6 +43,9 @@ module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
 
     async execute(interaction) {
+        // ⚡ FIX 1: editReply hatasını çözmek için ilk olarak etkileşimi erteliyoruz (Bot düşünüyor...)
+        await interaction.deferReply({ ephemeral: true }).catch(() => null);
+
         // Çift güvenlik: yetki kontrolü
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.editReply({
@@ -53,6 +56,10 @@ module.exports = {
         const sub     = interaction.options.getSubcommand();
         const tur     = interaction.options.getString('tur');
         const guildId = interaction.guildId;
+        const client  = interaction.client;
+
+        // RAM belleği var mı kontrol et yoksa index.js ile eşle kanka
+        if (!client.sistemBellegi) client.sistemBellegi = new Map();
 
         // ── DURUM ─────────────────────────────────────────────────────────
         if (sub === 'durum') {
@@ -74,12 +81,24 @@ module.exports = {
         // ── AÇ / KAPAT ────────────────────────────────────────────────────
         const yeniDurum = sub === 'ac';
 
+        // Sunucunun hafıza kaydını taze çek veya oluştur
+        if (!client.sistemBellegi.has(guildId)) {
+            client.sistemBellegi.set(guildId, { kufur: false, link: false });
+        }
+        const mevcutHafiza = client.sistemBellegi.get(guildId);
+
+        // Seçilen türe göre hem DB'yi hem de canlı RAM'i saniyesinde güncelliyoruz kanka
         if (tur === 'kufur' || tur === 'hepsi') {
             await ayarKaydet(guildId, 'kufurEngelDurum', yeniDurum);
+            mevcutHafiza.kufur = yeniDurum;
         }
         if (tur === 'link' || tur === 'hepsi') {
             await ayarKaydet(guildId, 'linkEngelDurum', yeniDurum);
+            mevcutHafiza.link = yeniDurum;
         }
+
+        // Değişen veriyi RAM belleğe geri fırlat kanka
+        client.sistemBellegi.set(guildId, mevcutHafiza);
 
         const turYazi = tur === 'hepsi' ? 'Küfür & Link Engeli' : tur === 'kufur' ? 'Küfür Engeli' : 'Link Engeli';
         const renk    = yeniDurum ? '#2ecc71' : '#e74c3c';
