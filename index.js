@@ -1,6 +1,7 @@
 // İlk satıra WebhookClient eklendi kanka, gözden kaçırma 
 const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient } = require('discord.js');
 const fs = require('node:fs');
+const path = require('node:path');
 const express = require('express'); 
 const Storage = require('./services/storage');
 require('dotenv').config();
@@ -30,12 +31,31 @@ const client = new Client({
     partials: [
         Partials.Message,
         Partials.Channel,
-        Partials.User
+        Partials.User,
+        Partials.GuildMember
     ]
 });
 
-// --- STORAGE ENTEGRASYONU ---
+// --- STORAGE VE VAXERA ALTYAPI UYUMLULUĞU ---
 client.storage = Storage;
+// Prismo altyapısının ihtiyaç duyduğu temel nesneleri buraya tanımlıyoruz kanka:
+client.database = {
+    antiNukeData: { get: async (id) => Storage.get(`antinuke_${id}`) },
+    guildData: { get: async (id) => Storage.get(`guild_${id}`) }
+};
+client.cache = new Map();
+client.config = { Client: { Owners: process.env.OWNERS?.split(',') || [] } };
+client.ErrorColor = '#e74c3c';
+client.util = {
+    checkOwner: (id) => process.env.OWNERS?.split(',')?.includes(id) || false,
+    embed: () => new EmbedBuilder(),
+    replaceOriginal: async (text, member) => text?.replace(/{user}/g, `${member}`)?.replace(/{guild}/g, `${member.guild.name}`),
+    replacerOriginal: async (embeds, member) => embeds
+};
+// Event engelleme cezalandırma sistemi
+client.eventRestrict = async (punishment, userId, guildId, reason) => {
+    console.log(`[Caza Sistemi] Yetkiliye ceza uygulandı: ${userId} -> ${punishment} (${reason})`);
+};
 
 client.commands = new Collection();
 const slashCommands = [];
@@ -60,13 +80,13 @@ if (!fs.existsSync('./commands')) {
     }
 }
 
-// --- 3. KRİTİK HATA KORUMASI ---
+// --- 3. KRİTİK HATA KORUMASI (Botun Asla Çökmemesini Sağlar) ---
 process.on('unhandledRejection', (error) => {
-    console.error('❌ [HATA]:', error);
+    console.error('❌ [YAKALANAMAYAN HATA]:', error);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ [KRİTİK HATA]:', error);
+    console.error('❌ [KRİTİK SİSTEM HATASI]:', error);
 });
 
 // --- 4. READY EVENT ---
@@ -100,9 +120,9 @@ client.on('interactionCreate', async interaction => {
         try {
             await command.execute(interaction);
         } catch (error) {
-            console.error(error);
+            console.error("Komut çalışırken hata fırlattı kanka:", error);
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'Hata oluştu!', ephemeral: true });
+                await interaction.reply({ content: 'Hata oluştu kanka, sistem kontrol ediliyor!', ephemeral: true });
             }
         }
     }
@@ -122,13 +142,38 @@ const sistemBellegi = new Map();
 client.sistemBellegi = sistemBellegi;
 
 // =========================================================================
-// 🔥 DIŞ DOSYA BAĞLANTILARI
+// 🔥 SINIF TABANLI VE DÜZ ETKİNLİK (EVENT) LOADER ENTEGRASYONU
 // =========================================================================
-if (fs.existsSync('./events/gelismislog.js')) {
-    require('./events/gelismislog')(client);
-}
-if (fs.existsSync('./events/kufurengel.js')) {
-    require('./events/kufurengel')(client);
+const eventsPath = './events';
+if (fs.existsSync(eventsPath)) {
+    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+
+    for (const file of eventFiles) {
+        try {
+            const TargetEvent = require(`./events/${file}`);
+            
+            // Eğer dosya Vaxera/Prismo sınıf yapısındaysa (class ise):
+            if (typeof TargetEvent === 'function' && TargetEvent.toString().startsWith('class')) {
+                const eventInstance = new TargetEvent(client);
+                const eventName = eventInstance.name || file.split('.')[0];
+                
+                if (eventInstance.once) {
+                    client.once(eventName, (...args) => eventInstance.run(...args));
+                } else {
+                    client.on(eventName, (...args) => eventInstance.run(...args));
+                }
+                console.log(`[Sınıf Eventi] 🟢 ${eventName} başarıyla yüklendi.`);
+            } else {
+                // Eğer eski tip düz fonksiyon dosyalarsa (kufurengel, gelismislog vb.)
+                if (typeof TargetEvent === 'function') {
+                    TargetEvent(client);
+                    console.log(`[Düz Fonksiyon Eventi] 🟢 ${file} başarıyla bağlandı.`);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Etkinlik yüklenirken patladı (${file}):`, error);
+        }
+    }
 }
 
 // --- BOT GİRİŞİ ---
