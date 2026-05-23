@@ -26,8 +26,9 @@ module.exports = (client) => {
 
     const kufurRegex = /(amcık|yarrak|sik|piç|orospu|sikiş|göt|meme|orospu çocuğu|amk|aq|pç|skm|amına)/i;
     
-    // Spam koruması için RAM belleği kanka
+    // Ulti Koruma RAM Bellekleri kanka
     const mesajTakip = new Map();
+    const banTakip = new Map(); // Mass Ban takibi için
 
     // =========================================================================
     // 🛡️ ANA MESAJ KORUMALARI (Küfür, Spam, Caps, Bahsetme)
@@ -73,7 +74,7 @@ module.exports = (client) => {
                     .setThumbnail(message.author.displayAvatarURL({ dynamic: true })).setColor('#e74c3c').setTimestamp();
                 logChan.send({ embeds: [embed] }).catch(() => {});
             }
-            return; // Tetiklendiyse diğer filtrelere sokma
+            return; 
         }
 
         // 2. ULTRA HIZLI SPAM KORUMASI (3 Saniyede 5 Mesaj)
@@ -84,7 +85,6 @@ module.exports = (client) => {
 
         if (filtrelenmisLog.length >= 5) {
             await message.delete().catch(() => null);
-            // Üyeye 5 dakika otomatik timeout çakıyoruz kanka
             await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
             
             message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
@@ -122,7 +122,7 @@ module.exports = (client) => {
             const buyukHarfler = message.content.replace(/[^A-ZĞÜŞİÖÇ]/g, "").length;
             const toplamHarf = message.content.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "").length;
             
-            if (toplamHarf > 0 && (buyukHarfler / toplamHarf) > 0.7) { // %70'ten fazlası büyük harfse
+            if (toplamHarf > 0 && (buyukHarfler / toplamHarf) > 0.7) { 
                 await message.delete().catch(() => null);
                 const capsUyarisi = await message.channel.send({ content: `⚠️ Kanka büyük harfleri biraz kısabilir miyiz? Bağırmana gerek yok ${message.author}.` }).catch(() => null);
                 if (capsUyarisi) setTimeout(() => capsUyarisi.delete().catch(() => null), 4000);
@@ -135,13 +135,12 @@ module.exports = (client) => {
     // 🤖 5. ANTIRAID / ILLEGAL BOT KORUMASI
     // =========================================================================
     client.on('guildMemberAdd', async (member) => {
-        if (!member.user.bot) return; // Katılan bot değilse es geç kanka
+        if (!member.user.bot) return; 
         
         const logChan = await logKanalGetir(member.guild.id);
         const logEntry = await auditLogCek(member.guild, AuditLogEvent.BotAdd, member.id);
         const ekleyen = logEntry?.executor;
 
-        // Eğer bot eklenmişse ve bu bot beyaz listede onaylı değilse direkt kapıya koyuyoruz
         await member.kick('İzinsiz/Kaçak Bot Girişi Engellendi').catch(() => null);
 
         if (logChan) {
@@ -163,12 +162,10 @@ module.exports = (client) => {
     client.on('guildMemberUpdate', async (oldMember, newMember) => {
         const logChan = await logKanalGetir(newMember.guild.id);
         
-        // Rol sayısı artmışsa yani birisi sağ tıkla rol vermişse tetiklenir
         if (oldMember.roles.cache.size < newMember.roles.cache.size) {
             const eklenenRol = newMember.roles.cache.filter(r => !oldMember.roles.cache.has(r.id)).first();
             if (!eklenenRol) return;
 
-            // Verilen rol Yönetici, Ban, Kick veya Rol yönetme yetkisi içeriyor mu?
             const tehlikeliYetkiler = [
                 PermissionFlagsBits.Administrator,
                 PermissionFlagsBits.BanMembers,
@@ -182,9 +179,7 @@ module.exports = (client) => {
                 const logEntry = await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
                 const işlemiYapan = logEntry?.executor;
 
-                // İşlemi yapan botun kendisi değilse müdahale et kanka
                 if (işlemiYapan && işlemiYapan.id !== client.user.id) {
-                    // Tehlikeli rolü üyeden şak diye geri söküyoruz
                     await newMember.roles.remove(eklenenRol, 'Tehlikeli Rol Verme Koruması').catch(() => null);
 
                     if (logChan) {
@@ -203,14 +198,11 @@ module.exports = (client) => {
             }
         }
 
-        // =========================================================================
-        // STANDART ROL & TIMEOUT & NICKNAME LOGLARI (Önceki Kodların Aynısı)
-        // =========================================================================
+        // STANDART ROL LOGLARI
         if (oldMember.roles.cache.size !== newMember.roles.cache.size) {
             const verilenRoller = newMember.roles.cache.filter(r => !oldMember.roles.cache.has(r.id));
             const alinanRoller  = oldMember.roles.cache.filter(r => !newMember.roles.cache.has(r.id));
             
-            // Eğer üstteki tehlikeli rol koruması tetiklendiyse normal logu basmasın diye kontrol ekledik kanka
             if (verilenRoller.size > 0 && verilenRoller.first().permissions.has(PermissionFlagsBits.Administrator) && (await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id))?.executor?.id !== client.user.id) return;
 
             const logEntry = await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
@@ -228,6 +220,7 @@ module.exports = (client) => {
             logChan.send({ embeds: [embed] }).catch(() => {});
         }
 
+        // TIMEOUT LOGLARI
         const oldTimeout = oldMember.communicationDisabledUntilTimestamp;
         const newTimeout = newMember.communicationDisabledUntilTimestamp;
 
@@ -256,6 +249,7 @@ module.exports = (client) => {
             logChan.send({ embeds: [embed] }).catch(() => {});
         }
 
+        // TAKMA AD LOGU
         if (oldMember.nickname !== newMember.nickname) {
             if (!logChan) return;
             const embed = new EmbedBuilder()
@@ -337,7 +331,7 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // 📁 KANAL LOGLARI
+    // 📁 KANAL LOGLARI & ULTİ LOG KORUMASI
     // =========================================================================
     client.on('channelCreate', async (channel) => {
         if (!channel.guild) return;
@@ -360,6 +354,33 @@ module.exports = (client) => {
 
     client.on('channelDelete', async (channel) => {
         if (!channel.guild) return;
+        
+        const korumaAktif = await ayarGetir(channel.guild.id, 'logKorumaDurum', false);
+        const sistemLogId = await ayarGetir(channel.guild.id, 'logKanal', null);
+
+        // 🔥 ULTİ LOG KORUMASI: Eğer silinen kanal ana log kanalıysa patlat kanka!
+        if (korumaAktif && sistemLogId && channel.id === sistemLogId) {
+            const logEntry = await auditLogCek(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
+            const hainYetkili = logEntry?.target?.id === channel.id ? logEntry.executor : null;
+
+            if (hainYetkili && hainYetkili.id !== client.user.id) {
+                const member = await channel.guild.members.fetch(hainYetkili.id).catch(() => null);
+                if (member) {
+                    await member.roles.set([], 'Ulti Log Kanalını Silmeye Çalıştı!').catch(() => null);
+                }
+
+                const guildOwner = await channel.guild.fetchOwner().catch(() => null);
+                if (guildOwner) {
+                    const acilEmbed = new EmbedBuilder()
+                        .setTitle('🚨 ACİL DURUM: LOG KANALI SABOTE EDİLDİ!')
+                        .setDescription(`⚠️ Sunucunuzdaki ana log kanalı (\`${channel.name}\`), **${hainYetkili.tag}** tarafından silindi! Bot anında yetkileri kesti!`)
+                        .setColor('#960018').setTimestamp();
+                    guildOwner.send({ embeds: [acilEmbed] }).catch(() => {});
+                }
+                return;
+            }
+        }
+
         const logChan = await logKanalGetir(channel.guild.id);
         if (!logChan) return;
 
@@ -379,6 +400,23 @@ module.exports = (client) => {
 
     client.on('channelUpdate', async (oldChannel, newChannel) => {
         if (!newChannel.guild) return;
+
+        const korumaAktif = await ayarGetir(newChannel.guild.id, 'logKorumaDurum', false);
+        const sistemLogId = await ayarGetir(newChannel.guild.id, 'logKanal', null);
+
+        // 🔥 ULTİ LOG KORUMASI: Biri log kanalı izinlerini kurcalarsa yetkisini al kanka!
+        if (korumaAktif && sistemLogId && newChannel.id === sistemLogId) {
+            const logEntry = await auditLogCek(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
+            const kurcalayan = logEntry?.executor;
+
+            if (kurcalayan && kurcalayan.id !== client.user.id) {
+                const member = await newChannel.guild.members.fetch(kurcalayan.id).catch(() => null);
+                if (member && !member.permissions.has(PermissionFlagsBits.Administrator)) {
+                    await member.roles.set([], 'Ulti Log Kanalı Ayarlarını Kurcaladı!').catch(() => null);
+                }
+            }
+        }
+
         if (oldChannel.name === newChannel.name && oldChannel.topic === newChannel.topic && oldChannel.nsfw === newChannel.nsfw && oldChannel.rateLimitPerUser === newChannel.rateLimitPerUser) return;
         const logChan = await logKanalGetir(newChannel.guild.id);
         if (!logChan) return;
@@ -397,7 +435,7 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // 👑 ROL LOGLARI
+    // 👑 ROL LOGLARI & ROL İZİNLERİ GÜVENLİĞİ
     // =========================================================================
     client.on('roleCreate', async (role) => {
         const logChan = await logKanalGetir(role.guild.id);
@@ -437,9 +475,23 @@ module.exports = (client) => {
     });
 
     client.on('roleUpdate', async (oldRole, newRole) => {
-        if (oldRole.name === newRole.name && oldRole.color === newRole.color && oldRole.hoist === newRole.hoist && oldRole.mentionable === newRole.mentionable) return;
         const logChan = await logKanalGetir(newRole.guild.id);
         if (!logChan) return;
+
+        // 🔥 ULTİ ÖZELLİK: Gizli İzin Değişikliği Taraması (Backdoor Engeli)
+        if (oldRole.permissions.bitfield !== newRole.permissions.bitfield) {
+            const logEntry = await auditLogCek(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
+            const düzenleyen = logEntry?.executor ? `${logEntry.executor}` : '`Bilinmiyor`';
+
+            const embed = new EmbedBuilder()
+                .setTitle('<a:acs_ayarlar:1505165015127162994> Rol İzinleri Değiştirildi!')
+                .setDescription(`⚠️ **${newRole.name}** rolünün kritik yetki ayarları kurcalandı kanka!`)
+                .addFields({ name: '<:change:1505202806666170501> Düzenleyen Yetkili', value: düzenleyen })
+                .setColor('#f39c12').setTimestamp();
+            logChan.send({ embeds: [embed] }).catch(() => {});
+        }
+
+        if (oldRole.name === newRole.name && oldRole.color === newRole.color && oldRole.hoist === newRole.hoist && oldRole.mentionable === newRole.mentionable) return;
 
         const embed = new EmbedBuilder()
             .setTitle('<:yeni:1505201065476362325> Rol Güncellendi!')
@@ -451,6 +503,25 @@ module.exports = (client) => {
         if (oldRole.mentionable !== newRole.mentionable) embed.addFields({ name: '<:riva_kilit:1505203119427162192> Mentionlanabilir', value: `\`${oldRole.mentionable}\` → \`${newRole.mentionable}\`` });
 
         embed.setTimestamp();
+        logChan.send({ embeds: [embed] }).catch(() => {});
+    });
+
+    // =========================================================================
+    // 🔥 SİNSİ WEBHOOK TAKİP LOGU
+    // =========================================================================
+    client.on('webhookUpdate', async (channel) => {
+        const logChan = await logKanalGetir(channel.guild.id);
+        if (!logChan) return;
+
+        const logEntry = await auditLogCek(channel.guild, AuditLogEvent.WebhookCreate);
+        if (!logEntry) return;
+
+        const yapan = logEntry.executor;
+        const embed = new EmbedBuilder()
+            .setTitle('<:Discord_Link:1505166617426923661> Webhook Verisi Tetiklendi!')
+            .setDescription(`⛓️ **#${channel.name}** kanalında Webhook oluşturuldu veya kurcalandı kanka!`)
+            .addFields({ name: '<:uzaybot_kullanicilar:1505146190973505567> İşlem Sahibi', value: `${yapan}` })
+            .setColor('#9b59b6').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 
@@ -511,144 +582,48 @@ module.exports = (client) => {
     });
 
     // =========================================================================
-    // 🔨 CEZA LOGLARI (BAN, UNBAN, KICK & AYRILMA)
+    // 🔨 CEZA LOGLARI & MASS BAN KORUMASI
     // =========================================================================
     client.on('guildBanAdd', async (ban) => {
         const logChan = await logKanalGetir(ban.guild.id);
-        if (!logChan) return;
-
         const logEntry = await auditLogCek(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
-        const yapan    = logEntry?.executor ? `${logEntry.executor} \`(${logEntry.executor.id})\`` : '`Bilinmiyor`';
-        const sebep    = logEntry?.reason    || ban.reason || 'Belirtilmemiş.';
+        const yapan = logEntry?.executor;
+        const sebep = logEntry?.reason || ban.reason || 'Belirtilmemiş.';
 
+        // 🔥 ULTİ ÖZELLİK: Sağ Tık Mass Ban Saldırı Engeli
+        if (yapan && yapan.id !== client.user.id) {
+            const simdi = Date.now();
+            const banGecmisi = banTakip.get(yapan.id) || [];
+            banGecmisi.push(simdi);
+            
+            const aktifBanlar = banGecmisi.filter(ts => simdi - ts < 10000); // 10 saniye limit
+            banTakip.set(yapan.id, aktifBanlar);
+
+            if (aktifBanlar.length >= 3) { // 10 saniyede 3 ban atarsa darbecidir kanka!
+                const member = await ban.guild.members.fetch(yapan.id).catch(() => null);
+                if (member) {
+                    await member.roles.set([], 'Mass Ban Saldırısı Tespit Edildi!').catch(() => null);
+                }
+
+                if (logChan) {
+                    const panikEmbed = new EmbedBuilder()
+                        .setTitle('<:yasaklandi:1505146022588842095> MASS BAN SALDIRISI ENGELLENDİ!')
+                        .setDescription(`🚨 **${yapan}** isimli yetkili ardı ardına seri ban attığı için sunucuyu korumak amacıyla **bütün yetkileri ve rolleri alındı**!`)
+                        .setColor('#960018').setTimestamp();
+                    return logChan.send({ embeds: [panikEmbed] }).catch(() => {});
+                }
+            }
+        }
+
+        if (!logChan) return;
         const embed = new EmbedBuilder()
             .setTitle('<:yasaklandi:1505146022588842095> Bir Üye Banlandı!')
             .addFields(
                 { name: '<:uzaybot_kullanicilar:1505146190973505567> Banlanan', value: `${ban.user.tag} \`(${ban.user.id})\``, inline: true },
-                { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan, inline: true },
+                { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan ? `${yapan} \`(${yapan.id})\`` : '`Bilinmiyor`', inline: true },
                 { name: '<:Paper:1505146388596391977> Sebep', value: `\`${sebep}\`` }
             )
-            .setThumbnail(ban.user.displayAvatarURL()).setColor('#960018').setTimestamp();
-        logChan.send({ embeds: [embed] }).catch(() => {});
-    });
-
-    client.on('guildBanRemove', async (ban) => {
-        const logChan = await logKanalGetir(ban.guild.id);
-        if (!logChan) return;
-
-        const logEntry = await auditLogCek(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
-        const yapan    = logEntry?.executor ? `${logEntry.executor}` : '`Bilinmiyor`';
-
-        const embed = new EmbedBuilder()
-            .setTitle('<:riva_kilit:1505203119427162192> Bir Üyenin Banı Kaldırıldı!')
-            .addFields(
-                { name: '<:uzaybot_kullanicilar:1505146190973505567> Banı Kaldırılan', value: `${ban.user.tag} \`(${ban.user.id})\``, inline: true },
-                { name: '<a:tik:1505164671081123840> Yapan Yetkili', value: yapan, inline: true }
-            )
-            .setThumbnail(ban.user.displayAvatarURL()).setColor('#27ae60').setTimestamp();
-        logChan.send({ embeds: [embed] }).catch(() => {});
-    });
-
-    client.on('guildMemberRemove', async (member) => {
-        if (member.user.bot) return;
-        const logChan = await logKanalGetir(member.guild.id);
-        if (!logChan) return;
-
-        const banKontrol = await member.guild.bans.fetch(member.id).catch(() => null);
-        if (banKontrol) return; 
-
-        const logEntry = await auditLogCek(member.guild, AuditLogEvent.MemberKick, member.id);
-
-        if (logEntry && logEntry.target?.id === member.id) {
-            const yapan = logEntry.executor ? `${logEntry.executor}` : '`Bilinmiyor`';
-            const sebep = logEntry.reason || 'Belirtilmemiş.';
-
-            const embed = new EmbedBuilder()
-                .setTitle('<:yasaklandi:1505146022588842095> Bir Üye Atıldı! (Kick)')
-                .addFields(
-                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Atılan', value: `${member.user.tag} \`(${member.user.id})\``, inline: true },
-                    { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan, inline: true },
-                    { name: '<:Paper:1505146388596391977> Sebep', value: `\`${sebep}\`` }
-                )
-                .setThumbnail(member.user.displayAvatarURL()).setColor('#e67e22').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
-        } else {
-            const embed = new EmbedBuilder()
-                .setTitle('<a:Leave_Leave:1505202549706195004> Bir Üye Sunucudan Ayrıldı!')
-                .addFields(
-                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Üye', value: `${member.user.tag} \`(${member.user.id})\``, inline: true },
-                    { name: '<:change:1505202806666170501> Katılış Tarihi', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true }
-                )
-                .setThumbnail(member.user.displayAvatarURL()).setColor('#e74c3c').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
-        }
-    });
-
-    // =========================================================================
-    // ⚙️ SUNUCU GÜNCELLEME LOGLARI
-    // =========================================================================
-    client.on('guildUpdate', async (oldGuild, newGuild) => {
-        const logChan = await logKanalGetir(newGuild.id);
-        if (!logChan) return;
-
-        if (oldGuild.name !== newGuild.name) {
-            const embed = new EmbedBuilder()
-                .setTitle('<:Ranch_Sunucu:1505442356000985239> Sunucu Adı Değiştirildi!')
-                .addFields(
-                    { name: '<:change:1505202806666170501> Eski Ad', value: `\`${oldGuild.name}\``, inline: true },
-                    { name: '<a:tik:1505164671081123840> Yeni Ad', value: `\`${newGuild.name}\``, inline: true }
-                )
-                .setColor('#3498db').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
-        }
-        if (oldGuild.icon !== newGuild.icon) {
-            const embed = new EmbedBuilder()
-                .setTitle('<:Ranch_Sunucu:1505442356000985239> Sunucu İkonu Değiştirildi!')
-                .setDescription('<a:acs_ayarlar:1505165015127162994> Sunucunun profil resmi güncellendi.')
-                .setThumbnail(newGuild.iconURL()).setColor('#9b59b6').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
-        }
-        if (oldGuild.verificationLevel !== newGuild.verificationLevel) {
-            const embed = new EmbedBuilder()
-                .setTitle('<:riva_kilit:1505203119427162192> Doğrulama Seviyesi Değiştirildi!')
-                .addFields(
-                    { name: '<:change:1505202806666170501> Eski Seviye', value: `\`${oldGuild.verificationLevel}\``, inline: true },
-                    { name: '<a:tik:1505164671081123840> Yeni Seviye', value: `\`${newGuild.verificationLevel}\``, inline: true }
-                )
-                .setColor('#f39c12').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
-        }
-    });
-
-    // =========================================================================
-    // 🎤 DAVET (INVITE) LOGLARI
-    // =========================================================================
-    client.on('inviteCreate', async (invite) => {
-        const logChan = await logKanalGetir(invite.guild.id);
-        if (!logChan) return;
-
-        const embed = new EmbedBuilder()
-            .setTitle('<:Discord_Link:1505166617426923661> Yeni İnvite Oluşturuldu!')
-            .addFields(
-                { name: '<:uzaybot_kullanicilar:1505146190973505567> Oluşturan', value: `${invite.inviter || 'Bilinmiyor'}`, inline: true },
-                { name: '<:Discord_Link:1505166617426923661> Kod', value: `\`${invite.code}\``, inline: true },
-                { name: '<:change:1505202806666170501> Kanal', value: `${invite.channel}`, inline: true }
-            )
-            .setColor('#3498db').setTimestamp();
-        logChan.send({ embeds: [embed] }).catch(() => {});
-    });
-
-    client.on('inviteDelete', async (invite) => {
-        const logChan = await logKanalGetir(invite.guild.id);
-        if (!logChan) return;
-
-        const embed = new EmbedBuilder()
-            .setTitle('<:Discord_Link:1505166617426923661> İnvite Silindi!')
-            .addFields(
-                { name: '<:sil:1505147967907037275> Kod', value: `\`${invite.code}\``, inline: true },
-                { name: '<:change:1505202806666170501> Kanal', value: `${invite.channel}`, inline: true }
-            )
-            .setColor('#e74c3c').setTimestamp();
+            .setThumbnail(ban.user.displayAvatarURL({ dynamic: true })).setColor('#960018').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 };
