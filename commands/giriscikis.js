@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+// 🟢 Çakışmayı önlemek için napi-rs canvas'ı doğrudan bu isimle çağırıyoruz:
+const napiCanvas = require('@napi-rs/canvas'); 
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -130,7 +131,7 @@ module.exports = {
         }
 
         // =========================================================
-        // 5. TEST
+        // 5. TEST (Hataları çözen güvenli bölge)
         // =========================================================
         if (altKomut === 'test') {
             if (!hafiza.durum || !hafiza.kanalId) {
@@ -142,71 +143,81 @@ module.exports = {
             const logChan = interaction.guild.channels.cache.get(hafiza.kanalId);
             if (!logChan) return interaction.editReply({ content: '❌ Kayıtlı kanal bulunamadı kanka.' });
 
-            // Canvas Resmi Hazırlama
-            const canvas = createCanvas(700, 250);
-            const ctx = canvas.getContext('2d');
-
-            // Arka Plan
-            ctx.fillStyle = '#1e1f22';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Çerçeve (Görseldeki gibi Turuncu/Kırmızı Çizgi)
-            ctx.strokeStyle = '#e67e22';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
-
-            // Sağ Alt ERENSİBOT Yazısı
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillStyle = '#4e5058';
-            ctx.fillText('ERENSİBOT', canvas.width - 100, canvas.height - 25);
-
-            // Profil Resmi İşleme
-            const avatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
             try {
-                const avatarImg = await loadImage(avatarURL);
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(100, 125, 60, 0, Math.PI * 2, true);
-                ctx.closePath();
-                ctx.clip();
-                ctx.drawImage(avatarImg, 40, 65, 120, 120);
-                ctx.restore();
+                // Görsel Boyutlandırma
+                const canvas = napiCanvas.createCanvas(700, 250);
+                const ctx = canvas.getContext('2d');
 
-                ctx.beginPath();
-                ctx.arc(100, 125, 61, 0, Math.PI * 2, true);
+                // Arka Plan Çizimi
+                ctx.fillStyle = '#1e1f22';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Çerçeve (Görseldeki gibi Turuncu/Kırmızı Çizgi)
                 ctx.strokeStyle = '#e67e22';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-            } catch (err) {
-                ctx.fillStyle = '#5865f2';
-                ctx.beginPath();
-                ctx.arc(100, 125, 60, 0, Math.PI * 2, true);
-                ctx.fill();
+                ctx.lineWidth = 4;
+                ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+
+                // Sağ Alt ERENSİBOT Logosu
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillStyle = '#4e5058';
+                ctx.fillText('ERENSİBOT', canvas.width - 100, canvas.height - 25);
+
+                // Profil Resmi İşleme
+                const avatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
+                try {
+                    const avatarImg = await napiCanvas.loadImage(avatarURL);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(100, 125, 60, 0, Math.PI * 2, true);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(avatarImg, 40, 65, 120, 120);
+                    ctx.restore();
+
+                    ctx.beginPath();
+                    ctx.arc(100, 125, 61, 0, Math.PI * 2, true);
+                    ctx.strokeStyle = '#e67e22';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } catch (avatarErr) {
+                    // Avatar yüklenirken hata verirse bot çökmesin, varsayılan renk bassın
+                    ctx.fillStyle = '#5865f2';
+                    ctx.beginPath();
+                    ctx.arc(100, 125, 60, 0, Math.PI * 2, true);
+                    ctx.fill();
+                }
+
+                // Yazılar
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 28px sans-serif';
+                ctx.fillText(interaction.user.username.toUpperCase(), 190, 105);
+
+                ctx.fillStyle = '#2ecc71';
+                ctx.font = '18px sans-serif';
+                ctx.fillText('Sisteme Giriş Yaptı! (TEST)', 190, 140);
+
+                ctx.fillStyle = '#949ba4';
+                ctx.font = '14px sans-serif';
+                ctx.fillText(`Sunucuda ${interaction.guild.memberCount} kişi olduk kanka.`, 190, 180);
+
+                const attachment = new AttachmentBuilder(await canvas.encode('png'), { name: 'giris-test.png' });
+
+                await logChan.send({
+                    content: `<a:join_join:1505202309343215717> **TSA Sistem Testi:** Aramıza hoş geldin ${interaction.user}!`,
+                    files: [attachment]
+                });
+
+                return interaction.editReply({
+                    content: `<a:tik:1505164671081123840> Test afişi başarıyla ve sunucu emojileriyle birlikte ${logChan} kanalına fırlatıldı!`
+                });
+
+            } catch (error) {
+                // Eğer burada bir hata yakalanırsa konsola detayını basacak
+                console.error("Canvas Çizim Hatası Kontrolü:", error);
+                return interaction.editReply({
+                    content: `❌ Resim oluşturulurken teknik bir hata alındı kanka. Konsolu (terminali) kontrol et!`
+                });
             }
-
-            // Metinler
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 28px sans-serif';
-            ctx.fillText(interaction.user.username.toUpperCase(), 190, 105);
-
-            ctx.fillStyle = '#2ecc71';
-            ctx.font = '18px sans-serif';
-            ctx.fillText('Sisteme Giriş Yaptı! (TEST)', 190, 140);
-
-            ctx.fillStyle = '#949ba4';
-            ctx.font = '14px sans-serif';
-            ctx.fillText(`Sunucuda ${interaction.guild.memberCount} kişi olduk kanka.`, 190, 180);
-
-            const attachment = new AttachmentBuilder(await canvas.encode('png'), { name: 'giris-test.png' });
-
-            await logChan.send({
-                content: `<a:join_join:1505202309343215717> **TSA Sistem Testi:** Aramıza hoş geldin ${interaction.user}!`,
-                files: [attachment]
-            });
-
-            return interaction.editReply({
-                content: `<a:tik:1505164671081123840> Test afişi başarıyla ve sunucu emojileriyle birlikte ${logChan} kanalına fırlatıldı!`
-            });
         }
     }
 };
