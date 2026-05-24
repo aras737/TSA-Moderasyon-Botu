@@ -1,114 +1,86 @@
-const { AuditLogEvent, EmbedBuilder } = require('discord.js');
+const { AttachmentBuilder } = require('discord.js');
 const { ayarGetir } = require('../utils/db');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
-module.exports = (client) => {
-    client.on('guildMemberAdd', async (member) => {
+module.exports = {
+    name: 'guildMemberAdd',
+    async execute(member) {
         const guild = member.guild;
+        const client = member.client;
 
         if (!client.girisCikisCache) client.girisCikisCache = new Map();
+        let hafiza = client.girisCikisCache.get(guild.id);
 
-        const kanalId      = await ayarGetir(guild.id, 'girisCikisKanal', null);
-        const durum        = await ayarGetir(guild.id, 'girisCikisDurum', false);
-        const guvenliListe = await ayarGetir(guild.id, 'botGuvenliListe', []);
-
-        const hafiza = { kanalId, durum, guvenliListe };
-        client.girisCikisCache.set(guild.id, hafiza);
-
-        // 🛡️ OTO MODERASYON: BOT GİRİŞİ
-        if (member.user.bot) {
-            try {
-                // Audit log retry
-                let logGirdisi = null;
-                for (let i = 0; i < 3; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    const fetchedLogs = await guild.fetchAuditLogs({
-                        limit: 1,
-                        type: AuditLogEvent.BotAdd
-                    }).catch(() => null);
-
-                    logGirdisi = fetchedLogs?.entries.first();
-                    if (logGirdisi) break;
-                }
-
-                if (logGirdisi) {
-                    const botiEkleyen = logGirdisi.executor;
-
-                    // Güvenli listede veya sunucu sahibi DEĞİLSE ban at
-                    if (botiEkleyen.id !== guild.ownerId && !hafiza.guvenliListe.includes(botiEkleyen.id)) {
-
-                        // ❌ Botu anında banla
-                        await member.ban({
-                            reason: `🛡️ Oto-Moderasyon: İzinsiz bot eklemesi! Ekleyen: ${botiEkleyen.tag}`
-                        }).catch(() => null);
-
-                        // Log embed
-                        const korumaEmbed = new EmbedBuilder()
-                            .setTitle('<:riva_kilit:1505203119427162192> OTO-MODERASYON TETİKLENDİ!')
-                            .setDescription(
-                                `<a:baarsz:1505146967817326675> Sunucuya izinsiz bir bot sokulmaya çalışıldı kanka!\n\n` +
-                                `**Banlanan Bot:** ${member.user.tag} (\`${member.id}\`)\n` +
-                                `**Sokan Yetkili:** ${botiEkleyen} (\`${botiEkleyen.id}\`)\n\n` +
-                                `*Sistem botu algıladığı gibi sunucudan kalıcı olarak uzaklaştırdı!*`
-                            )
-                            .setColor('#e74c3c')
-                            .setTimestamp();
-
-                        // Log kanalına gönder
-                        const logChan = hafiza.kanalId ? guild.channels.cache.get(hafiza.kanalId) : null;
-                        if (logChan) {
-                            await logChan.send({ embeds: [korumaEmbed] }).catch(() => null);
-                        }
-
-                        // 📩 Sunucu sahibine DM at
-                        try {
-                            const owner = await guild.fetchOwner();
-                            const dmEmbed = new EmbedBuilder()
-                                .setTitle('🚨 Sunucuna İzinsiz Bot Sokuldu!')
-                                .setDescription(
-                                    `**${guild.name}** sunucuna habersiz bir bot eklenmeye çalışıldı ve anında banlandı!\n\n` +
-                                    `**Banlanan Bot:** \`${member.user.tag}\` (\`${member.id}\`)\n` +
-                                    `**Ekleyen Kişi:** \`${botiEkleyen.tag}\` (\`${botiEkleyen.id}\`)\n\n` +
-                                    `⚠️ Bu kişinin yetkilerini kontrol etmeni öneririm kanka!`
-                                )
-                                .setColor('#e74c3c')
-                                .setTimestamp();
-
-                            await owner.send({ embeds: [dmEmbed] }).catch(() => null);
-                        } catch {
-                            // Sahibin DM'i kapalıysa sessizce geç
-                        }
-
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.error('Oto-moderasyon ban hatası kanka:', err);
-            }
-
-            // Güvenli bot da olsa hoş geldin gönderme
-            return;
+        if (!hafiza) {
+            const kanalId = await ayarGetir(guild.id, 'girisCikisKanal', null);
+            const durum = await ayarGetir(guild.id, 'girisCikisDurum', false);
+            hafiza = { kanalId, durum };
+            client.girisCikisCache.set(guild.id, hafiza);
         }
 
-        // 🖼️ NORMAL ÜYELER İÇİN HOŞ GELDİN MESAJI
-        if (hafiza.durum && hafiza.kanalId) {
-            const logChan = guild.channels.cache.get(hafiza.kanalId);
-            if (!logChan) return;
+        if (!hafiza.durum || !hafiza.kanalId) return;
+        const logChannel = guild.channels.cache.get(hafiza.kanalId);
+        if (!logChannel) return;
 
-            const avatar      = member.user.displayAvatarURL({ extension: 'png', size: 256 });
-            const memberCount = guild.memberCount;
-            const username    = encodeURIComponent(member.user.username);
-            const guildName   = encodeURIComponent(guild.name);
-            const resimUrl    = `https://placehold.co/800x350/2b2d31/f2f3f5/png?text=HOS+GELDIN+KANKA!%0A${username}%0A%0ASunucu:+${guildName}%0AUye+Sayisi:+${memberCount}`;
+        // Canvas Tasarımı
+        const canvas = createCanvas(700, 250);
+        const ctx = canvas.getContext('2d');
 
-            const girisEmbed = new EmbedBuilder()
-                .setTitle(`<a:join_join:1505202309343215717> Sunucumuza Yeni Bir Kan Katıldı!`)
-                .setDescription(`Aramıza hoş geldin ${member}! Seninle birlikte anlık **${memberCount}** kişi olduk kanka.`)
-                .setThumbnail(avatar)
-                .setImage(resimUrl)
-                .setColor('#2ecc71')
-                .setTimestamp();
+        ctx.fillStyle = '#1e1f22';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            await logChan.send({ embeds: [girisEmbed] }).catch(() => null);
+        ctx.strokeStyle = '#2ecc71'; // Giriş için Yeşil Çerçeve
+        ctx.lineWidth = 4;
+        ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('🟢 YENİ KULLANICI', 35, 40);
+
+        ctx.fillStyle = '#4e5058';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('ERENSİBOT', canvas.width - 100, canvas.height - 25);
+
+        const avatarURL = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+        try {
+            const avatarImg = await loadImage(avatarURL);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(100, 130, 55, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(avatarImg, 45, 75, 110, 110);
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(100, 130, 56, 0, Math.PI * 2, true);
+            ctx.strokeStyle = '#2ecc71';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        } catch (e) {
+            ctx.fillStyle = '#5865f2';
+            ctx.beginPath();
+            ctx.arc(100, 130, 55, 0, Math.PI * 2, true);
+            ctx.fill();
         }
-    });
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 26px sans-serif';
+        ctx.fillText(member.user.username.toUpperCase(), 180, 110);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '16px sans-serif';
+        ctx.fillText('Aramıza hoş geldin kanka!', 180, 145);
+
+        ctx.fillStyle = '#949ba4';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`Seninle birlikte ${guild.memberCount} kişiyiz.`, 180, 185);
+
+        const attachment = new AttachmentBuilder(await canvas.encode('png'), { name: 'hosgeldin.png' });
+        
+        logChannel.send({
+            content: `<a:join_join:1505202309343215717> Sunucuya Yeni Bir Kan Katıldı! Aramıza hoş geldin ${member} kanka.`,
+            files: [attachment]
+        }).catch(() => {});
+    }
 };
