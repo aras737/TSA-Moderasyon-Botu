@@ -3,106 +3,75 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('duyuru')
-        .setDescription('Sunucuda gelişmiş ve şık bir duyuru yayınlar kanka.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Sadece Yöneticiler kullanabilir
-        .addStringOption(opt => 
-            opt.setName('başlık')
-                .setDescription('Duyurunun ana başlığı ne olacak kanka?')
-                .setRequired(true))
-        .addStringOption(opt => 
-            opt.setName('içerik')
-                .setDescription('Duyurunun mesaj metnini buraya yaz kanka.')
-                .setRequired(true))
+        .setDescription('Sunucuda gelişmiş duyuru gönderir kanka.')
+        
+        // 🔒 DISCORD'UN KENDİ GÜVENLİK YETKİSİ:
+        // Buraya hangi temel yetkiyi istiyorsan onu yazıyorsun kanka. 
+        // Örn: PermissionFlagsBits.ManageMessages (Mesajları Yönet) veya PermissionFlagsBits.Administrator (Yönetici)
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages) 
+        
+        .addStringOption(opt => opt.setName('başlık').setDescription('Duyurunun başlığı').setRequired(true))
+        .addStringOption(opt => opt.setName('içerik').setDescription('Duyurunun içeriği').setRequired(true))
         .addChannelOption(opt => 
             opt.setName('hedef')
-                .setDescription('Duyurunun gönderileceği log/duyuru kanalı')
+                .setDescription('Duyurunun gönderileceği kanal (Boş bırakırsan olduğun kanala gönderir)')
                 .addChannelTypes(ChannelType.GuildText)
-                .setRequired(true))
+                .setRequired(false)) 
         .addStringOption(opt => 
             opt.setName('tip')
-                .setDescription('Duyuru tipi (Embed çerçeveli mi olsun, düz yazı mı?)')
+                .setDescription('Duyuru tipi (Görsel kutu mu, düz yazı mı?)')
                 .setRequired(false)
                 .addChoices(
-                    { name: 'Embed (Renkli Çerçeveli)', value: 'embed' },
-                    { name: 'Düz Yazı (Normal Metin)', value: 'duz_yazi' }
+                    { name: 'Embed (Şık Kutu)', value: 'embed' },
+                    { name: 'Düz Yazı', value: 'text' }
                 ))
-        .addStringOption(opt => 
-            opt.setName('resim')
-                .setDescription('Duyuruya eklenecek büyük resim URL\'si (Opsiyonel)'))
-        .addStringOption(opt => 
-            opt.setName('footer')
-                .setDescription('Duyurunun en altına eklenecek küçük alt yazı (Opsiyonel)'))
-        .addBooleanOption(opt => 
-            opt.setName('everyone')
-                .setDescription('@everyone etiketiyle herkesten rol çalınsın mı?')),
+        .addStringOption(opt => opt.setName('resim').setDescription('Duyuruya eklenecek resim URL\'si (Opsiyonel)').setRequired(false))
+        .addStringOption(opt => opt.setName('footer').setDescription('Alt yazı (Opsiyonel)').setRequired(false))
+        .addBooleanOption(opt => opt.setName('everyone').setDescription('@everyone ile gönderilsin mi?').setRequired(false)),
 
     async execute(interaction) {
-        // Komutun çalıştığına dair kullanıcıya gizli bir onay göstermek için defer ediyoruz
-        await interaction.deferReply({ ephemeral: true });
-
+        // Kodun içinde hiçbir manuel if(rol) kontrolü yok, Discord yetkiyi otomatik denetliyor!
         const baslik = interaction.options.getString('başlık');
         const icerik = interaction.options.getString('içerik');
-        const hedefKanal = interaction.options.getChannel('hedef');
+        const hedefKanal = interaction.options.getChannel('hedef') || interaction.channel;
         const tip = interaction.options.getString('tip') || 'embed';
         const resim = interaction.options.getString('resim');
-        const footerText = interaction.options.getString('footer');
-        const everyone = interaction.options.getBoolean('everyone') || false;
+        const footer = interaction.options.getString('footer');
+        const everyoneKontrol = interaction.options.getBoolean('everyone') || false;
 
-        // Görseldeki gibi "[Rol] İsim tarafından." formatını oluşturuyoruz
-        const uye = interaction.member;
-        const enYuksekRol = uye.roles.highest.name;
-        const olusturanNotu = `\n\n[${enYuksekRol}] ${interaction.user.username} tarafından.`;
+        const yetkiliEnYuksekRol = interaction.member.roles.highest.name;
+        const yetkiliIsim = interaction.user.username;
 
-        // Kanala gönderilecek ana paket nesnesi
-        const mesajPaketi = {};
-
-        // @everyone kontrolü (Embed içine yazılırsa pinglemez, o yüzden dış metin olarak ekliyoruz)
-        if (everyone) {
-            mesajPaketi.content = '@everyone';
+        // Botun kanala yazma yetkisi var mı kontrolü
+        if (!hedefKanal.permissionsFor(interaction.guild.members.me).has(PermissionFlagsBits.SendMessages)) {
+            return interaction.reply({ content: `❌ Kanka ${hedefKanal} kanalına mesaj gönderme yetkim yok!`, ephemeral: true });
         }
 
-        // 1. SEÇENEK: EMBED (ÇERÇEVELİ DUYURU)
+        await interaction.reply({ content: `🚀 Duyuru başarıyla ${hedefKanal} kanalına iletildi kanka.`, ephemeral: true });
+
+        const etiketIcerigi = everyoneKontrol ? '@everyone' : '';
+
         if (tip === 'embed') {
-            const embed = new EmbedBuilder()
+            const duyuruEmbed = new EmbedBuilder()
                 .setTitle(baslik)
-                .setDescription(`${icerik}${olusturanNotu}`)
-                .setColor('#f1c40f'); // Görseldeki sarı/turuncu çizgi rengi
+                .setDescription(`${icerik}\n\n*[${yetkiliEnYuksekRol}] ${yetkiliIsim} tarafından.*`)
+                .setColor('#f1c40f')
+                .setTimestamp();
 
-            if (resim && (resim.startsWith('http://') || resim.startsWith('https://'))) {
-                embed.setImage(resim);
-            }
+            if (resim) duyuruEmbed.setImage(resim);
+            if (footer) duyuruEmbed.setFooter({ text: footer });
 
-            if (footerText) {
-                embed.setFooter({ text: footerText });
-            }
-
-            mesajPaketi.embeds = [embed];
-
-        // 2. SEÇENEK: DÜZ YAZI (NORMAL METİN)
-        } else {
-            let duzMetinFormatı = `**${baslik}**\n\n${icerik}${olusturanNotu}`;
-            
-            if (footerText) {
-                duzMetinFormatı += `\n\n*${footerText}*`;
-            }
-            if (resim && (resim.startsWith('http://') || resim.startsWith('https://'))) {
-                duzMetinFormatı += `\n${resim}`;
-            }
-
-            if (mesajPaketi.content) {
-                mesajPaketi.content += `\n${duzMetinFormatı}`;
+            if (everyoneKontrol) {
+                await hedefKanal.send({ content: etiketIcerigi, embeds: [duyuruEmbed] });
             } else {
-                mesajPaketi.content = duzMetinFormatı;
+                await hedefKanal.send({ embeds: [duyuruEmbed] });
             }
-        }
+        } else {
+            let duzMetin = `📢 **${baslik}**\n\n${icerik}\n\n*[${yetkiliEnYuksekRol}] ${yetkiliIsim} tarafından.*\n`;
+            if (footer) duzMetin += `\n*${footer}*`;
+            if (everyoneKontrol) duzMetin += `\n\n${etIketIcerigi}`;
 
-        // Duyuruyu hedef kanala fırlatma aşaması
-        try {
-            await hedefKanal.send(mesajPaketi);
-            return interaction.editReply({ content: `✅ Duyuru başarıyla ${hedefKanal} kanalında uçuruldu kanka!` });
-        } catch (error) {
-            console.error('Duyuru gönderme hatası:', error);
-            return interaction.editReply({ content: '❌ Duyuru gönderilirken hata çıktı. Botun o kanala mesaj gönderme yetkilerini kontrol et kanka.' });
+            await hedefKanal.send({ content: duzMetin });
         }
     }
 };
