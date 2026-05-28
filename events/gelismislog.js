@@ -4,18 +4,20 @@ const { ayarGetir } = require('../utils/db');
 module.exports = (client) => {
 
     // =========================================================================
-    // 🛠️ YARDIMCI FONKSİYONLAR & BELLEK YAPILARI
+    // 🛠️ YARDIMCI FONKSİYONLAR & BELLEK YAPILARI (RAM DOSTU)
     // =========================================================================
     const logKanalGetir = async (guildId) => {
         const kanalId = await ayarGetir(guildId, 'logKanal', null);
-        return kanalId ? client.channels.cache.get(kanalId) : null;
+        return kanalId ? (client.channels.cache.get(kanalId) || await client.channels.fetch(kanalId).catch(() => null)) : null;
     };
 
     const auditLogCek = async (guild, type, hedefId = null) => {
+        // Discord API gecikmelerini önlemek için akıllı döngü
         for (let i = 0; i < 3; i++) {
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 600));
             const logs = await guild.fetchAuditLogs({ limit: 5, type }).catch(() => null);
             if (!logs) continue;
+            
             const entry = hedefId
                 ? logs.entries.find(e => e.target?.id === hedefId)
                 : logs.entries.first();
@@ -26,9 +28,25 @@ module.exports = (client) => {
 
     const kufurRegex = /(amcık|yarrak|sik|piç|orospu|sikiş|göt|meme|orospu çocuğu|amk|aq|pç|skm|amına)/i;
     
-    // Ulti Koruma RAM Bellekleri kanka
+    // Hafıza (RAM) Takip Bellekleri kanka
     const mesajTakip = new Map();
-    const banTakip = new Map(); // Mass Ban takibi için
+    const banTakip = new Map();
+
+    // 🔥 PERİYODİK BELLEK TEMİZLEYİCİ (Memory Leak Önleyici)
+    // Her 5 dakikada bir RAM'deki eski log kalıntılarını temizler
+    setInterval(() => {
+        const simdi = Date.now();
+        for (const [key, value] of mesajTakip.entries()) {
+            const aktif = value.filter(ts => simdi - ts < 3000);
+            if (aktif.length === 0) mesajTakip.delete(key);
+            else mesajTakip.set(key, aktif);
+        }
+        for (const [key, value] of banTakip.entries()) {
+            const aktif = value.filter(ts => simdi - ts < 10000);
+            if (aktif.length === 0) banTakip.delete(key);
+            else banTakip.set(key, aktif);
+        }
+    }, 5 * 60 * 1000);
 
     // =========================================================================
     // 🛡️ ANA MESAJ KORUMALARI (Küfür, Spam, Caps, Bahsetme)
@@ -36,10 +54,10 @@ module.exports = (client) => {
     client.on('messageCreate', async (message) => {
         if (!message.guild || message.author.bot || message.partial) return;
 
-        // Yönetici yetkisi olanları koruma filtrelerinden muaf tutuyoruz
+        // Muafiyet Kontrolü
         if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-        // Botun RAM belleğinden ayarı kontrol ediyoruz
+        // RAM Cache tabanlı ayar sistemi
         if (!client.sistemBellegi) client.sistemBellegi = new Map();
         let durum = client.sistemBellegi.get(message.guild.id)?.kufur;
         if (durum === undefined) {
@@ -84,17 +102,19 @@ module.exports = (client) => {
         mesajTakip.set(message.author.id, filtrelenmisLog);
 
         if (filtrelenmisLog.length >= 5) {
-            await message.delete().catch(() => null);
-            await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
-            
-            message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
+            // Hiyerarşi kontrolü: Botun gücü yetiyorsa sustursun
+            if (message.member.manageable) {
+                await message.delete().catch(() => null);
+                await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
+                message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
 
-            if (logChan) {
-                const embed = new EmbedBuilder()
-                    .setTitle('<:sil:1505147967907037275> Otomatik Spam Koruması!')
-                    .setDescription(`🛑 **${message.author.tag}** serisinden spam yaptığı için otomatik olarak **5 dakika** susturuldu!`)
-                    .setColor('#c0392b').setTimestamp();
-                logChan.send({ embeds: [embed] }).catch(() => {});
+                if (logChan) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('<:sil:1505147967907037275> Otomatik Spam Koruması!')
+                        .setDescription(`🛑 **${message.author.tag}** serisinden spam yaptığı için otomatik olarak **5 dakika** susturuldu!`)
+                        .setColor('#c0392b').setTimestamp();
+                    logChan.send({ embeds: [embed] }).catch(() => {});
+                }
             }
             return;
         }
@@ -102,17 +122,18 @@ module.exports = (client) => {
         // 3. MASS MENTION (TOPLU ETİKET) KORUMASI
         const toplamEtiket = message.mentions.users.size + message.mentions.roles.size;
         if (toplamEtiket > 5) {
-            await message.delete().catch(() => null);
-            await message.member.timeout(10 * 60 * 1000, 'Toplu Etiket Koruması Tetiklendi').catch(() => null);
-            
-            message.channel.send({ content: `⚠️ ${message.author} Tek bir mesajda çok fazla kişiyi etiketlediğin için 10 dakika susturuldun kanka!` }).catch(() => null);
+            if (message.member.manageable) {
+                await message.delete().catch(() => null);
+                await message.member.timeout(10 * 60 * 1000, 'Toplu Etiket Koruması Tetiklendi').catch(() => null);
+                message.channel.send({ content: `⚠️ ${message.author} Tek bir mesajda çok fazla kişiyi etiketlediğin için 10 dakika susturuldun kanka!` }).catch(() => null);
 
-            if (logChan) {
-                const embed = new EmbedBuilder()
-                    .setTitle('<:riva_kilit:1505203119427162192> Toplu Etiket Koruması!')
-                    .setDescription(`🚨 **${message.author.tag}** tam \`${toplamEtiket}\` adet etiket atarak milleti darladı ve **10 dakika** susturuldu.`)
-                    .setColor('#e67e22').setTimestamp();
-                logChan.send({ embeds: [embed] }).catch(() => {});
+                if (logChan) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('<:riva_kilit:1505203119427162192> Toplu Etiket Koruması!')
+                        .setDescription(`🚨 **${message.author.tag}** tam \`${toplamEtiket}\` adet etiket atarak milleti darladı ve **10 dakika** susturuldu.`)
+                        .setColor('#e67e22').setTimestamp();
+                    logChan.send({ embeds: [embed] }).catch(() => {});
+                }
             }
             return;
         }
@@ -141,18 +162,21 @@ module.exports = (client) => {
         const logEntry = await auditLogCek(member.guild, AuditLogEvent.BotAdd, member.id);
         const ekleyen = logEntry?.executor;
 
-        await member.kick('İzinsiz/Kaçak Bot Girişi Engellendi').catch(() => null);
+        // Botun giren botu kovmaya yetkisi var mı?
+        if (member.kickable) {
+            await member.kick('İzinsiz/Kaçak Bot Girişi Engellendi').catch(() => null);
 
-        if (logChan) {
-            const embed = new EmbedBuilder()
-                .setTitle('<:yasaklandi:1505146022588842095> Sunucuya Kaçak Bot Sokuldu!')
-                .setDescription(`🚨 Sunucuya izinsiz bir bot eklenmeye çalışıldı ve sistem tarafından anında imha edildi!`)
-                .addFields(
-                    { name: '🤖 Engellenen Bot', value: `\`${member.user.tag}\` \`(${member.id})\``, inline: true },
-                    { name: '👤 Ekleyen Yetkili', value: ekleyen ? `${ekleyen} \`(${ekleyen.id})\`` : '`Bilinmiyor`', inline: true }
-                )
-                .setColor('#960018').setTimestamp();
-            logChan.send({ embeds: [embed] }).catch(() => {});
+            if (logChan) {
+                const embed = new EmbedBuilder()
+                    .setTitle('<:yasaklandi:1505146022588842095> Sunucuya Kaçak Bot Sokuldu!')
+                    .setDescription(`🚨 Sunucuya izinsiz bir bot eklenmeye çalışıldı ve sistem tarafından anında imha edildi!`)
+                    .addFields(
+                        { name: '🤖 Engellenen Bot', value: `\`${member.user.tag}\` \`(${member.id})\``, inline: true },
+                        { name: '👤 Ekleyen Yetkili', value: ekleyen ? `${ekleyen} \`(${ekleyen.id})\`` : '`Bilinmiyor`', inline: true }
+                    )
+                    .setColor('#960018').setTimestamp();
+                logChan.send({ embeds: [embed] }).catch(() => {});
+            }
         }
     });
 
@@ -179,7 +203,8 @@ module.exports = (client) => {
                 const logEntry = await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
                 const işlemiYapan = logEntry?.executor;
 
-                if (işlemiYapan && işlemiYapan.id !== client.user.id) {
+                // Yetkiyi bot vermediyse ve geri alma yetkisi varsa işlemi iptal et
+                if (işlemiYapan && işlemiYapan.id !== client.user.id && newMember.manageable) {
                     await newMember.roles.remove(eklenenRol, 'Tehlikeli Rol Verme Koruması').catch(() => null);
 
                     if (logChan) {
@@ -194,6 +219,7 @@ module.exports = (client) => {
                             .setColor('#c0392b').setTimestamp();
                         logChan.send({ embeds: [embed] }).catch(() => {});
                     }
+                    return; // Standart log akışını keselim ki mükerrer log basmasın
                 }
             }
         }
@@ -213,7 +239,7 @@ module.exports = (client) => {
                 .setTitle('<:koruma1:1505143174190989352> Üye Rol Güncellemesi!')
                 .setDescription(`<:uzaybot_kullanicilar:1505146190973505567> **Üye:** ${newMember.user} \`(${newMember.user.tag})\``)
                 .addFields({ name: '<:change:1505202806666170501> İşlemi Yapan', value: yapan })
-                .setThumbnail(newMember.user.displayAvatarURL()).setColor('#34495e').setTimestamp();
+                .setThumbnail(newMember.user.displayAvatarURL() || null).setColor('#34495e').setTimestamp();
 
             if (verilenRoller.size > 0) embed.addFields({ name: '<a:online:1505145208046878730> Verilen Rol(ler)', value: verilenRoller.map(r => `${r}`).join(', ') });
             if (alinanRoller.size > 0) embed.addFields({ name: '<:Ofline:1505145553925832704> Alınan Rol(ler)', value: alinanRoller.map(r => `${r}`).join(', ') });
@@ -268,8 +294,8 @@ module.exports = (client) => {
     // 💬 MESAJ LOGLARI (DÜZENLEME & SİLME)
     // =========================================================================
     client.on('messageDelete', async (message) => {
-        if (message.partial || message.author?.bot) return;
-        const logChan = await logKanalGetir(message.guild?.id);
+        if (message.partial || message.author?.bot || !message.guild) return;
+        const logChan = await logKanalGetir(message.guild.id);
         if (!logChan) return;
 
         const logEntry = await auditLogCek(message.guild, AuditLogEvent.MessageDelete, message.author.id);
@@ -281,9 +307,9 @@ module.exports = (client) => {
                 { name: '<:uzaybot_kullanicilar:1505146190973505567> Yazan Üye', value: `${message.author} \`(${message.author.id})\``, inline: true },
                 { name: '<:sil:1505147967907037275> Silen Kişi', value: silenKisi, inline: true },
                 { name: '<:Discord_Link:1505166617426923661> Kanal', value: `${message.channel}`, inline: true },
-                { name: '<:Paper:1505146388596391977> Silinen İçerik', value: message.content ? `\`\`\`${message.content.substring(0, 1000)}\`\`\`` : '*İçerik boş veya görsel/dosya.*' }
+                { name: '<:Paper:1505146388596391977> Silinen İçerik', value: message.content ? `\`\`\`${message.content.substring(0, 1000)}\`\`\`` : '*İçerik boş veya sadece görsel/dosya.*' }
             )
-            .setThumbnail(message.author.displayAvatarURL()).setColor('#e74c3c').setTimestamp();
+            .setThumbnail(message.author.displayAvatarURL() || null).setColor('#e74c3c').setTimestamp();
 
         if (message.attachments.size > 0) {
             embed.addFields({ name: '📎 Ek Dosyalar', value: message.attachments.map(a => `[${a.name}](${a.url})`).join('\n').substring(0, 500) });
@@ -292,8 +318,8 @@ module.exports = (client) => {
     });
 
     client.on('messageUpdate', async (oldMessage, newMessage) => {
-        if (oldMessage.partial || oldMessage.author?.bot || oldMessage.content === newMessage.content) return;
-        const logChan = await logKanalGetir(oldMessage.guild?.id);
+        if (oldMessage.partial || oldMessage.author?.bot || !oldMessage.guild || oldMessage.content === newMessage.content) return;
+        const logChan = await logKanalGetir(oldMessage.guild.id);
         if (!logChan) return;
 
         const embed = new EmbedBuilder()
@@ -305,7 +331,7 @@ module.exports = (client) => {
                 { name: '<:change:1505202806666170501> Eski İçerik', value: `\`\`\`${oldMessage.content?.substring(0, 500) || 'Boş'}\`\`\`` },
                 { name: '<a:tik:1505164671081123840> Yeni İçerik', value: `\`\`\`${newMessage.content?.substring(0, 500) || 'Boş'}\`\`\`` }
             )
-            .setThumbnail(oldMessage.author.displayAvatarURL()).setColor('#f39c12').setTimestamp();
+            .setThumbnail(oldMessage.author.displayAvatarURL() || null).setColor('#f39c12').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 
@@ -358,14 +384,15 @@ module.exports = (client) => {
         const korumaAktif = await ayarGetir(channel.guild.id, 'logKorumaDurum', false);
         const sistemLogId = await ayarGetir(channel.guild.id, 'logKanal', null);
 
-        // 🔥 ULTİ LOG KORUMASI: Eğer silinen kanal ana log kanalıysa patlat kanka!
+        // 🔥 ULTİ LOG KORUMASI: Log kanalı silinirse darbecinin tüm rollerini sıfırla
         if (korumaAktif && sistemLogId && channel.id === sistemLogId) {
             const logEntry = await auditLogCek(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-            const hainYetkili = logEntry?.target?.id === channel.id ? logEntry.executor : null;
+            const hainYetkili = logEntry?.executor;
 
             if (hainYetkili && hainYetkili.id !== client.user.id) {
                 const member = await channel.guild.members.fetch(hainYetkili.id).catch(() => null);
-                if (member) {
+                // Botun hiyerarşik gücü yetiyorsa rolleri alsın (çökmeyi önler)
+                if (member && member.manageable) {
                     await member.roles.set([], 'Ulti Log Kanalını Silmeye Çalıştı!').catch(() => null);
                 }
 
@@ -373,7 +400,7 @@ module.exports = (client) => {
                 if (guildOwner) {
                     const acilEmbed = new EmbedBuilder()
                         .setTitle('🚨 ACİL DURUM: LOG KANALI SABOTE EDİLDİ!')
-                        .setDescription(`⚠️ Sunucunuzdaki ana log kanalı (\`${channel.name}\`), **${hainYetkili.tag}** tarafından silindi! Bot anında yetkileri kesti!`)
+                        .setDescription(`⚠️ Sunucunuzdaki ana log kanalı (\`${channel.name}\`), **${hainYetkili.tag}** tarafından silindi! Bot anında darbecinin yetkilerini kesti!`)
                         .setColor('#960018').setTimestamp();
                     guildOwner.send({ embeds: [acilEmbed] }).catch(() => {});
                 }
@@ -404,14 +431,14 @@ module.exports = (client) => {
         const korumaAktif = await ayarGetir(newChannel.guild.id, 'logKorumaDurum', false);
         const sistemLogId = await ayarGetir(newChannel.guild.id, 'logKanal', null);
 
-        // 🔥 ULTİ LOG KORUMASI: Biri log kanalı izinlerini kurcalarsa yetkisini al kanka!
+        // 🔥 ULTİ LOG KORUMASI: Log kanalı izinleri kurcalanırsa müdahale et kanka
         if (korumaAktif && sistemLogId && newChannel.id === sistemLogId) {
             const logEntry = await auditLogCek(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
             const kurcalayan = logEntry?.executor;
 
             if (kurcalayan && kurcalayan.id !== client.user.id) {
                 const member = await newChannel.guild.members.fetch(kurcalayan.id).catch(() => null);
-                if (member && !member.permissions.has(PermissionFlagsBits.Administrator)) {
+                if (member && member.manageable && !member.permissions.has(PermissionFlagsBits.Administrator)) {
                     await member.roles.set([], 'Ulti Log Kanalı Ayarlarını Kurcaladı!').catch(() => null);
                 }
             }
@@ -510,6 +537,7 @@ module.exports = (client) => {
     // 🔥 SİNSİ WEBHOOK TAKİP LOGU
     // =========================================================================
     client.on('webhookUpdate', async (channel) => {
+        if (!channel.guild) return;
         const logChan = await logKanalGetir(channel.guild.id);
         if (!logChan) return;
 
@@ -520,7 +548,7 @@ module.exports = (client) => {
         const embed = new EmbedBuilder()
             .setTitle('<:Discord_Link:1505166617426923661> Webhook Verisi Tetiklendi!')
             .setDescription(`⛓️ **#${channel.name}** kanalında Webhook oluşturuldu veya kurcalandı kanka!`)
-            .addFields({ name: '<:uzaybot_kullanicilar:1505146190973505567> İşlem Sahibi', value: `${yapan}` })
+            .addFields({ name: '<:uzaybot_kullanicilar:1505146190973505567> İşlem Sahibi', value: yapan ? `${yapan}` : '`Bilinmiyor`' })
             .setColor('#9b59b6').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
@@ -601,7 +629,8 @@ module.exports = (client) => {
 
             if (aktifBanlar.length >= 3) { // 10 saniyede 3 ban atarsa darbecidir kanka!
                 const member = await ban.guild.members.fetch(yapan.id).catch(() => null);
-                if (member) {
+                // Botun hiyerarşik gücü darbeciye yetiyorsa tüm yetkilerini budasın
+                if (member && member.manageable) {
                     await member.roles.set([], 'Mass Ban Saldırısı Tespit Edildi!').catch(() => null);
                 }
 
@@ -610,8 +639,9 @@ module.exports = (client) => {
                         .setTitle('<:yasaklandi:1505146022588842095> MASS BAN SALDIRISI ENGELLENDİ!')
                         .setDescription(`🚨 **${yapan}** isimli yetkili ardı ardına seri ban attığı için sunucuyu korumak amacıyla **bütün yetkileri ve rolleri alındı**!`)
                         .setColor('#960018').setTimestamp();
-                    return logChan.send({ embeds: [panikEmbed] }).catch(() => {});
+                    logChan.send({ embeds: [panikEmbed] }).catch(() => {});
                 }
+                return;
             }
         }
 
@@ -623,7 +653,7 @@ module.exports = (client) => {
                 { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan ? `${yapan} \`(${yapan.id})\`` : '`Bilinmiyor`', inline: true },
                 { name: '<:Paper:1505146388596391977> Sebep', value: `\`${sebep}\`` }
             )
-            .setThumbnail(ban.user.displayAvatarURL({ dynamic: true })).setColor('#960018').setTimestamp();
+            .setThumbnail(ban.user.displayAvatarURL({ dynamic: true }) || null).setColor('#960018').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 };
