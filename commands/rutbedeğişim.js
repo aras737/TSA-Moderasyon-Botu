@@ -9,186 +9,116 @@ const ROBLOX_GRUP_ID = "33389098"; // Grubunun ID'si sabit kanka
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('rütbe')
-        .setDescription('Roblox grubundaki üyelerin rütbelerini güvenli şekilde yönetir.')
+        .setName('rütbedeğiştir') // Discord kuralları gereği tamamen küçük harf yaptık kanka
+        .setDescription('Doğrudan Roblox kullanıcı adı belirterek rütbe günceller.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('değiştir')
-                .setDescription('Bir üyenin Roblox gruptaki rütbesini günceller.')
-                .addUserOption(option => 
-                    option.setName('kişi') 
-                        .setDescription('Rütbesi değiştirilecek Discord üyesini etiketleyin (İsteğe bağlı).')
-                        .setRequired(false) // Artık zorunlu değil kanka
+        .addStringOption(option =>
+            option.setName('isim') // İstediğin gibi "isim" seçeneği
+                .setDescription('Rütbesi değiştirilecek kişinin tam Roblox kullanıcı adı.')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('sebep') // İstediğin gibi "sebep" seçeneği
+                .setDescription('Rütbe değişim sebebini belirtin.')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Transfer', value: 'Transfer' },
+                    { name: 'Terfi', value: 'Terfi' },
+                    { name: 'Atama', value: 'Atama' }
                 )
-                .addStringOption(option =>
-                    option.setName('roblox_adı')
-                        .setDescription('Rütbesi değiştirilecek kişinin tam Roblox kullanıcı adı (İsteğe bağlı).')
-                        .setRequired(false) // Bu da isteğe bağlı, ikisinden biri yeterli
-                )
-                .addStringOption(option =>
-                    option.setName('sebep')
-                        .setDescription('Rütbe değişim sebebini belirtin.')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Transfer', value: 'Transfer' },
-                            { name: 'Terfi', value: 'Terfi' },
-                            { name: 'Atama', value: 'Atama' }
-                        )
-                )
-                .addStringOption(option =>
-                    option.setName('orta_rütbeler') 
-                        .setDescription('Verilecek yeni rütbeyi seçin.')
-                        .setRequired(false) 
-                        .addChoices(
-                            // ⚠️ NOT: Buradaki rütbe ID'lerini kendi grubuna göre güncellemeyi unutma!
-                            { name: 'Genelkurmay Başkanı', value: '98765432' }, 
-                            { name: 'Albay', value: '87654321' },
-                            { name: 'Teğmen', value: '76543210' },
-                            { name: 'Subay', value: '65432109' }
-                        )
+        )
+        .addStringOption(option =>
+            option.setName('orta_rütbeler') 
+                .setDescription('Verilecek yeni rütbeyi seçin.')
+                .setRequired(false) // İlk baştaki hata embed'ini tetikleyebilmek için false bıraktık kanka
+                .addChoices(
+                    // ⚠️ NOT: Buradaki rütbe ID'lerini kendi grubuna göre güncellemeyi unutma!
+                    { name: 'Genelkurmay Başkanı', value: '98765432' }, 
+                    { name: 'Albay', value: '87654321' },
+                    { name: 'Teğmen', value: '76543210' },
+                    { name: 'Subay', value: '65432109' }
                 )
         ),
 
     async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
+        const robloxAdiInput = interaction.options.getString('isim');
+        const sebep = interaction.options.getString('sebep');
+        const yeniRutbeId = interaction.options.getString('orta_rütbeler');
+        const yetkili = interaction.user; 
 
-        if (subcommand === 'değiştir') {
-            const hedefKisi = interaction.options.getUser('kişi');
-            const robloxAdiInput = interaction.options.getString('roblox_adı');
-            const sebep = interaction.options.getString('sebep');
-            const yeniRutbeId = interaction.options.getString('orta_rütbeler');
-            const yetkili = interaction.user; 
+        // 🟥 1. DURUM: RÜTBE SEÇİLMEDİĞİNDE DÖNEN HATA EMBED'İ
+        if (!yeniRutbeId) {
+            const hataEmbed = new EmbedBuilder()
+                .setTitle('❌ Rütbe Seçilmedi')
+                .setDescription('Lütfen bir rütbe kategorisinden rütbe seçin!')
+                .setColor('#7a0010'); 
 
-            // 🟥 1. DURUM: RÜTBE SEÇİLMEDİĞİNDE DÖNEN HATA EMBED'İ
-            if (!yeniRutbeId) {
-                const hataEmbed = new EmbedBuilder()
-                    .setTitle('❌ Rütbe Seçilmedi')
-                    .setDescription('Lütfen bir rütbe kategorisinden rütbe seçin!')
-                    .setColor('#7a0010'); 
+            return interaction.reply({ embeds: [hataEmbed] });
+        }
 
-                return interaction.reply({ embeds: [hataEmbed] });
-            }
+        await interaction.deferReply();
 
-            // 🟥 2. DURUM: İKİ SEÇENEK DE BOŞ BIRAKILDIYSA HATA VERELİM
-            if (!hedefKisi && !robloxAdiInput) {
-                const girdiHataEmbed = new EmbedBuilder()
-                    .setTitle('❌ Eksik Girdi')
-                    .setDescription('Lütfen bir Discord üyesi etiketleyin **veya** bir Roblox kullanıcı adı yazın kanka!')
+        try {
+            // 🔍 1. ADIM: Doğrudan Roblox Kullanıcı Adından ID Sorgulama
+            const robloxSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
+                usernames: [robloxAdiInput],
+                excludeBannedUsers: false
+            }).catch(() => null);
+
+            if (!robloxSearchResponse || !robloxSearchResponse.data || !robloxSearchResponse.data.data || !robloxSearchResponse.data.data[0]) {
+                const kayitsizEmbed = new EmbedBuilder()
+                    .setTitle('❌ Roblox Hesabı Bulunamadı')
+                    .setDescription(`**${robloxAdiInput}** adında aktif bir Roblox kullanıcı adı saptanamadı kanka!`)
                     .setColor('#7a0010');
-
-                return interaction.reply({ embeds: [girdiHataEmbed] });
+                return interaction.editReply({ embeds: [kayitsizEmbed] });
             }
 
-            await interaction.deferReply();
+            const robloxId = robloxSearchResponse.data.data[0].id;
+            const robloxUsername = robloxSearchResponse.data.data[0].name;
 
-            try {
-                let robloxId = null;
-                let robloxUsername = null;
+            // 📜 2. ADIM: Kullanıcının Gruptaki Mevcut Eski Rütbe Adını Öğrenme
+            const groupResponse = await axios.get(`https://groups.roblox.com/v2/users/${robloxId}/groups/roles`);
+            const grupVerisi = groupResponse.data.data.find(g => g.group.id == ROBLOX_GRUP_ID);
+            const eskiRutbeAdi = grupVerisi ? grupVerisi.role.name : 'Üye';
 
-                // 🌟 YOL A: DOĞRUDAN ROBLOX KULLANICI ADI YAZILDIYSA
-                if (robloxAdiInput) {
-                    const robloxSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
-                        usernames: [robloxAdiInput],
-                        excludeBannedUsers: false
-                    }).catch(() => null);
+            const rütbeIsimHaritasi = { '98765432': 'Genelkurmay Başkanı', '87654321': 'Albay', '76543210': 'Teğmen', '65432109': 'Subay' };
+            const yeniRutbeAdi = rütbeIsimHaritasi[yeniRutbeId] || 'Yeni Rütbe';
 
-                    if (robloxSearchResponse && robloxSearchResponse.data && robloxSearchResponse.data.data && robloxSearchResponse.data.data[0]) {
-                        robloxId = robloxSearchResponse.data.data[0].id;
-                        robloxUsername = robloxSearchResponse.data.data[0].name;
-                    }
-                } 
-                // 🌟 YOL B: DISCORD KİŞİSİ ETİKETLENDİYSE (3 KADEMELİ BULUCU)
-                else if (hedefKisi) {
-                    // [KADEME 1]: Bloxlink API sorgusu
-                    const bloxlinkResponse = await axios.get(`https://api.blox.link/v4/public/users/${hedefKisi.id}`, {
-                        headers: { 'Authorization': '989e7e7a-92e1-4560-bf64-52a1df0f0383' } 
-                    }).catch(() => null);
-
-                    if (bloxlinkResponse && bloxlinkResponse.data && bloxlinkResponse.data.robloxId) {
-                        robloxId = bloxlinkResponse.data.robloxId;
-                    } 
-                    // [KADEME 2]: RoWifi API sorgusu
-                    else {
-                        const rowifiResponse = await axios.get(`https://api.rowifi.xyz/v2/users/${hedefKisi.id}`).catch(() => null);
-                        if (rowifiResponse && rowifiResponse.data && rowifiResponse.data.roblox_id) {
-                            robloxId = rowifiResponse.data.roblox_id;
-                        }
-                    }
-
-                    // [KADEME 3]: Discord kullanıcı adını Roblox'ta arat
-                    if (!robloxId) {
-                        const robloxSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
-                            usernames: [hedefKisi.username],
-                            excludeBannedUsers: false
-                        }).catch(() => null);
-
-                        if (robloxSearchResponse && robloxSearchResponse.data && robloxSearchResponse.data.data && robloxSearchResponse.data.data[0]) {
-                            robloxId = robloxSearchResponse.data.data[0].id;
-                            robloxUsername = robloxSearchResponse.data.data[0].name;
-                        }
-                    }
-
-                    // Kademe 1 veya 2'den geldiyse ismini resmi api'den çekiyoruz
-                    if (robloxId && !robloxUsername) {
-                        const robloxUserCheck = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`).catch(() => null);
-                        if (robloxUserCheck) robloxUsername = robloxUserCheck.data.name;
+            // ⚡ 3. ADIM: ROBLOX OPEN CLOUD API İLE RÜTBE DEĞİŞTİRME TETİKLEMESİ
+            await axios.patch(
+                `https://apis.roblox.com/cloud/v2/groups/${ROBLOX_GRUP_ID}/memberships/${robloxId}`,
+                {
+                    role: `groups/${ROBLOX_GRUP_ID}/roles/${yeniRutbeId}`
+                },
+                {
+                    headers: {
+                        'x-api-key': ROBLOX_API_KEY,
+                        'Content-Type': 'application/json'
                     }
                 }
+            );
 
-                // Hiçbir şekilde hesap bulunamazsa
-                if (!robloxId || !robloxUsername) {
-                    const kayitsizEmbed = new EmbedBuilder()
-                        .setTitle('❌ Roblox Hesabı Bulunamadı')
-                        .setDescription(`Belirttiğin kriterlere uygun aktif bir Roblox hesabı saptanamadı kanka!`)
-                        .setColor('#7a0010');
-                    return interaction.editReply({ embeds: [kayitsizEmbed] });
-                }
-
-                // 📜 2. ADIM: Kullanıcının Gruptaki Mevcut Eski Rütbe Adını Öğrenme
-                const groupResponse = await axios.get(`https://groups.roblox.com/v2/users/${robloxId}/groups/roles`);
-                const grupVerisi = groupResponse.data.data.find(g => g.group.id == ROBLOX_GRUP_ID);
-                const eskiRutbeAdi = grupVerisi ? grupVerisi.role.name : 'Üye';
-
-                const rütbeIsimHaritasi = { '98765432': 'Genelkurmay Başkanı', '87654321': 'Albay', '76543210': 'Teğmen', '65432109': 'Subay' };
-                const yeniRutbeAdi = rütbeIsimHaritasi[yeniRutbeId] || 'Yeni Rütbe';
-
-                // ⚡ 3. ADIM: ROBLOX OPEN CLOUD API İLE RÜTBE DEĞİŞTİRME TETİKLEMESİ
-                await axios.patch(
-                    `https://apis.roblox.com/cloud/v2/groups/${ROBLOX_GRUP_ID}/memberships/${robloxId}`,
-                    {
-                        role: `groups/${ROBLOX_GRUP_ID}/roles/${yeniRutbeId}`
-                    },
-                    {
-                        headers: {
-                            'x-api-key': ROBLOX_API_KEY,
-                            'Content-Type': 'application/json'
-                        }
-                    }
-                );
-
-                // 🟩 3. DURUM: BAŞARILI ŞEKİLDE RÜTBE DEĞİŞTİRME EMBED'İ
-                const basariEmbed = new EmbedBuilder()
-                    .setDescription(`**${robloxUsername}** - [ \`${robloxId}\` ] adlı kişiye, Yetkili ${yetkili} tarafından **${sebep}** sebebiyle **${eskiRutbeAdi}** rütbesinden **${yeniRutbeAdi}** rütbesine **terfi** edildi.`)
-                    .setColor('#107a29')
-                    .setFooter({ 
-                        text: `İşlemi Yapan: ${yetkili.username}`, 
-                        iconURL: yetkili.displayAvatarURL({ dynamic: true }) 
+            // 🟩 2. DURUM: BAŞARILI ŞEKİLDE RÜTBE DEĞİŞTİRME EMBED'İ
+            const basariEmbed = new EmbedBuilder()
+                .setDescription(`**${robloxUsername}** - [ \`${robloxId}\` ] adlı kişiye, Yetkili ${yetkili} tarafından **${sebep}** sebebiyle **${eskiRutbeAdi}** rütbesinden **${yeniRutbeAdi}** rütbesine **terfi** edildi.`)
+                .setColor('#107a29')
+                .setFooter({ 
+                    text: `İşlemi Yapan: ${yetkili.username}`, 
+                    iconURL: yetkili.displayAvatarURL({ dynamic: true }) 
                     })
-                    .setTimestamp();
+                .setTimestamp();
 
-                return interaction.editReply({ embeds: [basariEmbed] });
+            return interaction.editReply({ embeds: [basariEmbed] });
 
-            } catch (error) {
-                console.error("Bulut Rütbe Hatası:", error.response ? error.response.data : error.message);
+        } catch (error) {
+            console.error("Bulut Rütbe Hatası:", error.response ? error.response.data : error.message);
+            
+            const apiHataEmbed = new EmbedBuilder()
+                .setTitle('❌ Rütbe Değiştirilemedi')
+                .setDescription('Roblox tarafında bir sorun oluştu veya botun gruptaki yetkisi bu işlemi yapmaya yetmiyor kanka!')
+                .setColor('#7a0010');
                 
-                const apiHataEmbed = new EmbedBuilder()
-                    .setTitle('❌ Rütbe Değiştirilemedi')
-                    .setDescription('Roblox tarafında bir sorun oluştu veya botun gruptaki yetkisi bu işlemi yapmaya yetmiyor kanka!')
-                    .setColor('#7a0010');
-                    
-                return interaction.editReply({ embeds: [apiHataEmbed] });
-            }
+            return interaction.editReply({ embeds: [apiHataEmbed] });
         }
     },
 };
