@@ -18,8 +18,13 @@ module.exports = {
                 .setDescription('Bir üyenin Roblox gruptaki rütbesini günceller.')
                 .addUserOption(option => 
                     option.setName('kişi') 
-                        .setDescription('Rütbesi değiştirilecek Discord üyesini etiketleyin.')
-                        .setRequired(true)
+                        .setDescription('Rütbesi değiştirilecek Discord üyesini etiketleyin (İsteğe bağlı).')
+                        .setRequired(false) // Artık zorunlu değil kanka
+                )
+                .addStringOption(option =>
+                    option.setName('roblox_adı')
+                        .setDescription('Rütbesi değiştirilecek kişinin tam Roblox kullanıcı adı (İsteğe bağlı).')
+                        .setRequired(false) // Bu da isteğe bağlı, ikisinden biri yeterli
                 )
                 .addStringOption(option =>
                     option.setName('sebep')
@@ -50,6 +55,7 @@ module.exports = {
 
         if (subcommand === 'değiştir') {
             const hedefKisi = interaction.options.getUser('kişi');
+            const robloxAdiInput = interaction.options.getString('roblox_adı');
             const sebep = interaction.options.getString('sebep');
             const yeniRutbeId = interaction.options.getString('orta_rütbeler');
             const yetkili = interaction.user; 
@@ -64,53 +70,77 @@ module.exports = {
                 return interaction.reply({ embeds: [hataEmbed] });
             }
 
+            // 🟥 2. DURUM: İKİ SEÇENEK DE BOŞ BIRAKILDIYSA HATA VERELİM
+            if (!hedefKisi && !robloxAdiInput) {
+                const girdiHataEmbed = new EmbedBuilder()
+                    .setTitle('❌ Eksik Girdi')
+                    .setDescription('Lütfen bir Discord üyesi etiketleyin **veya** bir Roblox kullanıcı adı yazın kanka!')
+                    .setColor('#7a0010');
+
+                return interaction.reply({ embeds: [girdiHataEmbed] });
+            }
+
             await interaction.deferReply();
 
             try {
-                // 🔍 1. ADIM: 3 KADEMELİ ROBLOX HESAP ARAMA MOTORU
                 let robloxId = null;
                 let robloxUsername = null;
 
-                // 🔄 [KADEME 1]: Bloxlink API sorgusu
-                const bloxlinkResponse = await axios.get(`https://api.blox.link/v4/public/users/${hedefKisi.id}`, {
-                    headers: { 'Authorization': '989e7e7a-92e1-4560-bf64-52a1df0f0383' } 
-                }).catch(() => null);
-
-                if (bloxlinkResponse && bloxlinkResponse.data && bloxlinkResponse.data.robloxId) {
-                    robloxId = bloxlinkResponse.data.robloxId;
-                } 
-                // 🔄 [KADEME 2]: Bloxlink bulamazsa RoWifi API sorgusu kanka
-                else {
-                    const rowifiResponse = await axios.get(`https://api.rowifi.xyz/v2/users/${hedefKisi.id}`).catch(() => null);
-                    if (rowifiResponse && rowifiResponse.data && rowifiResponse.data.roblox_id) {
-                        robloxId = rowifiResponse.data.roblox_id;
-                    }
-                }
-
-                // 🔄 [KADEME 3]: İki botta da yoksa Discord kullanıcı adını Roblox'ta aratıyoruz kanka
-                if (!robloxId) {
+                // 🌟 YOL A: DOĞRUDAN ROBLOX KULLANICI ADI YAZILDIYSA
+                if (robloxAdiInput) {
                     const robloxSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
-                        usernames: [hedefKisi.username],
+                        usernames: [robloxAdiInput],
                         excludeBannedUsers: false
                     }).catch(() => null);
 
                     if (robloxSearchResponse && robloxSearchResponse.data && robloxSearchResponse.data.data && robloxSearchResponse.data.data[0]) {
                         robloxId = robloxSearchResponse.data.data[0].id;
-                        robloxUsername = robloxSearchResponse.data.data[0].name; // İsmi direkt buradan aldık
+                        robloxUsername = robloxSearchResponse.data.data[0].name;
+                    }
+                } 
+                // 🌟 YOL B: DISCORD KİŞİSİ ETİKETLENDİYSE (3 KADEMELİ BULUCU)
+                else if (hedefKisi) {
+                    // [KADEME 1]: Bloxlink API sorgusu
+                    const bloxlinkResponse = await axios.get(`https://api.blox.link/v4/public/users/${hedefKisi.id}`, {
+                        headers: { 'Authorization': '989e7e7a-92e1-4560-bf64-52a1df0f0383' } 
+                    }).catch(() => null);
+
+                    if (bloxlinkResponse && bloxlinkResponse.data && bloxlinkResponse.data.robloxId) {
+                        robloxId = bloxlinkResponse.data.robloxId;
+                    } 
+                    // [KADEME 2]: RoWifi API sorgusu
+                    else {
+                        const rowifiResponse = await axios.get(`https://api.rowifi.xyz/v2/users/${hedefKisi.id}`).catch(() => null);
+                        if (rowifiResponse && rowifiResponse.data && rowifiResponse.data.roblox_id) {
+                            robloxId = rowifiResponse.data.roblox_id;
+                        }
+                    }
+
+                    // [KADEME 3]: Discord kullanıcı adını Roblox'ta arat
+                    if (!robloxId) {
+                        const robloxSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
+                            usernames: [hedefKisi.username],
+                            excludeBannedUsers: false
+                        }).catch(() => null);
+
+                        if (robloxSearchResponse && robloxSearchResponse.data && robloxSearchResponse.data.data && robloxSearchResponse.data.data[0]) {
+                            robloxId = robloxSearchResponse.data.data[0].id;
+                            robloxUsername = robloxSearchResponse.data.data[0].name;
+                        }
+                    }
+
+                    // Kademe 1 veya 2'den geldiyse ismini resmi api'den çekiyoruz
+                    if (robloxId && !robloxUsername) {
+                        const robloxUserCheck = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`).catch(() => null);
+                        if (robloxUserCheck) robloxUsername = robloxUserCheck.data.name;
                     }
                 }
 
-                // Eğer Kademe 1 veya Kademe 2'den ID geldiyse ama isim hala çekilmediyse resmi API'den çekelim
-                if (robloxId && !robloxUsername) {
-                    const robloxUserCheck = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`).catch(() => null);
-                    if (robloxUserCheck) robloxUsername = robloxUserCheck.data.name;
-                }
-
-                // 3 kademede de hiçbir şey bulunamazsa hata veriyoruz
+                // Hiçbir şekilde hesap bulunamazsa
                 if (!robloxId || !robloxUsername) {
                     const kayitsizEmbed = new EmbedBuilder()
                         .setTitle('❌ Roblox Hesabı Bulunamadı')
-                        .setDescription(`Etiketlenen **${hedefKisi.username}** kişisi veritabanlarında bulunamadı ve bu isimde bir Roblox hesabı saptanamadı kanka!`)
+                        .setDescription(`Belirttiğin kriterlere uygun aktif bir Roblox hesabı saptanamadı kanka!`)
                         .setColor('#7a0010');
                     return interaction.editReply({ embeds: [kayitsizEmbed] });
                 }
@@ -137,7 +167,7 @@ module.exports = {
                     }
                 );
 
-                // 🟩 2. DURUM: BAŞARILI ŞEKİLDE RÜTBE DEĞİŞTİRME EMBED'İ
+                // 🟩 3. DURUM: BAŞARILI ŞEKİLDE RÜTBE DEĞİŞTİRME EMBED'İ
                 const basariEmbed = new EmbedBuilder()
                     .setDescription(`**${robloxUsername}** - [ \`${robloxId}\` ] adlı kişiye, Yetkili ${yetkili} tarafından **${sebep}** sebebiyle **${eskiRutbeAdi}** rütbesinden **${yeniRutbeAdi}** rütbesine **terfi** edildi.`)
                     .setColor('#107a29')
