@@ -4,7 +4,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('tamyasakla')
         .setDescription('Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers) // Sadece ban yetkisi olanlar görebilir
         .addStringOption(option =>
             option.setName('kisi')
                 .setDescription('Yasaklanacak kişinin Discord ID\'sini veya etiketini girin kanka.')
@@ -21,13 +21,13 @@ module.exports = {
         const sebep = interaction.options.getString('sebep');
         const yetkili = interaction.user;
 
-        // 🧹 Etiket parantezlerini temizleyip saf ID'yi alıyoruz
+        // 🧹 Etiket parantezlerini temizleyip saf ID'yi alıyoruz kanka
         const targetId = kisiInput.replace(/[<@!>]/g, '');
 
         if (!/^\d+$/.test(targetId)) {
             const hataEmbed = new EmbedBuilder()
                 .setTitle('❌ Geçersiz Kullanıcı')
-                .setDescription('Lütfen geçerli bir Discord ID\'si veya kullanıcı etiketi gir kanka!')
+                .setDescription('<a:baarsz:1505146967817326675> Lütfen geçerli bir Discord ID\'si veya kullanıcı etiketi gir kanka!')
                 .setColor('#7a0010');
             return interaction.reply({ embeds: [hataEmbed], ephemeral: true });
         }
@@ -35,7 +35,7 @@ module.exports = {
         await interaction.deferReply();
 
         let targetUser = null;
-        let dmDurumu = "❌ **DM İletilemedi** *(Kullanıcı bulunamadı)*";
+        let dmDurumu = "<a:baarsz:1505146967817326675> **DM İletilemedi** *(Kullanıcı bulunamadı)*";
 
         try {
             targetUser = await interaction.client.users.fetch(targetId).catch(() => null);
@@ -47,20 +47,20 @@ module.exports = {
         if (targetUser) {
             try {
                 const dmEmbed = new EmbedBuilder()
-                    .setTitle('🚨 KÜRESEL YASAKLAMA BİLDİRİMİ 🚨')
-                    .setDescription(`Merhaba **${targetUser.username}**,\nTHT Yönetim Sistemi kararıyla botun bağlı olduğu tüm askeri ve sivil sunuculardan kalıcı olarak uzaklaştırıldınız.`)
+                    .setTitle('<:yasaklandi:1505146022588842095> KÜRESEL YASAKLAMA BİLDİRİMİ')
+                    .setDescription(`Merhaba **${targetUser.username}**,\nTSA Yönetim Sistemi kararıyla botun bağlı olduğu tüm sunuculardan kalıcı olarak uzaklaştırıldınız.`)
                     .addFields(
-                        { name: '💬 Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
-                        { name: '👑 İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
+                        { name: '┗ <:Paper:1505146388596391977> Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
+                        { name: '┗ <:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
                     )
                     .setColor('#7a0010')
-                    .setFooter({ text: 'THT Küresel Sıkıyönetim Sistemi' })
+                    .setFooter({ text: 'TSA Küresel Sıkıyönetim Sistemi' })
                     .setTimestamp();
 
                 await targetUser.send({ embeds: [dmEmbed] });
-                dmDurumu = "📩 **DM Başarıyla İletildi**";
+                dmDurumu = "<a:tik:1505164671081123840> **DM Başarıyla İletildi**";
             } catch (dmError) {
-                dmDurumu = "🔒 **DM İletilemedi** *(Kullanıcının DM'leri kapalı veya botu engellemiş)*";
+                dmDurumu = "<a:uyari:1505166167189487757> **DM İletilemedi** *(Kullanıcının DM'leri kapalı veya botu engellemiş)*";
             }
         }
 
@@ -72,6 +72,7 @@ module.exports = {
 
         for (const [guildId, sunucu] of tumSunucular) {
             try {
+                // Ban listesindeki arama algoritmasının tanıması için sebebi "Küresel Sıkıyönetim" olarak işaretliyoruz
                 await sunucu.members.ban(targetId, { 
                     reason: `Küresel Sıkıyönetim | Yetkili: ${yetkili.username} | Sebep: ${sebep}` 
                 });
@@ -85,25 +86,25 @@ module.exports = {
         if (banlananSunucular.length === 0) {
             const basarisizEmbed = new EmbedBuilder()
                 .setTitle('❌ İşlem Başarısız')
-                .setDescription(`**${targetName}** kişisi hiçbir sunucudan banlanamadı. Yetkileri kontrol et kanka!`)
+                .setDescription(`<a:baarsz:1505146967817326675> **${targetName}** kişisi hiçbir sunucudan banlanamadı. Yetkileri kontrol et kanka!`)
                 .setColor('#7a0010');
             return interaction.editReply({ embeds: [basarisizEmbed] });
         }
 
-        // 🟩 3. ADIM: YETKİLİYE EMOJİLİ DETAYLI OPERASYON RAPORU
-        let sunucuListesiMetni = banlananSunucular.map(s => `🔹 ${s}`).join('\n');
+        // 🟩 3. ADIM: YETKİLİYE SANA ÖZEL EMOJİLERLE RAPORLAMA
+        let sunucuListesiMetni = banlananSunucular.map(s => `<a:tik:1505164671081123840> ${s}`).join('\n');
 
         const basariEmbed = new EmbedBuilder()
-            .setTitle('🛡️ KÜRESEL SIKIYÖNETİM OPERASYONU TIKIRINDA 🛡️')
+            .setTitle('<:yasaklandi:1505146022588842095> TSA | Küresel Sıkıyönetim Operasyonu')
             .setDescription(
-                `### 👤 Kullanıcı Bilgileri\n` +
+                `### <:uzaybot_kullanicilar:1505146190973505567> Kullanıcı Bilgileri\n` +
                 `• **Kullanıcı:** ${targetName}\n` +
                 `• **ID:** \`${targetId}\`\n\n` +
-                `### 👮 Yetkili Bilgileri\n` +
+                `### 👑 Yetkili Bilgileri\n` +
                 `• **İşlemi Yapan:** ${yetkili}\n` +
                 `• **Kullanıcı Adı:** \`${yetkili.username}\`\n\n` +
-                `### 📄 İşlem Detayları\n` +
-                `• **Sebep:** \`${sebep}\`\n` +
+                `### <:Paper:1505146388596391977> İşlem Detayları\n` +
+                `• **Sebep:** *${sebep}*\n` +
                 `• **DM Durumu:** ${dmDurumu}\n\n` +
                 `### 🌐 Yasaklandığı Discord Sunucuları (${banlananSunucular.length})\n` +
                 `${sunucuListesiMetni}`
@@ -111,7 +112,7 @@ module.exports = {
             .setColor('#7a0010')
             .setThumbnail(targetUser ? targetUser.displayAvatarURL({ dynamic: true }) : null)
             .setFooter({ 
-                text: `THT Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, 
+                text: `TSA Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, 
                 iconURL: interaction.guild.iconURL({ dynamic: true }) 
             })
             .setTimestamp();
