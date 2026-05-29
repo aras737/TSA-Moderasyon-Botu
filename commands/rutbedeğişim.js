@@ -5,7 +5,7 @@ const axios = require('axios');
 // ⚙️ ROBLOX OPEN CLOUD CONFIG (Render .env Bağlantılı)
 // =========================================================================
 const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY; 
-const ROBLOX_GRUP_ID = "33389098"; // Kendi Roblox Grup ID'ni buraya yaz kanka
+const ROBLOX_GRUP_ID = "33389098"; // Kendi Grup ID'ni koruduk kanka
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -52,7 +52,7 @@ module.exports = {
             const hedefKisi = interaction.options.getUser('kişi');
             const sebep = interaction.options.getString('sebep');
             const yeniRutbeId = interaction.options.getString('orta_rütbeler');
-            const yetkili = interaction.user; // 🔥 Komutu kullanan yetkiliyi buradan çekiyoruz kanka
+            const yetkili = interaction.user; 
 
             // 🟥 1. DURUM: RÜTBE SEÇİLMEDİĞİNDE DÖNEN HATA EMBED'İ
             if (!yeniRutbeId) {
@@ -67,25 +67,37 @@ module.exports = {
             await interaction.deferReply();
 
             try {
-                // 🔍 1. ADIM: Discord ID'sinden Roblox Bilgilerini Çekme (Bloxlink)
+                // 🔍 1. ADIM: Discord ID'sinden Roblox Bilgilerini Çekme (Bloxlink & RoWifi Çift Filtre)
                 let robloxId = null;
                 let robloxUsername = null;
 
+                // 🔄 Sistem 1: Önce Bloxlink'e soruyoruz
                 const bloxlinkResponse = await axios.get(`https://api.blox.link/v4/public/users/${hedefKisi.id}`, {
                     headers: { 'Authorization': '989e7e7a-92e1-4560-bf64-52a1df0f0383' } 
                 }).catch(() => null);
 
                 if (bloxlinkResponse && bloxlinkResponse.data && bloxlinkResponse.data.robloxId) {
                     robloxId = bloxlinkResponse.data.robloxId;
-                    
+                } 
+                // 🔄 Sistem 2: Bloxlink boş dönerse hemen RoWifi API'sine soruyoruz kanka
+                else {
+                    const rowifiResponse = await axios.get(`https://api.rowifi.xyz/v2/users/${hedefKisi.id}`).catch(() => null);
+                    if (rowifiResponse && rowifiResponse.data && rowifiResponse.data.roblox_id) {
+                        robloxId = rowifiResponse.data.roblox_id;
+                    }
+                }
+
+                // Eğer iki botta da kayıt bulduysak resmi Roblox API'sinden güncel ismi çekiyoruz
+                if (robloxId) {
                     const robloxUserCheck = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`).catch(() => null);
                     if (robloxUserCheck) robloxUsername = robloxUserCheck.data.name;
                 }
 
+                // İki veritabanında da yoksa hata veriyoruz
                 if (!robloxId || !robloxUsername) {
                     const kayitsizEmbed = new EmbedBuilder()
                         .setTitle('❌ Roblox Hesabı Bulunamadı')
-                        .setDescription(`Etiketlenen **${hedefKisi.username}** kişisinin Roblox hesabı Bloxlink üzerinde bulunamadı kanka!`)
+                        .setDescription(`Etiketlenen **${hedefKisi.username}** kişisinin hesabı ne **Bloxlink** ne de **RoWifi** üzerinde bulunamadı kanka!`)
                         .setColor('#7a0010');
                     return interaction.editReply({ embeds: [kayitsizEmbed] });
                 }
@@ -114,10 +126,8 @@ module.exports = {
 
                 // 🟩 2. DURUM: BAŞARILI ŞEKİLDE RÜTBE DEĞİŞTİRME EMBED'İ (Yetkili Takipli)
                 const basariEmbed = new EmbedBuilder()
-                    // Açıklama kısmına işlemi yapan yetkiliyi şıkça iliştirdik kanka:
                     .setDescription(`**${robloxUsername}** - [ \`${robloxId}\` ] adlı kişiye, Yetkili ${yetkili} tarafından **${sebep}** sebebiyle **${eskiRutbeAdi}** rütbesinden **${yeniRutbeAdi}** rütbesine **terfi** edildi.`)
                     .setColor('#107a29')
-                    // Sağlama almak için en alta da isim ve avatarını basıyoruz:
                     .setFooter({ 
                         text: `İşlemi Yapan: ${yetkili.username}`, 
                         iconURL: yetkili.displayAvatarURL({ dynamic: true }) 
