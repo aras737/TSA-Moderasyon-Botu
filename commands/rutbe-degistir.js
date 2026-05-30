@@ -47,6 +47,11 @@ async function getGroupRoles() {
     return response.data?.groupRoles || response.data?.roles || [];
 }
 
+async function getPublicGroupRoles() {
+    const response = await axios.get(`https://groups.roblox.com/v1/groups/${ROBLOX_GRUP_ID}/roles`);
+    return response.data?.roles || [];
+}
+
 async function getMembershipByUserId(userId) {
     const params = new URLSearchParams({
         filter: `user == 'users/${userId}'`,
@@ -69,6 +74,24 @@ function membershipIdFromPath(membershipPath) {
     return String(membershipPath || '').split('/').pop();
 }
 
+function publicRoleByIdOrRank(publicRoles, input) {
+    return publicRoles.find((role) => String(role.id) === input || String(role.rank) === input) || null;
+}
+
+function publicRoleByCloudRole(publicRoles, cloudRolePath) {
+    const roleId = roleIdFromPath(cloudRolePath);
+    return publicRoles.find((role) => String(role.id) === roleId) || null;
+}
+
+function cloudRoleByPublicRole(cloudRoles, publicRole) {
+    if (!publicRole) return null;
+
+    return cloudRoles.find((role) => {
+        const cloudRoleId = roleIdFromPath(role.path || role.name);
+        return cloudRoleId === String(publicRole.id) || String(role.id) === String(publicRole.id);
+    }) || null;
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('rutbe-degistir')
@@ -81,7 +104,12 @@ module.exports = {
         )
         .addStringOption(option =>
             option.setName('rutbe_id')
-                .setDescription('Verilecek Roblox rol/rutbe ID. /grup_listele ile gorebilirsin.')
+                .setDescription('Verilecek Roblox rol ID veya rank. /grup_listele ile gorebilirsin.')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('yetkili_roblox')
+                .setDescription('Komutu kullanan yetkilinin Roblox kullanici adi.')
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -100,6 +128,7 @@ module.exports = {
     async execute(interaction) {
         const robloxAdiInput = interaction.options.getString('isim', true).trim();
         const yeniRutbeId = interaction.options.getString('rutbe_id', true).trim();
+        const yetkiliRobloxInput = interaction.options.getString('yetkili_roblox', true).trim();
         const sebep = interaction.options.getString('sebep', true);
         const yetkili = interaction.user;
 
@@ -121,6 +150,7 @@ module.exports = {
 
         try {
             const robloxUser = await getRobloxUser(robloxAdiInput);
+            const yetkiliRobloxUser = await getRobloxUser(yetkiliRobloxInput);
 
             if (!robloxUser) {
                 const kayitsizEmbed = new EmbedBuilder()
@@ -130,9 +160,19 @@ module.exports = {
                 return interaction.editReply({ embeds: [kayitsizEmbed] });
             }
 
-            const [membership, roles] = await Promise.all([
+            if (!yetkiliRobloxUser) {
+                const yetkiliYokEmbed = new EmbedBuilder()
+                    .setTitle('Yetkili Roblox Hesabi Bulunamadi')
+                    .setDescription(`**${yetkiliRobloxInput}** adinda bir Roblox kullanicisi bulunamadi.`)
+                    .setColor('#7a0010');
+                return interaction.editReply({ embeds: [yetkiliYokEmbed] });
+            }
+
+            const [membership, yetkiliMembership, roles, publicRoles] = await Promise.all([
                 getMembershipByUserId(robloxUser.id),
-                getGroupRoles()
+                getMembershipByUserId(yetkiliRobloxUser.id),
+                getGroupRoles(),
+                getPublicGroupRoles()
             ]);
 
             if (!membership) {
@@ -143,24 +183,51 @@ module.exports = {
                 return interaction.editReply({ embeds: [uyeDegilEmbed] });
             }
 
-            const hedefRol = roles.find((role) => roleIdFromPath(role.path || role.name) === yeniRutbeId || String(role.id) === yeniRutbeId);
+            if (!yetkiliMembership) {
+                const yetkiliUyeDegilEmbed = new EmbedBuilder()
+                    .setTitle('Yetkili Grup Uyeligi Bulunamadi')
+                    .setDescription(`**${yetkiliRobloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
+                    .setColor('#7a0010');
+                return interaction.editReply({ embeds: [yetkiliUyeDegilEmbed] });
+            }
+
+            const hedefPublicRol = publicRoleByIdOrRank(publicRoles, yeniRutbeId);
+            const hedefRol = cloudRoleByPublicRole(roles, hedefPublicRol);
             if (!hedefRol) {
                 const rolYokEmbed = new EmbedBuilder()
                     .setTitle('Rutbe Bulunamadi')
-                    .setDescription(`\`${yeniRutbeId}\` ID'li rutbe bu grupta bulunamadi. Dogru ID icin \`/grup_listele\` kullan.`)
+                    .setDescription(`\`${yeniRutbeId}\` ID/rank degerine sahip rutbe bu grupta bulunamadi. Dogru deger icin \`/grup_listele\` kullan.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [rolYokEmbed] });
             }
 
             const membershipId = membershipIdFromPath(membership.path || membership.name);
             const eskiRutbeId = roleIdFromPath(membership.role);
-            const eskiRol = roles.find((role) => roleIdFromPath(role.path || role.name) === eskiRutbeId || String(role.id) === eskiRutbeId);
-            const eskiRutbeAdi = eskiRol?.displayName || eskiRol?.name || eskiRutbeId || 'Bilinmiyor';
-            const yeniRutbeAdi = hedefRol.displayName || hedefRol.name || yeniRutbeId;
+            const eskiPublicRol = publicRoleByCloudRole(publicRoles, membership.role);
+            const yetkiliPublicRol = publicRoleByCloudRole(publicRoles, yetkiliMembership.role);
+            const hedefRoleId = String(hedefPublicRol.id);
+            const eskiRutbeAdi = eskiPublicRol?.name || eskiRutbeId || 'Bilinmiyor';
+            const yeniRutbeAdi = hedefPublicRol.name || hedefRoleId;
+            const yetkiliRutbeAdi = yetkiliPublicRol?.name || 'Bilinmiyor';
+            const yetkiliRank = Number(yetkiliPublicRol?.rank ?? -1);
+            const hedefRank = Number(hedefPublicRol.rank ?? -1);
+
+            if (hedefRank > yetkiliRank) {
+                const yetkiEmbed = new EmbedBuilder()
+                    .setTitle('Rutbe Yetkisi Yetersiz')
+                    .setDescription(`**${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
+                    .addFields(
+                        { name: 'Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
+                        { name: 'Verilmek Istenen Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
+                    )
+                    .setColor('#7a0010');
+
+                return interaction.editReply({ embeds: [yetkiEmbed] });
+            }
 
             await axios.patch(
                 `${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/memberships/${membershipId}`,
-                { role: `groups/${ROBLOX_GRUP_ID}/roles/${yeniRutbeId}` },
+                { role: `groups/${ROBLOX_GRUP_ID}/roles/${hedefRoleId}` },
                 { headers: robloxHeaders() }
             );
 
@@ -177,8 +244,15 @@ module.exports = {
                     name: eskiRutbeAdi
                 },
                 newRole: {
-                    id: yeniRutbeId,
-                    name: yeniRutbeAdi
+                    id: hedefRoleId,
+                    name: yeniRutbeAdi,
+                    rank: hedefRank
+                },
+                executorRoblox: {
+                    id: yetkiliRobloxUser.id,
+                    name: yetkiliRobloxUser.name,
+                    roleName: yetkiliRutbeAdi,
+                    rank: yetkiliRank
                 },
                 reason: sebep,
                 executor: {
@@ -195,7 +269,8 @@ module.exports = {
                     { name: 'Roblox Adi', value: `\`${robloxUser.name}\``, inline: true },
                     { name: 'Roblox ID', value: `\`${robloxUser.id}\``, inline: true },
                     { name: 'Eski Rutbe', value: `\`${eskiRutbeAdi}\``, inline: true },
-                    { name: 'Yeni Rutbe', value: `\`${yeniRutbeAdi}\``, inline: true },
+                    { name: 'Yeni Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: true },
+                    { name: 'Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRobloxUser.name}\` - \`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
                     { name: 'Sebep', value: `\`${sebep}\``, inline: false },
                     { name: 'Komutu Kullanan Yetkili', value: `${yetkili} \`(${yetkili.id})\``, inline: false },
                     { name: 'Denetim Kaydi', value: 'Roblox denetim kaydi islemi API key/OAuth kimligiyle gosterir. Discord yetkilisi bot datastore kaydina yazildi.', inline: false }
