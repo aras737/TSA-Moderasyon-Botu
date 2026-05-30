@@ -3,6 +3,7 @@ const axios = require('axios');
 const Storage = require('../services/storage');
 
 const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
+const ROWIFI_API_KEY = process.env.ROWIFI_API_KEY; // RoWifi API Anahtarı kanka
 const ROBLOX_GRUP_ID = process.env.ROBLOX_GRUP_ID || '33389098';
 const CLOUD_BASE_URL = 'https://apis.roblox.com/cloud/v2';
 
@@ -13,6 +14,25 @@ function robloxHeaders() {
     };
 }
 
+// 🌐 ROWIFI API'SİNDEN DOĞRULAMA VERİSİ ÇEKEN FONKSİYON
+async function getRoWifiUser(guildId, discordId) {
+    if (!ROWIFI_API_KEY) return null;
+    try {
+        const response = await axios.get(`https://api.rowifi.xyz/v2/guilds/${guildId}/users/${discordId}`, {
+            headers: {
+                'Authorization': `Bearer ${ROWIFI_API_KEY}`
+            }
+        });
+        return {
+            username: response.data?.username || response.data?.roblox_username || null,
+            robloxId: response.data?.robloxId || response.data?.roblox_id || null
+        };
+    } catch (error) {
+        console.error('RoWifi API bağlantı hatası kanka:', error.message);
+        return null;
+    }
+}
+
 function parseRobloxError(error) {
     const status = error.response?.status;
     const data = error.response?.data;
@@ -20,11 +40,9 @@ function parseRobloxError(error) {
     if (status === 401 || status === 403) {
         return 'Roblox API key yetkisiz. API key icin group:read ve group:write izinlerini, ayrica grup erisimini kontrol et.';
     }
-
     if (status === 404) {
         return 'Roblox tarafinda kullanici, grup uyeligi veya rutbe bulunamadi.';
     }
-
     if (data?.message) return data.message;
     if (data?.errors?.[0]?.message) return data.errors[0].message;
     return error.message || 'Bilinmeyen Roblox hatasi.';
@@ -35,7 +53,6 @@ async function getRobloxUser(username) {
         usernames: [username],
         excludeBannedUsers: false
     });
-
     return response.data?.data?.[0] || null;
 }
 
@@ -43,7 +60,6 @@ async function getGroupRoles() {
     const response = await axios.get(`${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/roles`, {
         headers: robloxHeaders()
     });
-
     return response.data?.groupRoles || response.data?.roles || [];
 }
 
@@ -57,11 +73,9 @@ async function getMembershipByUserId(userId) {
         filter: `user == 'users/${userId}'`,
         maxPageSize: '10'
     });
-
     const response = await axios.get(`${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/memberships?${params.toString()}`, {
         headers: robloxHeaders()
     });
-
     const memberships = response.data?.groupMemberships || response.data?.memberships || [];
     return memberships.find((membership) => membership.user === `users/${userId}`) || memberships[0] || null;
 }
@@ -85,7 +99,6 @@ function publicRoleByCloudRole(publicRoles, cloudRolePath) {
 
 function cloudRoleByPublicRole(cloudRoles, publicRole) {
     if (!publicRole) return null;
-
     return cloudRoles.find((role) => {
         const cloudRoleId = roleIdFromPath(role.path || role.name);
         return cloudRoleId === String(publicRole.id) || String(role.id) === String(publicRole.id);
@@ -139,6 +152,13 @@ module.exports = {
             });
         }
 
+        if (!ROWIFI_API_KEY) {
+            return interaction.reply({
+                content: '⚠️ ROWIFI_API_KEY .env içinde tanımlı değil kanka! Güvenlik doğrulaması yapılamıyor.',
+                ephemeral: true
+            });
+        }
+
         if (!/^\d+$/.test(yeniRutbeId)) {
             return interaction.reply({
                 content: 'Rutbe ID sadece rakamlardan olusmali. ID listesini `/grup_listele` ile kontrol et.',
@@ -149,13 +169,33 @@ module.exports = {
         await interaction.deferReply();
 
         try {
+            // 🛡️ ROWIFI GÜVENLİK SORGUSU VE KONTROLÜ
+            const rowifiData = await getRoWifiUser(interaction.guild.id, yetkili.id);
+
+            if (!rowifiData || !rowifiData.username || rowifiData.username.toLowerCase() !== yetkiliRobloxInput.toLowerCase()) {
+                const rowifiHataEmbed = new EmbedBuilder()
+                    .setTitle('<a:uyari:1505166167189487757> TSA | RoWifi Güvenlik Duvarı')
+                    .setDescription(
+                        `Kanka, girdiğin **${yetkiliRobloxInput}** hesabı ile RoWifi üzerindeki doğrulanmış hesabın eşleşmedi!\n\n` +
+                        `### 🤖 RoWifi Veri Analizi:\n` +
+                        `• RoWifi'da Kayıtlı Hesabın: **${rowifiData?.username ? `\`${rowifiData.username}\`` : '*Bulunamadı / Doğrulanmamış*'}**\n` +
+                        `• Komuta Yazdığın Hesap: \`${yetkiliRobloxInput}\`\n\n` +
+                        `┗ *Lütfen RoWifi botuna hangi hesapla kayıt olduysan, komuttaki yetkili alanına da o ismi yaz kanka.*`
+                    )
+                    .setColor('#7a0010')
+                    .setTimestamp();
+
+                return interaction.editReply({ embeds: [rowifiHataEmbed] });
+            }
+
+            // ANA SİSTEM AKIŞI
             const robloxUser = await getRobloxUser(robloxAdiInput);
             const yetkiliRobloxUser = await getRobloxUser(yetkiliRobloxInput);
 
             if (!robloxUser) {
                 const kayitsizEmbed = new EmbedBuilder()
                     .setTitle('Roblox Hesabi Bulunamadi')
-                    .setDescription(`**${robloxAdiInput}** adinda bir Roblox kullanicisi bulunamadi.`)
+                    .setDescription(`<a:baarsz:1505146967817326675> **${robloxAdiInput}** adinda bir Roblox kullanicisi bulunamadi.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [kayitsizEmbed] });
             }
@@ -163,7 +203,7 @@ module.exports = {
             if (!yetkiliRobloxUser) {
                 const yetkiliYokEmbed = new EmbedBuilder()
                     .setTitle('Yetkili Roblox Hesabi Bulunamadi')
-                    .setDescription(`**${yetkiliRobloxInput}** adinda bir Roblox kullanicisi bulunamadi.`)
+                    .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxInput}** adinda bir Roblox kullanicisi bulunamadi.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [yetkiliYokEmbed] });
             }
@@ -178,7 +218,7 @@ module.exports = {
             if (!membership) {
                 const uyeDegilEmbed = new EmbedBuilder()
                     .setTitle('Grup Uyeligi Bulunamadi')
-                    .setDescription(`**${robloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
+                    .setDescription(`<a:uyari:1505166167189487757> **${robloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [uyeDegilEmbed] });
             }
@@ -186,7 +226,7 @@ module.exports = {
             if (!yetkiliMembership) {
                 const yetkiliUyeDegilEmbed = new EmbedBuilder()
                     .setTitle('Yetkili Grup Uyeligi Bulunamadi')
-                    .setDescription(`**${yetkiliRobloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
+                    .setDescription(`<a:uyari:1505166167189487757> **${yetkiliRobloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [yetkiliUyeDegilEmbed] });
             }
@@ -215,7 +255,7 @@ module.exports = {
             if (hedefRank > yetkiliRank) {
                 const yetkiEmbed = new EmbedBuilder()
                     .setTitle('Rutbe Yetkisi Yetersiz')
-                    .setDescription(`**${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
+                    .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
                     .addFields(
                         { name: 'Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
                         { name: 'Verilmek Istenen Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
@@ -235,49 +275,27 @@ module.exports = {
                 guildId: interaction.guild.id,
                 channelId: interaction.channelId,
                 groupId: ROBLOX_GRUP_ID,
-                robloxUser: {
-                    id: robloxUser.id,
-                    name: robloxUser.name
-                },
-                oldRole: {
-                    id: eskiRutbeId,
-                    name: eskiRutbeAdi
-                },
-                newRole: {
-                    id: hedefRoleId,
-                    name: yeniRutbeAdi,
-                    rank: hedefRank
-                },
-                executorRoblox: {
-                    id: yetkiliRobloxUser.id,
-                    name: yetkiliRobloxUser.name,
-                    roleName: yetkiliRutbeAdi,
-                    rank: yetkiliRank
-                },
+                robloxUser: { id: robloxUser.id, name: robloxUser.name },
+                oldRole: { id: eskiRutbeId, name: eskiRutbeAdi },
+                newRole: { id: hedefRoleId, name: yeniRutbeAdi, rank: hedefRank },
+                executorRoblox: { id: yetkiliRobloxUser.id, name: yetkiliRobloxUser.name, roleName: yetkiliRutbeAdi, rank: yetkiliRank },
                 reason: sebep,
-                executor: {
-                    id: yetkili.id,
-                    username: yetkili.username,
-                    tag: yetkili.tag
-                }
+                executor: { id: yetkili.id, username: yetkili.username, tag: yetkili.tag }
             });
 
             const basariEmbed = new EmbedBuilder()
-                .setTitle('Roblox Grubunda Rutbe Degistirildi')
-                .setDescription(`**${robloxUser.name}** adli kisinin Roblox grubundaki rutbesi degistirildi.`)
+                .setTitle('<a:tik:1505164671081123840> Roblox Grubunda Rütbe Değiştirildi')
+                .setDescription(`**${robloxUser.name}** adlı kişinin Roblox grubundaki rütbesi başarıyla güncellendi kanka.`)
                 .addFields(
-                    { name: 'Roblox Adi', value: `\`${robloxUser.name}\``, inline: true },
-                    { name: 'Roblox ID', value: `\`${robloxUser.id}\``, inline: true },
-                    { name: 'Eski Rutbe', value: `\`${eskiRutbeAdi}\``, inline: true },
-                    { name: 'Yeni Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: true },
-                    { name: 'Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRobloxUser.name}\` - \`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
-                    { name: 'Sebep', value: `\`${sebep}\``, inline: false },
-                    { name: 'Komutu Kullanan Yetkili', value: `${yetkili} \`(${yetkili.id})\``, inline: false },
-                    { name: 'Denetim Kaydi', value: 'Roblox denetim kaydi islemi API key/OAuth kimligiyle gosterir. Discord yetkilisi bot datastore kaydina yazildi.', inline: false }
+                    { name: '┗ <:uzaybot_kullanicilar:1505146190973505567> Roblox Adı / ID', value: `\`${robloxUser.name}\` (${robloxUser.id})`, inline: true },
+                    { name: '┗ <:Paper:1505146388596391977> Eski Rütbe', value: `\`${eskiRutbeAdi}\``, inline: true },
+                    { name: '┗ <:Paper:1505146388596391977> Yeni Rütbe', value: `\`${yeniRutbeAdi}\` *[Rank: ${hedefRank}]*`, inline: true },
+                    { name: '┗ 👑 İşlem Yapan Yetkili', value: `${yetkili} — RoWifi Onaylı: \`${yetkiliRobloxUser.name}\` *(${yetkiliRutbeAdi})*`, inline: false },
+                    { name: '┗ ✨ Değişim Sebebi', value: `\`${sebep}\``, inline: false }
                 )
                 .setColor('#107a29')
                 .setFooter({
-                    text: `Islemi yapan: ${yetkili.username}`,
+                    text: `TSA Güvenlik Departmanı • RoWifi Entegre Sistemi`,
                     iconURL: yetkili.displayAvatarURL({ dynamic: true })
                 })
                 .setTimestamp();
