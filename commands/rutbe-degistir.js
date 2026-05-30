@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
+const Storage = require('../services/storage');
 
 const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
 const ROBLOX_GRUP_ID = process.env.ROBLOX_GRUP_ID || '33389098';
@@ -163,6 +164,30 @@ module.exports = {
                 { headers: robloxHeaders() }
             );
 
+            Storage.addLog('robloxRankChange', {
+                guildId: interaction.guild.id,
+                channelId: interaction.channelId,
+                groupId: ROBLOX_GRUP_ID,
+                robloxUser: {
+                    id: robloxUser.id,
+                    name: robloxUser.name
+                },
+                oldRole: {
+                    id: eskiRutbeId,
+                    name: eskiRutbeAdi
+                },
+                newRole: {
+                    id: yeniRutbeId,
+                    name: yeniRutbeAdi
+                },
+                reason: sebep,
+                executor: {
+                    id: yetkili.id,
+                    username: yetkili.username,
+                    tag: yetkili.tag
+                }
+            });
+
             const basariEmbed = new EmbedBuilder()
                 .setTitle('Roblox Grubunda Rutbe Degistirildi')
                 .setDescription(`**${robloxUser.name}** adli kisinin Roblox grubundaki rutbesi degistirildi.`)
@@ -172,7 +197,8 @@ module.exports = {
                     { name: 'Eski Rutbe', value: `\`${eskiRutbeAdi}\``, inline: true },
                     { name: 'Yeni Rutbe', value: `\`${yeniRutbeAdi}\``, inline: true },
                     { name: 'Sebep', value: `\`${sebep}\``, inline: false },
-                    { name: 'Yetkili', value: `${yetkili}`, inline: true }
+                    { name: 'Komutu Kullanan Yetkili', value: `${yetkili} \`(${yetkili.id})\``, inline: false },
+                    { name: 'Denetim Kaydi', value: 'Roblox denetim kaydi islemi API key/OAuth kimligiyle gosterir. Discord yetkilisi bot datastore kaydina yazildi.', inline: false }
                 )
                 .setColor('#107a29')
                 .setFooter({
