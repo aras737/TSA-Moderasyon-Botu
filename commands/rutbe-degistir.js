@@ -164,9 +164,11 @@ module.exports = {
             );
 
             const basariEmbed = new EmbedBuilder()
-                .setTitle('Rutbe Degistirildi')
-                .setDescription(`**${robloxUser.name}** - \`${robloxUser.id}\` kullanicisinin rutbesi guncellendi.`)
+                .setTitle('Roblox Grubunda Rutbe Degistirildi')
+                .setDescription(`**${robloxUser.name}** adli kisinin Roblox grubundaki rutbesi degistirildi.`)
                 .addFields(
+                    { name: 'Roblox Adi', value: `\`${robloxUser.name}\``, inline: true },
+                    { name: 'Roblox ID', value: `\`${robloxUser.id}\``, inline: true },
                     { name: 'Eski Rutbe', value: `\`${eskiRutbeAdi}\``, inline: true },
                     { name: 'Yeni Rutbe', value: `\`${yeniRutbeAdi}\``, inline: true },
                     { name: 'Sebep', value: `\`${sebep}\``, inline: false },
