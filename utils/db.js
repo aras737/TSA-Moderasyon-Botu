@@ -7,8 +7,7 @@ const Storage = require('../services/storage');
  * @param {any} deger - Ayar değeri
  */
 function ayarKaydet(guildId, anahtar, deger) {
-    const key = `guild_${guildId}_${anahtar}`;
-    Storage.set(key, deger);
+    Storage.setGuildSetting(guildId, anahtar, deger);
 }
 
 /**
@@ -18,8 +17,7 @@ function ayarKaydet(guildId, anahtar, deger) {
  * @param {any} varsayilan - Varsayılan değer
  */
 function ayarGetir(guildId, anahtar, varsayilan = null) {
-    const key = `guild_${guildId}_${anahtar}`;
-    return Storage.get(key) || varsayilan;
+    return Storage.getGuildSetting(guildId, anahtar, varsayilan);
 }
 
 /**
@@ -27,18 +25,7 @@ function ayarGetir(guildId, anahtar, varsayilan = null) {
  * @param {string} guildId - Sunucu ID
  */
 function sunucuAyarlariniGetir(guildId) {
-    const allData = Storage.getAll();
-    const guildPrefix = `guild_${guildId}_`;
-    const guildData = {};
-    
-    Object.keys(allData).forEach(key => {
-        if (key.startsWith(guildPrefix)) {
-            const cleanKey = key.replace(guildPrefix, '');
-            guildData[cleanKey] = allData[key];
-        }
-    });
-    
-    return guildData;
+    return Storage.getGuildSettings(guildId);
 }
 
 /**
@@ -46,14 +33,7 @@ function sunucuAyarlariniGetir(guildId) {
  * @param {string} guildId - Sunucu ID
  */
 function sunucuSil(guildId) {
-    const allData = Storage.getAll();
-    const guildPrefix = `guild_${guildId}_`;
-    
-    Object.keys(allData).forEach(key => {
-        if (key.startsWith(guildPrefix)) {
-            Storage.delete(key);
-        }
-    });
+    Storage.deleteGuild(guildId);
 }
 
 module.exports = {

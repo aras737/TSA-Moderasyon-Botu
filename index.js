@@ -1,9 +1,10 @@
-// 🔥 En sona ActivityType eklendi kanka, durumu ayarlamak için şarttı!
-const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient, ActivityType } = require('discord.js');
+// İlk satıra WebhookClient eklendi kanka, gözden kaçırma 
+const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express'); 
 const Storage = require('./services/storage');
+const registerDatastoreEvents = require('./services/datastore-events');
 require('dotenv').config();
 
 // --- 1. RENDER'I İKNA ETME SİSTEMİ (WEB SERVER) ---
@@ -38,9 +39,11 @@ const client = new Client({
 
 // --- STORAGE VE VAXERA ALTYAPI UYUMLULUĞU ---
 client.storage = Storage;
+registerDatastoreEvents(client);
+// Prismo altyapısının ihtiyaç duyduğu temel nesneleri buraya tanımlıyoruz kanka:
 client.database = {
     antiNukeData: { get: async (id) => Storage.get(`antinuke_${id}`) },
-    guildData: { get: async (id) => Storage.get(`guild_${id}`) }
+    guildData: { get: async (id) => Storage.getGuildSettings(id) }
 };
 client.cache = new Map();
 client.config = { Client: { Owners: process.env.OWNERS?.split(',') || [] } };
@@ -91,12 +94,6 @@ process.on('uncaughtException', (error) => {
 // --- 4. READY EVENT ---
 client.once('ready', async () => {
     console.log(`🚀 [TSA] ${client.user.tag} Aktif!`);
-    
-    // 🔥 BOTUN DURUMUNU "Çalışıyorum…" YAPTIK KANKA
-    client.user.setPresence({
-        activities: [{ name: 'Çalışıyorum…', type: ActivityType.Custom }],
-        status: 'online' // Çevrimiçi yeşil ışık yakar
-    });
     
     setInterval(() => {
         console.log(`[TSA DURUM] Sistem Stabil | Saat: ${new Date().toLocaleTimeString('tr-TR')}`);
@@ -157,6 +154,7 @@ if (fs.existsSync(eventsPath)) {
         try {
             const TargetEvent = require(`./events/${file}`);
             
+            // Eğer dosya Vaxera/Prismo sınıf yapısındaysa (class ise):
             if (typeof TargetEvent === 'function' && TargetEvent.toString().startsWith('class')) {
                 const eventInstance = new TargetEvent(client);
                 const eventName = eventInstance.name || file.split('.')[0];
@@ -168,9 +166,17 @@ if (fs.existsSync(eventsPath)) {
                 }
                 console.log(`[Sınıf Eventi] 🟢 ${eventName} başarıyla yüklendi.`);
             } else {
+                // Eğer eski tip düz fonksiyon dosyalarsa (kufurengel, gelismislog vb.)
                 if (typeof TargetEvent === 'function') {
                     TargetEvent(client);
                     console.log(`[Düz Fonksiyon Eventi] 🟢 ${file} başarıyla bağlandı.`);
+                } else if (TargetEvent && TargetEvent.name && typeof TargetEvent.execute === 'function') {
+                    if (TargetEvent.once) {
+                        client.once(TargetEvent.name, (...args) => TargetEvent.execute(...args));
+                    } else {
+                        client.on(TargetEvent.name, (...args) => TargetEvent.execute(...args));
+                    }
+                    console.log(`[Object Eventi] 🟢 ${TargetEvent.name} başarıyla yüklendi.`);
                 }
             }
         } catch (error) {
