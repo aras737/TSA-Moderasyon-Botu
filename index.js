@@ -7,19 +7,19 @@ const Storage = require('./services/storage');
 const registerDatastoreEvents = require('./services/datastore-events');
 require('dotenv').config();
 
-// --- 1. RENDER'I İKNA ETME SİSTEMİ (WEB SERVER) ---
+// --- 1. WEB SERVER ---
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
 app.get('/', (req, res) => {
-    res.send('TSA Sistemi Aktif ve 7/24 Görevde! ✅ Bilgisayar kapalı olsa bile bot yayında.');
+    res.send('TSA Sistemi Aktif ve 7/24 Görevde! ✅');
 });
 
 app.listen(PORT, () => {
-    console.log(`📡 [WEB] Render Portu Dinleniyor: ${PORT}`);
+    console.log(`📡 [WEB] Port: ${PORT}`);
 });
 
-// --- 2. BOT YAPILANDIRMASI (FULL INTENTS) ---
+// --- BOT ---
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -37,156 +37,126 @@ const client = new Client({
     ]
 });
 
-// --- STORAGE VE VAXERA ALTYAPI UYUMLULUĞU ---
 client.storage = Storage;
 registerDatastoreEvents(client);
-// Prismo altyapısının ihtiyaç duyduğu temel nesneleri buraya tanımlıyoruz kanka:
+
 client.database = {
     antiNukeData: { get: async (id) => Storage.get(`antinuke_${id}`) },
     guildData: { get: async (id) => Storage.getGuildSettings(id) }
 };
+
 client.cache = new Map();
-client.config = { Client: { Owners: process.env.OWNERS?.split(',') || [] } };
-client.ErrorColor = '#e74c3c';
-client.util = {
-    checkOwner: (id) => process.env.OWNERS?.split(',')?.includes(id) || false,
-    embed: () => new EmbedBuilder(),
-    replaceOriginal: async (text, member) => text?.replace(/{user}/g, `${member}`)?.replace(/{guild}/g, `${member.guild.name}`),
-    replacerOriginal: async (embeds, member) => embeds
-};
-// Event engelleme cezalandırma sistemi
-client.eventRestrict = async (punishment, userId, guildId, reason) => {
-    console.log(`[Caza Sistemi] Yetkiliye ceza uygulandı: ${userId} -> ${punishment} (${reason})`);
-};
 
 client.commands = new Collection();
 const slashCommands = [];
 
-// Commands klasörü var mı kontrol et
-if (!fs.existsSync('./commands')) {
-    console.warn('⚠️ ./commands klasörü bulunamadı!');
-    fs.mkdirSync('./commands', { recursive: true });
-} else {
-    const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+// COMMAND LOAD
+if (fs.existsSync('./commands')) {
+    const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 
     for (const file of commandFiles) {
-        try {
-            const command = require(`./commands/${file}`);
-            if (command.data && command.execute) {
-                client.commands.set(command.data.name, command);
-                slashCommands.push(command.data.toJSON());
-            }
-        } catch (error) {
-            console.error(`❌ Komut yükleme hatası (${file}):`, error);
+        const cmd = require(`./commands/${file}`);
+        if (cmd.data && cmd.execute) {
+            client.commands.set(cmd.data.name, cmd);
+            slashCommands.push(cmd.data.toJSON());
         }
     }
 }
 
-// --- 3. KRİTİK HATA KORUMASI (Botun Asla Çökmemesini Sağlar) ---
-process.on('unhandledRejection', (error) => {
-    console.error('❌ [YAKALANAMAYAN HATA]:', error);
-});
+// --- ERROR HANDLER ---
+process.on('unhandledRejection', console.error);
+process.on('uncaughtException', console.error);
 
-process.on('uncaughtException', (error) => {
-    console.error('❌ [KRİTİK SİSTEM HATASI]:', error);
-});
-
-// --- 4. READY EVENT ---
+// --- READY ---
 client.once('ready', async () => {
-    console.log(`🚀 [TSA] ${client.user.tag} Aktif!`);
-    
-    setInterval(() => {
-        console.log(`[TSA DURUM] Sistem Stabil | Saat: ${new Date().toLocaleTimeString('tr-TR')}`);
-    }, 60000);
+    console.log(`🚀 Aktif: ${client.user.tag}`);
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
     try {
-        await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-        console.log('📡 [TSA] Slash Komutları Yüklendi.');
-    } catch (error) {
-        console.error('❌ Slash Hatası:', error);
+        await rest.put(Routes.applicationCommands(client.user.id), {
+            body: slashCommands
+        });
+
+        console.log('📡 Slash komutlar yüklendi');
+    } catch (err) {
+        console.error(err);
     }
 });
 
-// --- 5. ETKİLEŞİM YÖNETİMİ ---
-client.on('interactionCreate', async interaction => {
-    if (interaction.isChatInputCommand()) {
-        const command = client.commands.get(interaction.commandName);
-        if (!command) return;
+// --- INTERACTION FIXED ---
+client.on('interactionCreate', async (interaction) => {
 
-        if (command.requiredPerms) {
-            const hasPerm = command.requiredPerms.some(p => interaction.member.permissions.has(p));
-            if (!hasPerm) return interaction.reply({ content: '⚠️ Yetkin yetersiz kanka.', ephemeral: true });
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
+
+    // SAFE PERMISSION CHECK
+    if (command.requiredPerms?.length) {
+
+        if (!interaction.inGuild()) {
+            return interaction.reply({
+                content: 'Bu komut sadece sunucuda kullanılır.',
+                ephemeral: true
+            });
         }
 
-        try {
-            await command.execute(interaction);
-        } catch (error) {
-            console.error("Komut çalışırken hata fırlattı kanka:", error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'Hata oluştu kanka, sistem kontrol ediliyor!', ephemeral: true });
-            }
+        const perms = interaction.memberPermissions;
+
+        if (!perms) {
+            return interaction.reply({
+                content: 'İzin bilgisi alınamadı.',
+                ephemeral: true
+            });
+        }
+
+        const hasPerm = command.requiredPerms.some(p => perms.has(p));
+
+        if (!hasPerm) {
+            return interaction.reply({
+                content: 'Yetkin yok.',
+                ephemeral: true
+            });
         }
     }
-    
+
+    try {
+        await command.execute(interaction);
+    } catch (err) {
+        console.error(err);
+
+        if (!interaction.replied) {
+            await interaction.reply({
+                content: 'Hata oluştu.',
+                ephemeral: true
+            });
+        }
+    }
+
+    // BUTTON HANDLER
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        const biletKomutu = client.commands.get('destek-kur');
-        if (biletKomutu?.interactionHandler) {
-            await biletKomutu.interactionHandler(interaction).catch(() => {});
+        const cmd = client.commands.get('destek-kur');
+        if (cmd?.interactionHandler) {
+            cmd.interactionHandler(interaction).catch(() => {});
         }
     }
 });
 
-// =========================================================================
-// 🛡️ KÜFÜR ENGEL SİSTEMİ — RAM BELLEĞİ
-// =========================================================================
-const sistemBellegi = new Map();
-client.sistemBellegi = sistemBellegi;
-
-// =========================================================================
-// 🔥 SINIF TABANLI VE DÜZ ETKİNLİK (EVENT) LOADER ENTEGRASYONU
-// =========================================================================
+// --- EVENTS LOADER ---
 const eventsPath = './events';
+
 if (fs.existsSync(eventsPath)) {
-    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+    const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
 
     for (const file of eventFiles) {
-        try {
-            const TargetEvent = require(`./events/${file}`);
-            
-            // Eğer dosya Vaxera/Prismo sınıf yapısındaysa (class ise):
-            if (typeof TargetEvent === 'function' && TargetEvent.toString().startsWith('class')) {
-                const eventInstance = new TargetEvent(client);
-                const eventName = eventInstance.name || file.split('.')[0];
-                
-                if (eventInstance.once) {
-                    client.once(eventName, (...args) => eventInstance.run(...args));
-                } else {
-                    client.on(eventName, (...args) => eventInstance.run(...args));
-                }
-                console.log(`[Sınıf Eventi] 🟢 ${eventName} başarıyla yüklendi.`);
-            } else {
-                // Eğer eski tip düz fonksiyon dosyalarsa (kufurengel, gelismislog vb.)
-                if (typeof TargetEvent === 'function') {
-                    TargetEvent(client);
-                    console.log(`[Düz Fonksiyon Eventi] 🟢 ${file} başarıyla bağlandı.`);
-                } else if (TargetEvent && TargetEvent.name && typeof TargetEvent.execute === 'function') {
-                    if (TargetEvent.once) {
-                        client.once(TargetEvent.name, (...args) => TargetEvent.execute(...args));
-                    } else {
-                        client.on(TargetEvent.name, (...args) => TargetEvent.execute(...args));
-                    }
-                    console.log(`[Object Eventi] 🟢 ${TargetEvent.name} başarıyla yüklendi.`);
-                }
-            }
-        } catch (error) {
-            console.error(`❌ Etkinlik yüklenirken patladı (${file}):`, error);
+        const ev = require(`./events/${file}`);
+
+        if (typeof ev === 'function') {
+            ev(client);
         }
     }
 }
 
-// --- BOT GİRİŞİ ---
-client.login(process.env.TOKEN).catch(error => {
-    console.error('❌ Bot giriş hatası:', error.message);
-    process.exit(1);
-});
+// --- LOGIN ---
+client.login(process.env.TOKEN);
