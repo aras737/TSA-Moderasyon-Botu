@@ -1,5 +1,5 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient } = require('discord.js');
-const { InteractionType, InteractionResponseType, verifyKeyMiddleware } = require('discord-interactions'); 
+const { Client, GatewayIntentBits, Collection, REST, Routes, Partials } = require('discord.js');
+const { verifyKey } = require('discord-interactions');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express'); 
@@ -7,65 +7,24 @@ const Storage = require('./services/storage');
 const registerDatastoreEvents = require('./services/datastore-events');
 require('dotenv').config();
 
-// --- 1. WEB SERVER & DISCORD VERIFICATION ---
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
-app.get('/', (req, res) => {
-    res.send('TSA Sistemi Aktif ve 2026 Standartlarında Görevde! ✅');
-});
-
-// DISCORD'UN GÜVENLİK KAPISI (Sadece PING doğrulaması bırakıldı)
-app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), (req, res) => {
-    const { type } = req.body;
-
-    // Discord portal "Save Changes" dediğinde bu PING'i yakalar ve PONG döner.
-    if (type === InteractionType.PING) {
-        return res.send({ type: InteractionResponseType.PONG });
-    }
-    
-    // NOT: Komutları tıkayan APPLICATION_COMMAND bloğu buradan kaldırıldı.
-    // Artık komutlar aşağıda yer alan gerçek 'interactionCreate' olayına aktarılacak.
-});
-
-app.listen(PORT, () => {
-    console.log(`📡 [WEB] Port: ${PORT}`);
-});
-
-// --- BOT ---
+// 1. CLIENT & COMMAND SETUP (İstek gelmeden önce komutları hafızaya yüklüyoruz kanka)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildModeration
-    ],
-    partials: [
-        Partials.Message,
-        Partials.Channel,
-        Partials.User,
-        Partials.GuildMember
+        GatewayIntentBits.GuildMembers
     ]
 });
 
-client.storage = Storage;
-registerDatastoreEvents(client);
-
-client.database = {
-    antiNukeData: { get: async (id) => Storage.get(`antinuke_${id}`) },
-    guildData: { get: async (id) => Storage.getGuildSettings(id) }
-};
-
-client.cache = new Map();
 client.commands = new Collection();
 const slashCommands = [];
 
-// COMMAND LOAD
 if (fs.existsSync('./commands')) {
     const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
-
     for (const file of commandFiles) {
         const cmd = require(`./commands/${file}`);
         if (cmd.data && cmd.execute) {
@@ -75,100 +34,144 @@ if (fs.existsSync('./commands')) {
     }
 }
 
-// --- ERROR HANDLER ---
-process.on('unhandledRejection', console.error);
-process.on('uncaughtException', console.error);
+// Vercel imza doğrulaması için ham gövdeyi (rawBody) koruyoruz
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 
-// --- READY ---
-client.once('ready', async () => {
-    console.log(`🚀 Aktif: ${client.user.tag}`);
+app.get('/', (req, res) => {
+    res.send('TSA Sistemi Aktif ve Görevde! ✅');
+});
 
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+// 2. DISCORD WEBHOOK INTERACTION KÖPRÜSÜ
+app.post('/interactions', async (req, res) => {
+    const signature = req.headers['x-signature-ed25519'];
+    const timestamp = req.headers['x-signature-timestamp'];
+    
+    if (!signature || !timestamp) return res.status(401).send('Eksik imza.');
 
-    try {
-        await rest.put(Routes.applicationCommands(client.user.id), {
-            body: slashCommands
-        });
+    const isVerified = verifyKey(
+        req.rawBody || JSON.stringify(req.body),
+        signature,
+        timestamp,
+        process.env.PUBLIC_KEY
+    );
+    
+    if (!isVerified) return res.status(401).send('Geçersiz imza.');
 
-        console.log('📡 Slash komutlar yüklendi');
-    } catch (err) {
-        console.error(err);
+    const { type, data, guild_id, channel_id, member, user, token, application_id } = req.body;
+
+    // Discord Portal Doğrulama PING'i
+    if (type === 1) { 
+        return res.send({ type: 1 });
+    }
+
+    // SLASH KOMUT TETİKLENDİĞİNDE (Type 2)
+    if (type === 2) {
+        const commandName = data.name;
+        const command = client.commands.get(commandName);
+        
+        if (!command) {
+            return res.send({
+                type: 4,
+                data: { content: '❌ Bu komut sistemde bulunamadı.' }
+            });
+        }
+
+        // Kanka burası sihirli nokta! commands/ klasöründeki kodların kırılmasın diye sahte bir interaction objesi üretiyoruz.
+        const mockInteraction = {
+            commandName: commandName,
+            guildId: guild_id,
+            channelId: channel_id,
+            user: member ? member.user : user,
+            member: member,
+            replied: false,
+            deferred: false,
+            options: {
+                _options: data.options || [],
+                get(name) { return this._options.find(o => o.name === name); },
+                getString(name) { const o = this.get(name); return o ? String(o.value) : null; },
+                getInteger(name) { const o = this.get(name); return o ? Number(o.value) : null; },
+                getBoolean(name) { const o = this.get(name); return o ? Boolean(o.value) : null; },
+                getUser(name) {
+                    const o = this.get(name);
+                    return o && req.body.data.resolved?.users ? req.body.data.resolved.users[o.value] : null;
+                },
+                getMember(name) {
+                    const o = this.get(name);
+                    return o && req.body.data.resolved?.members ? req.body.data.resolved.members[o.value] : null;
+                },
+                getChannel(name) {
+                    const o = this.get(name);
+                    return o && req.body.data.resolved?.channels ? req.body.data.resolved.channels[o.value] : null;
+                }
+            },
+            // interaction.reply() fonksiyonunu Express'in res.send() methoduna bağlıyoruz!
+            async reply(content) {
+                if (this.replied) return;
+                this.replied = true;
+                
+                let responseData = {};
+                if (typeof content === 'string') {
+                    responseData = { content: content };
+                } else {
+                    responseData = {
+                        content: content.content || '',
+                        embeds: content.embeds || [],
+                        ephemeral: content.ephemeral ? 64 : 0
+                    };
+                }
+                return res.send({ type: 4, data: responseData });
+            },
+            // Ağır işlemler için deferReply() desteği
+            async deferReply(options = {}) {
+                if (this.deferred || this.replied) return;
+                this.deferred = true;
+                return res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
+            },
+            // deferReply sonrasında mesajı güncellemek için editReply() desteği
+            async editReply(content) {
+                let responseData = {};
+                if (typeof content === 'string') {
+                    responseData = { content: content };
+                } else {
+                    responseData = { content: content.content || '', embeds: content.embeds || [] };
+                }
+                try {
+                    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+                    await rest.patch(Routes.webhookMessage(application_id, token, '@original'), { body: responseData });
+                } catch (err) {
+                    console.error('editReply Hatası:', err);
+                }
+            }
+        };
+
+        // Gerçek komut dosyanı çalıştırıyoruz kanka!
+        try {
+            await command.execute(mockInteraction);
+        } catch (err) {
+            console.error(`Komut hatası (${commandName}):`, err);
+            if (!mockInteraction.replied) {
+                return res.send({
+                    type: 4,
+                    data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu!', flags: 64 }
+                });
+            }
+        }
     }
 });
 
-// --- INTERACTION FIXED ---
-client.on('interactionCreate', async (interaction) => {
-
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    // SAFE PERMISSION CHECK
-    if (command.requiredPerms?.length) {
-
-        if (!interaction.inGuild()) {
-            return interaction.reply({
-                content: 'Bu komut sadece sunucuda kullanılır.',
-                ephemeral: true
-            });
-        }
-
-        const perms = interaction.memberPermissions;
-
-        if (!perms) {
-            return interaction.reply({
-                content: 'İzin bilgisi alınamadı.',
-                ephemeral: true
-            });
-        }
-
-        const hasPerm = command.requiredPerms.some(p => perms.has(p));
-
-        if (!hasPerm) {
-            return interaction.reply({
-                content: 'Yetkin yok.',
-                ephemeral: true
-            });
-        }
-    }
-
-    try {
-        await command.execute(interaction);
-    } catch (err) {
-        console.error(err);
-
-        if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({
-                content: 'Hata oluştu.',
-                ephemeral: true
-            });
-        }
-    }
-
-    // BUTTON HANDLER
-    if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        const cmd = client.commands.get('destek-kur');
-        if (cmd?.interactionHandler) {
-            cmd.interactionHandler(interaction).catch(() => {});
-        }
-    }
+app.listen(PORT, () => {
+    console.log(`📡 [WEB] Vercel Köprüsü Aktif! Port: ${PORT}`);
 });
 
-// --- EVENTS LOADER ---
-const eventsPath = './events';
-
-if (fs.existsSync(eventsPath)) {
-    const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
-
-    for (const file of eventFiles) {
-        const ev = require(`./events/${file}`);
-
-        if (typeof ev === 'function') {
-            ev(client);
-        }
-    }
+// Arka planda veritabanı veya diğer eventleri başlatmak istersen tetikleyici
+client.storage = Storage;
+if (typeof registerDatastoreEvents === 'function') {
+    registerDatastoreEvents(client);
 }
 
-// --- LOGIN ---
-client.login(process.env.TOKEN);
+process.on('unhandledRejection', console.error);
+process.on('uncaughtException', console.error);
