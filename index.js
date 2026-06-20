@@ -3,14 +3,29 @@ const { verifyKey } = require('discord-interactions');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express'); 
-const Storage = require('./services/storage');
-const registerDatastoreEvents = require('./services/datastore-events');
+
+// Vercel'in dosya sisteminde yolların kırılmaması için try-catch ile güvenli require yapıyoruz kanka
+let Storage;
+try {
+    Storage = require('./services/storage');
+} catch (e) {
+    console.log("⚠️ Storage servisi yüklenemedi, boş obje atandı.");
+    Storage = new Map();
+}
+
+let registerDatastoreEvents;
+try {
+    registerDatastoreEvents = require('./services/datastore-events');
+} catch (e) {
+    registerDatastoreEvents = null;
+}
+
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
-// 1. CLIENT & COMMAND SETUP (İstek gelmeden önce komutları hafızaya yüklüyoruz kanka)
+// 1. CLIENT & COMMAND SETUP (Vercel mutlak yol senaryosu)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -23,13 +38,19 @@ const client = new Client({
 client.commands = new Collection();
 const slashCommands = [];
 
-if (fs.existsSync('./commands')) {
-    const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
+// 💡 ÇÖKME ÇÖZÜMÜ: Klasör yolunu absolute (tam) hale getiriyoruz ki Vercel bulabilsin
+const commandsPath = path.join(__dirname, 'commands');
+if (fs.existsSync(commandsPath)) {
+    const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
     for (const file of commandFiles) {
-        const cmd = require(`./commands/${file}`);
-        if (cmd.data && cmd.execute) {
-            client.commands.set(cmd.data.name, cmd);
-            slashCommands.push(cmd.data.toJSON());
+        try {
+            const cmd = require(path.join(commandsPath, file));
+            if (cmd.data && cmd.execute) {
+                client.commands.set(cmd.data.name, cmd);
+                slashCommands.push(cmd.data.toJSON());
+            }
+        } catch (err) {
+            console.error(`Komut yüklenirken hata oluştu (${file}):`, err);
         }
     }
 }
@@ -52,11 +73,16 @@ app.post('/interactions', async (req, res) => {
     
     if (!signature || !timestamp) return res.status(401).send('Eksik imza.');
 
+    const publicKey = process.env.PUBLIC_KEY;
+    if (!publicKey) {
+        return res.status(500).send('Sunucu ayarı eksik (PUBLIC_KEY).');
+    }
+
     const isVerified = verifyKey(
         req.rawBody || JSON.stringify(req.body),
         signature,
         timestamp,
-        process.env.PUBLIC_KEY
+        publicKey
     );
     
     if (!isVerified) return res.status(401).send('Geçersiz imza.');
@@ -80,7 +106,7 @@ app.post('/interactions', async (req, res) => {
             });
         }
 
-        // Kanka burası sihirli nokta! commands/ klasöründeki kodların kırılmasın diye sahte bir interaction objesi üretiyoruz.
+        // Klasördeki kodların kırılmaması için sahte (mock) bir interaction objesi üretiyoruz
         const mockInteraction = {
             commandName: commandName,
             guildId: guild_id,
@@ -108,7 +134,6 @@ app.post('/interactions', async (req, res) => {
                     return o && req.body.data.resolved?.channels ? req.body.data.resolved.channels[o.value] : null;
                 }
             },
-            // interaction.reply() fonksiyonunu Express'in res.send() methoduna bağlıyoruz!
             async reply(content) {
                 if (this.replied) return;
                 this.replied = true;
@@ -125,13 +150,11 @@ app.post('/interactions', async (req, res) => {
                 }
                 return res.send({ type: 4, data: responseData });
             },
-            // Ağır işlemler için deferReply() desteği
             async deferReply(options = {}) {
                 if (this.deferred || this.replied) return;
                 this.deferred = true;
                 return res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
             },
-            // deferReply sonrasında mesajı güncellemek için editReply() desteği
             async editReply(content) {
                 let responseData = {};
                 if (typeof content === 'string') {
@@ -148,7 +171,7 @@ app.post('/interactions', async (req, res) => {
             }
         };
 
-        // Gerçek komut dosyanı çalıştırıyoruz kanka!
+        // Gerçek komut dosyanı tetikliyoruz
         try {
             await command.execute(mockInteraction);
         } catch (err) {
@@ -163,11 +186,13 @@ app.post('/interactions', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`📡 [WEB] Vercel Köprüsü Aktif! Port: ${PORT}`);
-});
+// Yerel testler için port dinleme (Vercel canlısında burayı es geçer)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`📡 Local Port aktif: ${PORT}`);
+    });
+}
 
-// Arka planda veritabanı veya diğer eventleri başlatmak istersen tetikleyici
 client.storage = Storage;
 if (typeof registerDatastoreEvents === 'function') {
     registerDatastoreEvents(client);
@@ -175,3 +200,6 @@ if (typeof registerDatastoreEvents === 'function') {
 
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
+
+// 🎯 EN KRİTİK NOKTA: Vercel'in çökmesini engelleyen asıl ihracat satırı!
+module.exports = app;
