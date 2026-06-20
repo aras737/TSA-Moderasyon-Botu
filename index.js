@@ -1,6 +1,5 @@
-// İlk satıra WebhookClient eklendi kanka, gözden kaçırma 
 const { Client, GatewayIntentBits, Collection, REST, Routes, Partials, EmbedBuilder, WebhookClient } = require('discord.js');
-const { InteractionType, InteractionResponseType, verifyKeyMiddleware } = require('discord-interactions'); // Kırmızı hatayı çözen paket
+const { InteractionType, InteractionResponseType, verifyKeyMiddleware } = require('discord-interactions'); 
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express'); 
@@ -16,22 +15,17 @@ app.get('/', (req, res) => {
     res.send('TSA Sistemi Aktif ve 2026 Standartlarında Görevde! ✅');
 });
 
-// DISCORD'UN KIRMIZI HATASINI DÜZELTEN GÜVENLİK KAPISI
+// DISCORD'UN GÜVENLİK KAPISI (Sadece PING doğrulaması bırakıldı)
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), (req, res) => {
     const { type } = req.body;
 
-    // Discord portal "Save Changes" dediğinde bu PING'i yakalar ve PONG döner. Hata düzelir!
+    // Discord portal "Save Changes" dediğinde bu PING'i yakalar ve PONG döner.
     if (type === InteractionType.PING) {
         return res.send({ type: InteractionResponseType.PONG });
     }
-
-    // Slash komutları tetiklendiğinde Vercel'e hızlıca olumlu yanıt döner
-    if (type === InteractionType.APPLICATION_COMMAND) {
-        return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: 'TSA Botu Webhook üzerinden başarıyla tetiklendi!' }
-        });
-    }
+    
+    // NOT: Komutları tıkayan APPLICATION_COMMAND bloğu buradan kaldırıldı.
+    // Artık komutlar aşağıda yer alan gerçek 'interactionCreate' olayına aktarılacak.
 });
 
 app.listen(PORT, () => {
@@ -65,7 +59,6 @@ client.database = {
 };
 
 client.cache = new Map();
-
 client.commands = new Collection();
 const slashCommands = [];
 
@@ -145,7 +138,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
         console.error(err);
 
-        if (!interaction.replied) {
+        if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
                 content: 'Hata oluştu.',
                 ephemeral: true
