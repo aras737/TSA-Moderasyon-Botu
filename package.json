@@ -1,28 +1,20 @@
 {
-  "name": "tsa-ittifak-bot",
+  "name": "tsa-moderasyon-botu",
   "version": "1.0.0",
-  "description": "TSA Sistemi 2026 Standartlarında Discord Botu",
+  "description": "TSA Discord Moderasyon Botu",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "vercel-build": "node -e \"console.log('Vercel web endpoint build OK')\""
   },
-  "keywords": [
-    "discord",
-    "bot",
-    "tsa",
-    "express"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "axios": "latest",
-    "discord-interactions": "latest",
-    "discord.js": "latest",
-    "dotenv": "latest",
-    "express": "latest"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "axios": "^1.7.2",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "@napi-rs/canvas": "^0.1.65"
   }
 }
