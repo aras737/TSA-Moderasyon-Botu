@@ -1,8 +1,13 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
+const express = require('express');
 
 require('dotenv').config();
+
+// Express server
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 // 1. CLIENT & COMMAND SETUP (PURE GATEWAY MODE)
 const client = new Client({
@@ -62,7 +67,25 @@ if (typeof registerDatastoreEvents === 'function') {
     registerDatastoreEvents(client);
 }
 
-// 2. READY EVENT - Bot hazır olduğunda
+// 2. EXPRESS SERVER
+app.get('/', (req, res) => {
+    res.send('TSA Sistemi Aktif ve Görevde! ✅');
+});
+
+// Health check endpoint (Render için ping)
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        ok: true, 
+        bot: client.user ? client.user.tag : 'Bağlanılıyor...',
+        commands: slashCommands.length 
+    });
+});
+
+const server = app.listen(PORT, () => {
+    console.log(`📡 Express server port ${PORT}'de çalışıyor`);
+});
+
+// 3. READY EVENT - Bot hazır olduğunda
 client.once('ready', async () => {
     console.log(`✅ Bot giriş yaptı ve aktif: ${client.user.tag}`);
     
@@ -86,7 +109,7 @@ client.once('ready', async () => {
     }
 });
 
-// 3. SLASH COMMAND INTERACTION HANDLER
+// 4. SLASH COMMAND INTERACTION HANDLER
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -121,7 +144,13 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// 4. BOT LOGIN
+// 5. PING SISTEMÜ (Render'ın service'i çökmesini önle)
+setInterval(() => {
+    const botStatus = client.user ? `🟢 ${client.user.tag}` : '🔴 Bağlanılıyor';
+    console.log(`💓 Ping: ${botStatus} | Komutlar: ${slashCommands.length}`);
+}, 60000); // Her 60 saniye
+
+// 6. BOT LOGIN
 if (process.env.TOKEN) {
     client.login(process.env.TOKEN).catch((err) => {
         console.error('❌ Bot girişi başarısız oldu:', err);
@@ -135,6 +164,6 @@ if (process.env.TOKEN) {
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
-console.log('🚀 Bot başlatılıyor... (Pure Gateway Mode)');
+console.log('🚀 Bot başlatılıyor... (Gateway Mode + Express Server)');
 
-module.exports = client;
+module.exports = { app, client };
