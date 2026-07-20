@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const { verifyKey } = require('discord-interactions');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,7 +25,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
-// 1. CLIENT & COMMAND SETUP (Render sunucu senaryosu)
+// 1. CLIENT & COMMAND SETUP (PURE WEBHOOK MODE - Gateway bağlantısı yok)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -69,18 +69,22 @@ app.use(express.json({
 }));
 
 app.get('/', (req, res) => {
-    res.send('TSA Sistemi Aktif ve Görevde! ✅');
+    res.send('TSA Sistemi Aktif ve Görevde! ✅ (Webhook Mode)');
 });
 
-// 2. DISCORD WEBHOOK INTERACTION KÖPRÜSÜ
+// 2. DISCORD WEBHOOK INTERACTION KÖPRÜSÜ (ONLY)
 app.post('/interactions', async (req, res) => {
     const signature = req.headers['x-signature-ed25519'];
     const timestamp = req.headers['x-signature-timestamp'];
     
-    if (!signature || !timestamp) return res.status(401).send('Eksik imza.');
+    if (!signature || !timestamp) {
+        console.error('❌ İmza veya timestamp eksik');
+        return res.status(401).send('Eksik imza.');
+    }
 
     const publicKey = process.env.PUBLIC_KEY;
     if (!publicKey) {
+        console.error('❌ PUBLIC_KEY env değişkeni eksik');
         return res.status(500).send('Sunucu ayarı eksik (PUBLIC_KEY).');
     }
 
@@ -91,12 +95,16 @@ app.post('/interactions', async (req, res) => {
         publicKey
     );
     
-    if (!isVerified) return res.status(401).send('Geçersiz imza.');
+    if (!isVerified) {
+        console.error('❌ İmza doğrulaması başarısız');
+        return res.status(401).send('Geçersiz imza.');
+    }
 
     const { type, data, guild_id, channel_id, member, user, token, application_id } = req.body;
 
     // Discord Portal Doğrulama PING'i
     if (type === 1) { 
+        console.log('✅ Discord PING doğrulandı');
         return res.send({ type: 1 });
     }
 
@@ -147,7 +155,7 @@ app.post('/interactions', async (req, res) => {
             },
             async reply(content) {
                 if (this.replied) {
-                    console.warn('⚠️ reply() zaten çağrıldı, yeniden çağrılamaz');
+                    console.warn('⚠️ reply() zaten çağrıldı');
                     return;
                 }
                 this.replied = true;
@@ -166,12 +174,11 @@ app.post('/interactions', async (req, res) => {
             },
             async deferReply(options = {}) {
                 if (this.deferred || this.replied) {
-                    console.warn('⚠️ deferReply() zaten çağrıldı, yeniden çağrılamaz');
+                    console.warn('⚠️ deferReply() zaten çağrıldı');
                     return;
                 }
                 this.deferred = true;
                 res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
-                // fetchReply: true yerine obje dönüyoruz
                 return { createdTimestamp: Date.now() };
             },
             async editReply(content) {
@@ -205,13 +212,13 @@ app.post('/interactions', async (req, res) => {
             if (!mockInteraction.replied && !mockInteraction.deferred) {
                 return res.send({
                     type: 4,
-                    data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu! Hata detayı: `' + (err.message || 'Bilinmeyen hata') + '`', flags: 64 }
+                    data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu! Hata: `' + (err.message || 'Bilinmeyen hata') + '`', flags: 64 }
                 });
             } else if (mockInteraction.deferred) {
                 try {
                     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
                     await rest.patch(Routes.webhookMessage(application_id, token, '@original'), {
-                        body: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu! Hata: `' + (err.message || 'Bilinmeyen hata') + '`' }
+                        body: { content: '💥 Komut çalıştırılırken hata oluştu! Hata: `' + (err.message || 'Bilinmeyen hata') + '`' }
                     });
                 } catch (err) {
                     console.error('Hata bilgisi gönderilemedi:', err.message);
@@ -222,9 +229,16 @@ app.post('/interactions', async (req, res) => {
 });
 
 // 🎯 EN KRİTİK NOKTA: Render bir "Web Service" olarak sürekli çalışan bir process
-// beklediği için sunucuyu HER ZAMAN dinlemeye açıyoruz (Vercel'deki gibi serverless değil).
+// beklediği için sunucuyu HER ZAMAN dinlemeye açıyoruz (WEBHOOK MODE)
 app.listen(PORT, () => {
     console.log(`📡 Render üzerinde port aktif: ${PORT}`);
+    console.log(`🌐 Interaction Endpoint: https://your-render-url.onrender.com/interactions`);
+    console.log(`📋 Toplam ${slashCommands.length} komut hazır (webhook mod)`);
+    
+    // Startup sırasında komutları register et
+    if (slashCommands.length > 0 && process.env.TOKEN && process.env.APPLICATION_ID) {
+        registerSlashCommands();
+    }
 });
 
 client.storage = Storage;
@@ -232,17 +246,7 @@ if (typeof registerDatastoreEvents === 'function') {
     registerDatastoreEvents(client);
 }
 
-// Bot Discord'a bağlanıp aktif (online) göründüğünde bunu logluyoruz
-client.once('ready', () => {
-    console.log(`✅ Bot giriş yaptı ve aktif: ${client.user.tag}`);
-    
-    // Bot hazır olduktan sonra slash komutları register et (varsa)
-    if (slashCommands.length > 0 && process.env.TOKEN && process.env.APPLICATION_ID) {
-        registerSlashCommands();
-    }
-});
-
-// Slash komutları Discord'a register et
+// Slash komutları Discord'a register et (Webhook Mode için)
 async function registerSlashCommands() {
     try {
         const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -259,13 +263,8 @@ async function registerSlashCommands() {
     }
 }
 
-if (process.env.TOKEN) {
-    client.login(process.env.TOKEN).catch((err) => {
-        console.error('❌ Bot girişi başarısız oldu:', err.message || err);
-    });
-} else {
-    console.log('⚠️ TOKEN env değişkeni bulunamadı, bot gateway girişi atlanıyor.');
-}
+// GATEWAY BAĞLANTISI KAPATILDI - PURE WEBHOOK MODE
+console.log('🔌 Gateway bağlantısı kapatıldı (Webhook Mode aktif)');
 
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
