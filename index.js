@@ -261,7 +261,7 @@ async function registerSlashCommands() {
 
 if (process.env.TOKEN) {
     client.login(process.env.TOKEN).catch((err) => {
-        console.error('❌ Bot girişi başarısız oldu:', err);
+        console.error('❌ Bot girişi başarısız oldu:', err.message || err);
     });
 } else {
     console.log('⚠️ TOKEN env değişkeni bulunamadı, bot gateway girişi atlanıyor.');
