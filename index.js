@@ -186,13 +186,6 @@ app.post('/interactions', async (req, res) => {
     }
 });
 
-// Yerel testler için port dinleme (Vercel canlısında burayı es geçer)
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`📡 Local Port aktif: ${PORT}`);
-    });
-}
-
 client.storage = Storage;
 if (typeof registerDatastoreEvents === 'function') {
     registerDatastoreEvents(client);
@@ -201,5 +194,10 @@ if (typeof registerDatastoreEvents === 'function') {
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
-// 🎯 EN KRİTİK NOKTA: Vercel'in çökmesini engelleyen asıl ihracat satırı!
+// 🎯 ÇÖZÜM: Render gibi platformlarda uygulamanın ayağa kalkabilmesi ve kapanmaması için 
+// express sunucusunu her ortamda (production dahil) `.listen()` ile başlatıyoruz.
+app.listen(PORT, () => {
+    console.log(`📡 Server aktif ve ${PORT} portunu dinliyor.`);
+});
+
 module.exports = app;
