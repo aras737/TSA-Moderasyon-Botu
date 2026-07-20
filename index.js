@@ -48,11 +48,17 @@ if (fs.existsSync(commandsPath)) {
             if (cmd.data && cmd.execute) {
                 client.commands.set(cmd.data.name, cmd);
                 slashCommands.push(cmd.data.toJSON());
+                console.log(`✅ Komut yüklendi: ${cmd.data.name}`);
+            } else {
+                console.warn(`⚠️ Komut eksik özellik: ${file} (data ve execute gerekli)`);
             }
         } catch (err) {
-            console.error(`Komut yüklenirken hata oluştu (${file}):`, err);
+            console.error(`❌ Komut yüklenirken hata oluştu (${file}):`, err.message || err);
         }
     }
+    console.log(`📋 Toplam ${slashCommands.length} komut yüklendi.`);
+} else {
+    console.warn(`⚠️ Commands klasörü bulunamadı: ${commandsPath}`);
 }
 
 // İmza doğrulaması için ham gövdeyi (rawBody) koruyoruz
@@ -100,11 +106,14 @@ app.post('/interactions', async (req, res) => {
         const command = client.commands.get(commandName);
         
         if (!command) {
+            console.warn(`⚠️ Komut bulunamadı: ${commandName}`);
             return res.send({
                 type: 4,
                 data: { content: '❌ Bu komut sistemde bulunamadı.' }
             });
         }
+
+        console.log(`🔨 Komut çalıştırılıyor: ${commandName} (Kullanıcı: ${user?.username || member?.user?.username})`);
 
         // Klasördeki kodların kırılmaması için sahte (mock) bir interaction objesi üretiyoruz
         const mockInteraction = {
@@ -113,8 +122,10 @@ app.post('/interactions', async (req, res) => {
             channelId: channel_id,
             user: member ? member.user : user,
             member: member,
+            guild: { id: guild_id },
             replied: false,
             deferred: false,
+            client: client,
             options: {
                 _options: data.options || [],
                 get(name) { return this._options.find(o => o.name === name); },
@@ -135,7 +146,10 @@ app.post('/interactions', async (req, res) => {
                 }
             },
             async reply(content) {
-                if (this.replied) return;
+                if (this.replied) {
+                    console.warn('⚠️ reply() zaten çağrıldı, yeniden çağrılamaz');
+                    return;
+                }
                 this.replied = true;
                 
                 let responseData = {};
@@ -151,11 +165,21 @@ app.post('/interactions', async (req, res) => {
                 return res.send({ type: 4, data: responseData });
             },
             async deferReply(options = {}) {
-                if (this.deferred || this.replied) return;
+                if (this.deferred || this.replied) {
+                    console.warn('⚠️ deferReply() zaten çağrıldı, yeniden çağrılamaz');
+                    return;
+                }
                 this.deferred = true;
-                return res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
+                res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
+                // fetchReply: true yerine obje dönüyoruz
+                return { createdTimestamp: Date.now() };
             },
             async editReply(content) {
+                if (!this.deferred) {
+                    console.warn('⚠️ editReply() çağrılmadan önce deferReply() çağrılmalı');
+                    return;
+                }
+                
                 let responseData = {};
                 if (typeof content === 'string') {
                     responseData = { content: content };
@@ -166,7 +190,7 @@ app.post('/interactions', async (req, res) => {
                     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
                     await rest.patch(Routes.webhookMessage(application_id, token, '@original'), { body: responseData });
                 } catch (err) {
-                    console.error('editReply Hatası:', err);
+                    console.error('❌ editReply Hatası:', err.message || err);
                 }
             }
         };
@@ -174,13 +198,24 @@ app.post('/interactions', async (req, res) => {
         // Gerçek komut dosyanı tetikliyoruz
         try {
             await command.execute(mockInteraction);
+            console.log(`✅ Komut başarıyla çalıştırıldı: ${commandName}`);
         } catch (err) {
-            console.error(`Komut hatası (${commandName}):`, err);
-            if (!mockInteraction.replied) {
+            console.error(`❌ Komut hatası (${commandName}):`, err.message || err);
+            console.error('Stack:', err.stack);
+            if (!mockInteraction.replied && !mockInteraction.deferred) {
                 return res.send({
                     type: 4,
-                    data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu!', flags: 64 }
+                    data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu! Hata detayı: `' + (err.message || 'Bilinmeyen hata') + '`', flags: 64 }
                 });
+            } else if (mockInteraction.deferred) {
+                try {
+                    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+                    await rest.patch(Routes.webhookMessage(application_id, token, '@original'), {
+                        body: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu! Hata: `' + (err.message || 'Bilinmeyen hata') + '`' }
+                    });
+                } catch (err) {
+                    console.error('Hata bilgisi gönderilemedi:', err.message);
+                }
             }
         }
     }
@@ -200,7 +235,29 @@ if (typeof registerDatastoreEvents === 'function') {
 // Bot Discord'a bağlanıp aktif (online) göründüğünde bunu logluyoruz
 client.once('ready', () => {
     console.log(`✅ Bot giriş yaptı ve aktif: ${client.user.tag}`);
+    
+    // Bot hazır olduktan sonra slash komutları register et (varsa)
+    if (slashCommands.length > 0 && process.env.TOKEN && process.env.APPLICATION_ID) {
+        registerSlashCommands();
+    }
 });
+
+// Slash komutları Discord'a register et
+async function registerSlashCommands() {
+    try {
+        const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+        console.log(`🔄 ${slashCommands.length} slash komut register ediliyor...`);
+        
+        const data = await rest.put(
+            Routes.applicationCommands(process.env.APPLICATION_ID),
+            { body: slashCommands }
+        );
+        
+        console.log(`✅ ${data.length} slash komut başarıyla register edildi!`);
+    } catch (error) {
+        console.error('❌ Slash komut register hatası:', error.message || error);
+    }
+}
 
 if (process.env.TOKEN) {
     client.login(process.env.TOKEN).catch((err) => {
