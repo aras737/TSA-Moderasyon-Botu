@@ -25,7 +25,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
-// 1. CLIENT & COMMAND SETUP (Render mutlak yol senaryosu)
+// 1. CLIENT & COMMAND SETUP (Render sunucu senaryosu)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -55,7 +55,7 @@ if (fs.existsSync(commandsPath)) {
     }
 }
 
-// Render imza doğrulaması için ham gövdeyi (rawBody) koruyoruz
+// İmza doğrulaması için ham gövdeyi (rawBody) koruyoruz
 app.use(express.json({
     verify: (req, res, buf) => {
         req.rawBody = buf;
@@ -186,9 +186,10 @@ app.post('/interactions', async (req, res) => {
     }
 });
 
-// Render için port dinleme (Render'da sunucunun açık kalması için şarttır)
+// 🎯 EN KRİTİK NOKTA: Render bir "Web Service" olarak sürekli çalışan bir process
+// beklediği için sunucuyu HER ZAMAN dinlemeye açıyoruz (Vercel'deki gibi serverless değil).
 app.listen(PORT, () => {
-    console.log(`📡 Render Port aktif: ${PORT}`);
+    console.log(`📡 Render üzerinde port aktif: ${PORT}`);
 });
 
 client.storage = Storage;
@@ -199,5 +200,4 @@ if (typeof registerDatastoreEvents === 'function') {
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
-// 🎯 EN KRİTİK NOKTA: Render'ın çökmesini engelleyen asıl ihracat satırı!
 module.exports = app;
