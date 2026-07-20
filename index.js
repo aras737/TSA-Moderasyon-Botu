@@ -57,7 +57,7 @@ if (fs.existsSync(commandsPath)) {
 }
 
 // Bot açıldığında komutları Discord'a global olarak kaydet
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`🤖 Bot başarıyla giriş yaptı: ${client.user.tag} (Aktif!)`);
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -144,7 +144,7 @@ app.post('/interactions', async (req, res) => {
                 },
                 getMember(name) {
                     const o = this.get(name);
-                    return o && req.body.data.resolved?.members ? req.body.data.resolved.members[o.Developer] : null;
+                    return o && req.body.data.resolved?.members ? req.body.data.resolved.members[o.value] : null;
                 },
                 getChannel(name) {
                     const o = this.get(name);
@@ -152,7 +152,7 @@ app.post('/interactions', async (req, res) => {
                 }
             },
             async reply(content) {
-                if (this.replied) return;
+                if (this.replied || this.deferred) return;
                 this.replied = true;
                 
                 let responseData = {};
@@ -192,7 +192,7 @@ app.post('/interactions', async (req, res) => {
             await command.execute(mockInteraction);
         } catch (err) {
             console.error(`Komut hatası (${commandName}):`, err);
-            if (!mockInteraction.replied) {
+            if (!mockInteraction.replied && !mockInteraction.deferred) {
                 return res.send({
                     type: 4,
                     data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu!', flags: 64 }
@@ -215,7 +215,6 @@ app.listen(PORT, () => {
     console.log(`📡 Server aktif ve ${PORT} portunu dinliyor.`);
 });
 
-// 🎯 BOTUN DİSCORD'DA AKTİF GÖRÜNMESİNİ SAĞLAYAN KRİTİK SATIR
 client.login(process.env.TOKEN);
 
 module.exports = app;
