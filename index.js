@@ -197,6 +197,19 @@ if (typeof registerDatastoreEvents === 'function') {
     registerDatastoreEvents(client);
 }
 
+// Bot Discord'a bağlanıp aktif (online) göründüğünde bunu logluyoruz
+client.once('ready', () => {
+    console.log(`✅ Bot giriş yaptı ve aktif: ${client.user.tag}`);
+});
+
+if (process.env.TOKEN) {
+    client.login(process.env.TOKEN).catch((err) => {
+        console.error('❌ Bot girişi başarısız oldu:', err);
+    });
+} else {
+    console.log('⚠️ TOKEN env değişkeni bulunamadı, bot gateway girişi atlanıyor.');
+}
+
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
