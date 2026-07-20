@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { REST, Routes } = require('discord.js');
 const { verifyKey } = require('discord-interactions');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,7 +14,6 @@ let Storage;
 try {
     Storage = require('./services/storage');
 } catch (e) {
-    console.log("⚠️ Storage servisi yüklenemedi, Map kullanılıyor.");
     Storage = new Map();
 }
 
@@ -25,55 +24,25 @@ try {
     registerDatastoreEvents = null;
 }
 
-// 1. CLIENT SETUP
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers
-    ]
-});
-
-client.commands = new Collection();
-const slashCommands = [];
-
-// 2. KOMUTLARI YÜKLEME VE DİSCORD'A KAYDETME
+// Komutları belleğe yükleme map'i
+const commands = new Map();
 const commandsPath = path.join(__dirname, 'commands');
+
 if (fs.existsSync(commandsPath)) {
     const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
     for (const file of commandFiles) {
         try {
             const cmd = require(path.join(commandsPath, file));
             if (cmd.data && cmd.execute) {
-                client.commands.set(cmd.data.name, cmd);
-                slashCommands.push(cmd.data.toJSON());
-                console.log(`✅ Komut yüklendi: ${cmd.data.name}`);
+                commands.set(cmd.data.name, cmd);
             }
         } catch (err) {
-            console.error(`Komut yüklenirken hata oluştu (${file}):`, err);
+            console.error(`Komut yüklenirken hata (${file}):`, err);
         }
     }
 }
 
-// Bot açıldığında komutları Discord'a global olarak kaydet
-client.once('clientReady', async () => {
-    console.log(`🤖 Bot başarıyla giriş yaptı: ${client.user.tag} (Aktif!)`);
-
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    try {
-        console.log('🔄 Slash komutları Discord\'a kaydediliyor...');
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: slashCommands },
-        );
-        console.log('✨ Slash komutları başarıyla yüklendi!');
-    } catch (error) {
-        console.error('Komut kaydetme hatası:', error);
-    }
-});
-
-// Express Raw Body Ayarı (Discord İmza Doğrulaması İçin)
+// Express Raw Body (İmza doğrulaması için hayati önem taşır)
 app.use(express.json({
     verify: (req, res, buf) => {
         req.rawBody = buf;
@@ -84,18 +53,21 @@ app.get('/', (req, res) => {
     res.send('TSA Sistemi Aktif ve Görevde! ✅');
 });
 
-// 3. DISCORD WEBHOOK INTERACTIONS KÖPRÜSÜ
+// DISCORD INTERACTIONS WEBHOOK ENDPOINT
 app.post('/interactions', async (req, res) => {
     const signature = req.headers['x-signature-ed25519'];
     const timestamp = req.headers['x-signature-timestamp'];
     
-    if (!signature || !timestamp) return res.status(401).send('Eksik imza.');
+    if (!signature || !timestamp) {
+        return res.status(401).send('Eksik imza.');
+    }
 
     const publicKey = process.env.PUBLIC_KEY;
     if (!publicKey) {
         return res.status(500).send('Sunucu ayarı eksik (PUBLIC_KEY).');
     }
 
+    // Güvenlik imza doğrulaması
     const isVerified = verifyKey(
         req.rawBody || JSON.stringify(req.body),
         signature,
@@ -103,35 +75,39 @@ app.post('/interactions', async (req, res) => {
         publicKey
     );
     
-    if (!isVerified) return res.status(401).send('Geçersiz imza.');
-
-    const { type, data, guild_id, channel_id, member, user, token, application_id } = req.body;
-
-    // Discord Ping (Bağlantı Testi)
-    if (type === 1) { 
-        return res.send({ type: 1 });
+    if (!isVerified) {
+        return res.status(401).send('Geçersiz imza.');
     }
 
-    // Slash Komut Çalıştırıldığında
-    if (type === 2) {
+    const body = req.body;
+
+    // 1. PING (Discord test isteği)
+    if (body.type === 1) {
+        return res.json({ type: 1 });
+    }
+
+    // 2. APPLICATION COMMAND (Slash komut tetiklendiğinde)
+    if (body.type === 2) {
+        const { data, guild_id, channel_id, member, user, token, application_id } = body;
         const commandName = data.name;
-        const command = client.commands.get(commandName);
-        
+        const command = commands.get(commandName);
+
         if (!command) {
-            return res.send({
+            return res.json({
                 type: 4,
                 data: { content: '❌ Bu komut sistemde bulunamadı.' }
             });
         }
 
+        let isResponded = false;
+
+        // Komutların sorunsuz çalışması için gelişmiş Mock Interaction objesi
         const mockInteraction = {
-            commandName: commandName,
+            commandName,
             guildId: guild_id,
             channelId: channel_id,
             user: member ? member.user : user,
-            member: member,
-            replied: false,
-            deferred: false,
+            member,
             options: {
                 _options: data.options || [],
                 get(name) { return this._options.find(o => o.name === name); },
@@ -140,42 +116,42 @@ app.post('/interactions', async (req, res) => {
                 getBoolean(name) { const o = this.get(name); return o ? Boolean(o.value) : null; },
                 getUser(name) {
                     const o = this.get(name);
-                    return o && req.body.data.resolved?.users ? req.body.data.resolved.users[o.value] : null;
+                    return o && body.data.resolved?.users ? body.data.resolved.users[o.value] : null;
                 },
                 getMember(name) {
                     const o = this.get(name);
-                    return o && req.body.data.resolved?.members ? req.body.data.resolved.members[o.value] : null;
+                    return o && body.data.resolved?.members ? body.data.resolved.members[o.value] : null;
                 },
                 getChannel(name) {
                     const o = this.get(name);
-                    return o && req.body.data.resolved?.channels ? req.body.data.resolved.channels[o.value] : null;
+                    return o && body.data.resolved?.channels ? body.data.resolved.channels[o.value] : null;
                 }
             },
             async reply(content) {
-                if (this.replied || this.deferred) return;
-                this.replied = true;
-                
+                if (isResponded) return;
+                isResponded = true;
+
                 let responseData = {};
                 if (typeof content === 'string') {
-                    responseData = { content: content };
+                    responseData = { content };
                 } else {
                     responseData = {
                         content: content.content || '',
                         embeds: content.embeds || [],
-                        ephemeral: content.ephemeral ? 64 : 0
+                        flags: content.ephemeral ? 64 : 0
                     };
                 }
-                return res.send({ type: 4, data: responseData });
+                return res.json({ type: 4, data: responseData });
             },
             async deferReply(options = {}) {
-                if (this.deferred || this.replied) return;
-                this.deferred = true;
-                return res.send({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
+                if (isResponded) return;
+                isResponded = true;
+                return res.json({ type: 5, data: { flags: options.ephemeral ? 64 : 0 } });
             },
             async editReply(content) {
                 let responseData = {};
                 if (typeof content === 'string') {
-                    responseData = { content: content };
+                    responseData = { content };
                 } else {
                     responseData = { content: content.content || '', embeds: content.embeds || [] };
                 }
@@ -191,9 +167,9 @@ app.post('/interactions', async (req, res) => {
         try {
             await command.execute(mockInteraction);
         } catch (err) {
-            console.error(`Komut hatası (${commandName}):`, err);
-            if (!mockInteraction.replied && !mockInteraction.deferred) {
-                return res.send({
+            console.error(`Komut çalıştırma hatası (${commandName}):`, err);
+            if (!isResponded) {
+                return res.json({
                     type: 4,
                     data: { content: '💥 Komut çalıştırılırken teknik bir hata oluştu!', flags: 64 }
                 });
@@ -202,19 +178,16 @@ app.post('/interactions', async (req, res) => {
     }
 });
 
-client.storage = Storage;
-if (typeof registerDatastoreEvents === 'function') {
-    registerDatastoreEvents(client);
+const clientStorage = Storage;
+if (typeof registerDatastoreEvents === 'function' && clientStorage) {
+    // Gerekirse event kayıtları yapılabilir
 }
 
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
 
-// 4. SUNUCUYU BAŞLAT VE DİSCORD'A GİRİŞ YAP
 app.listen(PORT, () => {
-    console.log(`📡 Server aktif ve ${PORT} portunu dinliyor.`);
+    console.log(`📡 Webhook Sunucusu aktif ve ${PORT} portunu dinliyor.`);
 });
-
-client.login(process.env.TOKEN);
 
 module.exports = app;
