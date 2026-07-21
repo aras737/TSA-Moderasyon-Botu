@@ -22,7 +22,6 @@ module.exports = {
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
         
         // --- SABİT ÖZEL EMOJİ SİSTEMİ ---
-        // Attığın emoji ID'sini bura direkt gömdük kanka, asla sekmez.
         const korumaEmoji = '<:koruma1:1505143174190989352>';
 
         // Sunucuda var mı yok mu kontrol etmek için çekiyoruz
@@ -65,7 +64,7 @@ module.exports = {
                     { name: '<:uzaybot_kullanicilar:1505146190973505567> Kullanıcı', value: `${user.tag} \`(${user.id})\``, inline: true },
                     { name: `${korumaEmoji} Yetkili`, value: `${interaction.user}`, inline: true },
                     { name: '<:Paper:1505146388596391977> Sebep', value: `\`${reason}\``, inline: false },
-                    { name: '<:global:1505146647221374977> Durum', value: member ? '<a:online:1505145208046878730> Sunucudaydı (DM Denendi)' : '<:Ofline:1505145553925832704> Sunucuda Değildi (ID Ban/Forceban Atıldı)', inline: false }
+                    { name: '<:global:1505146647221374977> Durum', value: member ? '<a:online:1505145208046878730> Sunucudaydı (DM Denendi)' : '<:Ofline:1505145553925832704> Sunucuda Değildi', inline: false }
                 )
                 .setThumbnail(user.displayAvatarURL({ dynamic: true }) || interaction.guild.iconURL())
                 .setColor('#ff3333')

@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const { ayarKaydet, ayarGetir } = require('../utils/db');
 
 module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
@@ -28,17 +27,23 @@ module.exports = {
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
+        const guildId = interaction.guild.id;
+        const storageKey = `logKanal_${guildId}`;
 
         if (subcommand === 'kanalı-ayarla') {
             const kanal = interaction.options.getChannel('kanal');
 
             try {
-                // Database'e kaydet
-                ayarKaydet(interaction.guild.id, 'logKanal', kanal.id);
+                // Storage'a kaydet
+                if (global.logChannels) {
+                    global.logChannels[guildId] = kanal.id;
+                } else {
+                    global.logChannels = { [guildId]: kanal.id };
+                }
 
                 const embed = new EmbedBuilder()
                     .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
-                    .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses, üye, ban, emoji, sticker ve invite hareketleri artık ${kanal} kanalına raporlanacak kanka.`)
+                    .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses, üye, ban, emoji, sticker ve invite hareketleri artık ${kanal} kanalına raporlanacak.`)
                     .setColor('#2ecc71')
                     .setTimestamp();
 
@@ -51,7 +56,7 @@ module.exports = {
 
         if (subcommand === 'göster') {
             try {
-                const logKanalId = ayarGetir(interaction.guild.id, 'logKanal', null);
+                const logKanalId = global.logChannels ? global.logChannels[guildId] : null;
 
                 if (!logKanalId) {
                     return interaction.reply({ 
@@ -64,7 +69,7 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setTitle('<:Paper:1505146388596391977> Log Kanalı Bilgisi')
-                    .setDescription(`Log kanalı: ${logKanal || '`Kanal silindi!`'}`)
+                    .setDescription(`Log kanalı: ${logKanal || '\`Kanal silindi!\`'}`)
                     .addFields(
                         { name: 'Kanal ID', value: `\`${logKanalId}\`` },
                         { name: 'Durum', value: logKanal ? '<a:tik:1505164671081123840> Aktif' : '<:sil:1505147967907037275> Kanal Silinmiş' }
@@ -81,7 +86,9 @@ module.exports = {
 
         if (subcommand === 'kapat') {
             try {
-                ayarKaydet(interaction.guild.id, 'logKanal', null);
+                if (global.logChannels) {
+                    delete global.logChannels[guildId];
+                }
 
                 const embed = new EmbedBuilder()
                     .setTitle('<a:baarsz:1505146967817326675> Log Sistemi Kapatıldı')

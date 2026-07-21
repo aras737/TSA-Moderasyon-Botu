@@ -66,7 +66,7 @@ module.exports = {
                         const isGlobal = ban.reason && ban.reason.includes('Küresel Sıkıyönetim');
                         const rozet = isGlobal ? '🔴 `[KÜRESEL TAM YASAK]`' : '🟡 `[SUNUCU YASAĞI]`';
 
-                        return `**${baslangic + index + 1}.** <:uzaybot_kullanicilar:1505146190973505567> **${ban.user.tag}** \`(${ban.user.id})\` — ${rozet}\n┗ <:Paper:1505146388596391977> **Sebep:** *${sebep}*`;
+                        return `**${baslangic + index + 1}.** <:uzaybot_kullanicilar:1505146190973505567> **${ban.user.tag}** \`(${ban.user.id})\` — ${rozet}\n┗ <:Paper:1505146388596391977> **Sebep:** ${sebep}`;
                     }).join('\n\n');
                 }
 
@@ -113,17 +113,17 @@ module.exports = {
                     new ButtonBuilder()
                         .setCustomId('filtre_hepsi')
                         .setLabel('Tümü')
-                        .setEmoji('1505146190973505567') // uzaybot_kullanicilar emojisi
+                        .setEmoji('<:uzaybot_kullanicilar:1505146190973505567>')
                         .setStyle(mevcutFiltre === 'hepsi' ? ButtonStyle.Success : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId('filtre_tam')
                         .setLabel('Tam Yasaklılar')
-                        .setEmoji('1505146022588842095') // yasaklandi emojisi
+                        .setEmoji('<:yasaklandi:1505146022588842095>')
                         .setStyle(mevcutFiltre === 'tam' ? ButtonStyle.Danger : ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId('filtre_standart')
                         .setLabel('Sunucu Yasakları')
-                        .setEmoji('1505146388596391977') // Paper emojisi
+                        .setEmoji('<:Paper:1505146388596391977>')
                         .setStyle(mevcutFiltre === 'standart' ? ButtonStyle.Primary : ButtonStyle.Secondary)
                 );
 

@@ -12,30 +12,31 @@ module.exports = {
             option.setName('sebep').setDescription('Cezayı kaldırma sebebini yazın.').setRequired(false)),
 
     async execute(interaction) {
-        const target = interaction.options.getMember('kullanıcı');
+        const target = interaction.options.getUser('kullanıcı');
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmemiş kanka.';
 
-        if (!target) {
+        const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+        if (!member) {
             return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu kullanıcı sunucuda bulunamadı kanka.', ephemeral: true });
         }
 
-        if (!target.isCommunicationDisabled()) {
+        if (!member.isCommunicationDisabled()) {
             return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu kullanıcı zaten susturulmamış (Timeout cezası yok).', ephemeral: true });
         }
 
         try {
-            await target.timeout(null, reason); // Timeout'u null yapmak cezayı tamamen siler
+            await member.timeout(null, reason);
 
             const embed = new EmbedBuilder()
                 .setTitle('🔊 TSA | Susturma Kaldırıldı')
-                .setDescription(`**${target.user.tag}** kullanıcısının cezası el ile kaldırıldı.`)
+                .setDescription(`**${target.tag}** kullanıcısının cezası el ile kaldırıldı.`)
                 .addFields(
-                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Üye', value: `${target}`, inline: true },
+                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Üye', value: `${member}`, inline: true },
                     { name: '<:Yetkili:1505192912680390827> Yetkili', value: `${interaction.user}`, inline: true },
                     { name: '<:Paper:1505146388596391977> Kaldırma Sebebi', value: `*${reason}*`, inline: false }
                 )
-                .setColor('#2ecc71') // Yeşil renk
-                .setThumbnail(target.user.displayAvatarURL())
+                .setColor('#2ecc71')
+                .setThumbnail(target.displayAvatarURL())
                 .setTimestamp();
 
             await interaction.reply({ embeds: [embed] });

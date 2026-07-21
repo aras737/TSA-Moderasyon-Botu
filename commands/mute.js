@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
-const ms = require('ms'); // Süre dönüştürücü (Eğer hata verirse terminale: npm i ms)
+const ms = require('ms');
 
 module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.ModerateMembers], // Sadece Üyeleri Sustur yetkisi olanlar görebilir
+    requiredPerms: [PermissionsBitField.Flags.ModerateMembers],
 
     data: new SlashCommandBuilder()
         .setName('mute')
@@ -15,19 +15,20 @@ module.exports = {
             option.setName('sebep').setDescription('Susturma sebebini yazın.').setRequired(false)),
 
     async execute(interaction) {
-        const target = interaction.options.getMember('kullanıcı');
+        const target = interaction.options.getUser('kullanıcı');
         const durationString = interaction.options.getString('süre');
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmemiş kanka.';
 
-        if (!target) {
+        const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+        if (!member) {
             return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu kullanıcı sunucuda bulunamadı kanka.', ephemeral: true });
         }
 
         // Hiyerarşi Kontrolü
-        if (target.roles.highest.position >= interaction.member.roles.highest.position) {
+        if (member.roles.highest.position >= interaction.member.roles.highest.position) {
             return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu üyenin yetkisi senden yüksek veya seninle eşit, susturamazsın!', ephemeral: true });
         }
-        if (!target.moderatable) {
+        if (!member.moderatable) {
             return interaction.reply({ content: '<a:uyari:1505166167189487757> Botun yetkisi bu kullanıcıyı susturmaya yetmiyor.', ephemeral: true });
         }
 
@@ -38,19 +39,19 @@ module.exports = {
         }
 
         try {
-            await target.timeout(durationMs, reason);
+            await member.timeout(durationMs, reason);
 
             const embed = new EmbedBuilder()
                 .setTitle('<:Ses:1505164439505342484> TSA | Kullanıcı Susturuldu')
-                .setDescription(`**${target.user.tag}** adlı üye başarıyla cezalandırıldı.`)
+                .setDescription(`**${target.tag}** adlı üye başarıyla cezalandırıldı.`)
                 .addFields(
-                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Susturulan', value: `${target}`, inline: true },
+                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Susturulan', value: `${member}`, inline: true },
                     { name: '<:Yetkili:1505192912680390827> Yetkili', value: `${interaction.user}`, inline: true },
                     { name: '<:duration:1505171054497370275> Süre', value: `\`${durationString}\``, inline: true },
                     { name: '<:Paper:1505146388596391977> Sebep', value: `*${reason}*`, inline: false }
                 )
-                .setColor('#f1c40f') // Sarı renk
-                .setThumbnail(target.user.displayAvatarURL())
+                .setColor('#f1c40f')
+                .setThumbnail(target.displayAvatarURL())
                 .setTimestamp();
 
             await interaction.reply({ embeds: [embed] });
