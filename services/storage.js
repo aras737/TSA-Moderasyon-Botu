@@ -81,7 +81,14 @@ class Storage {
       try {
         if (fs.existsSync(BACKUP_FILE)) {
           const backupRaw = fs.readFileSync(BACKUP_FILE, 'utf-8');
-          return this.normalize(JSON.parse(backupRaw));
+          const restored = this.normalize(JSON.parse(backupRaw));
+
+          // Restore the primary file before returning. Otherwise the next save
+          // would copy the corrupt primary over the last known-good backup.
+          const restoreFile = `${STORAGE_FILE}.restore.tmp`;
+          fs.writeFileSync(restoreFile, JSON.stringify(restored, null, 2));
+          fs.renameSync(restoreFile, STORAGE_FILE);
+          return restored;
         }
       } catch (backupError) {
         console.error('Yedek veri de okunamadı:', backupError.message);
