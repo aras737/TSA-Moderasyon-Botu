@@ -70,7 +70,7 @@ module.exports = {
             const mesajMetni = interaction.options.getString('mesaj', true);
 
             const duyuruEmbed = new EmbedBuilder()
-                .setTitle('📢 TSA | OTOMATİK DUYURU')
+                .setTitle('📢 TMF | OTOMATİK DUYURU')
                 .setDescription(mesajMetni.replace(/\\n/g, '\n'))
                 .setColor('#3498db')
                 .setTimestamp()
