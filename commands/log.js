@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { ayarKaydet, ayarGetir } = require('../utils/db');
 
 module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
@@ -6,101 +7,80 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('log')
         .setDescription('TMF Log sistemini yönetir.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand.setName('kanalı-ayarla')
-                .setDescription('Sunucudaki tüm olayların akacağı log kanalını belirler.')
+                .setDescription('Sunucudaki olayların kaydedileceği log kanalını belirler.')
                 .addChannelOption(option =>
                     option.setName('kanal')
-                        .setDescription('Log kanalı olacak metin kanalını seçin kanka.')
+                        .setDescription('Log kanalı olacak metin kanalı.')
                         .addChannelTypes(ChannelType.GuildText)
-                        .setRequired(true)
-                )
-        )
+                        .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand.setName('göster')
-                .setDescription('Şu anda ayarlı olan log kanalını gösterir.')
-        )
+                .setDescription('Ayarlı log kanalını gösterir.'))
         .addSubcommand(subcommand =>
             subcommand.setName('kapat')
-                .setDescription('Log sistemini bu sunucu için kapatır.')
-        ),
+                .setDescription('Log sistemini kapatır.')),
 
     async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
-        const storageKey = `logKanal_${guildId}`;
+        const subcommand = interaction.options.getSubcommand();
 
         if (subcommand === 'kanalı-ayarla') {
-            const kanal = interaction.options.getChannel('kanal');
+            const channel = interaction.options.getChannel('kanal', true);
+            const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+            const permissions = botMember ? channel.permissionsFor(botMember) : null;
 
-            try {
-                // Storage'a kaydet
-                if (global.logChannels) {
-                    global.logChannels[guildId] = kanal.id;
-                } else {
-                    global.logChannels = { [guildId]: kanal.id };
-                }
-
-                const embed = new EmbedBuilder()
-                    .setTitle('<a:acs_ayarlar:1505165015127162994> TMF | Log Sistemi Aktif!')
-                    .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses, üye, ban, emoji, sticker ve invite hareketleri artık ${kanal} kanalına raporlanacak.`)
-                    .setColor('#2ecc71')
-                    .setTimestamp();
-
-                return interaction.reply({ embeds: [embed] });
-            } catch (error) {
-                console.error('<a:baarsz:1505146967817326675> Log kanalı ayar hatası:', error);
-                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
+            if (!permissions?.has(PermissionFlagsBits.ViewChannel) ||
+                !permissions.has(PermissionFlagsBits.SendMessages) ||
+                !permissions.has(PermissionFlagsBits.EmbedLinks)) {
+                return interaction.reply({
+                    content: '⛔ Botun seçilen log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
+                    ephemeral: true
+                });
             }
+
+            ayarKaydet(guildId, 'logKanal', channel.id);
+
+            const embed = new EmbedBuilder()
+                .setTitle('⚙️ TMF | Log Sistemi Aktif')
+                .setDescription(`Sunucu olayları artık ${channel} kanalına kaydedilecek. Bu ayar bot yeniden başlatıldığında korunur.`)
+                .setColor('#2ecc71')
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
         if (subcommand === 'göster') {
-            try {
-                const logKanalId = global.logChannels ? global.logChannels[guildId] : null;
-
-                if (!logKanalId) {
-                    return interaction.reply({ 
-                        content: '<a:uyari:1505166167189487757> Henüz hiç log kanalı ayarlanmamış kanka! `/log kanalı-ayarla` kullan.', 
-                        ephemeral: true 
-                    });
-                }
-
-                const logKanal = interaction.guild.channels.cache.get(logKanalId);
-
-                const embed = new EmbedBuilder()
-                    .setTitle('<:Paper:1505146388596391977> Log Kanalı Bilgisi')
-                    .setDescription(`Log kanalı: ${logKanal || '\`Kanal silindi!\`'}`)
-                    .addFields(
-                        { name: 'Kanal ID', value: `\`${logKanalId}\`` },
-                        { name: 'Durum', value: logKanal ? '<a:tik:1505164671081123840> Aktif' : '<:sil:1505147967907037275> Kanal Silinmiş' }
-                    )
-                    .setColor('#3498db')
-                    .setTimestamp();
-
-                return interaction.reply({ embeds: [embed] });
-            } catch (error) {
-                console.error('<a:baarsz:1505146967817326675> Log göster hatası:', error);
-                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
+            const channelId = ayarGetir(guildId, 'logKanal', null);
+            if (!channelId) {
+                return interaction.reply({
+                    content: '⚠️ Henüz log kanalı ayarlanmamış. `/log kanalı-ayarla` kullan.',
+                    ephemeral: true
+                });
             }
+
+            const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+            const embed = new EmbedBuilder()
+                .setTitle('📋 TMF | Log Kanalı Bilgisi')
+                .setDescription(channel ? `Log kanalı: ${channel}` : 'Kayıtlı kanal bulunamadı veya silinmiş.')
+                .addFields(
+                    { name: 'Kanal ID', value: `\`${channelId}\``, inline: true },
+                    { name: 'Durum', value: channel ? '✅ Aktif' : '⚠️ Kanal bulunamadı', inline: true }
+                )
+                .setColor('#3498db')
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
         if (subcommand === 'kapat') {
-            try {
-                if (global.logChannels) {
-                    delete global.logChannels[guildId];
-                }
-
-                const embed = new EmbedBuilder()
-                    .setTitle('<a:baarsz:1505146967817326675> Log Sistemi Kapatıldı')
-                    .setDescription('Log sistemi bu sunucu için devre dışı bırakıldı.')
-                    .setColor('#e74c3c')
-                    .setTimestamp();
-
-                return interaction.reply({ embeds: [embed] });
-            } catch (error) {
-                console.error('<a:baarsz:1505146967817326675> Log kapatma hatası:', error);
-                return interaction.reply({ content: '<a:baarsz:1505146967817326675> Bir hata oluştu kanka!', ephemeral: true });
-            }
+            ayarKaydet(guildId, 'logKanal', null);
+            return interaction.reply({
+                content: '⛔ Bu sunucu için log sistemi kapatıldı.',
+                ephemeral: true
+            });
         }
     }
 };
