@@ -33,11 +33,19 @@ module.exports = {
             });
         }
 
-        if (member && user.id === interaction.guild.ownerId) {
+        if (user.id === interaction.guild.ownerId) {
             return interaction.reply({ content: '⛔ Sunucu sahibi yasaklanamaz.', ephemeral: true });
         }
 
         if (member) {
+            const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+            if (!moderator) {
+                return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
+            }
+            if (moderator.id !== interaction.guild.ownerId &&
+                moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+                return interaction.reply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi banlayamazsın.', ephemeral: true });
+            }
             const dmEmbed = new EmbedBuilder()
                 .setTitle('<:yasaklandi:1505146022588842095> TMF | Sunucudan Yasaklandınız')
                 .setDescription(`**${interaction.guild.name}** sunucusundan kalıcı olarak uzaklaştırıldınız.`)
