@@ -1,73 +1,90 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 
+function canSendEmbed(channel, botMember) {
+    const permissions = channel?.permissionsFor?.(botMember);
+    return Boolean(
+        permissions?.has(PermissionFlagsBits.ViewChannel) &&
+        permissions.has(PermissionFlagsBits.SendMessages) &&
+        permissions.has(PermissionFlagsBits.EmbedLinks)
+    );
+}
+
+function stopLoop(client, key) {
+    const timer = client.sureliDuyurular?.get(key);
+    if (!timer) return false;
+    clearInterval(timer);
+    client.sureliDuyurular.delete(key);
+    return true;
+}
+
 module.exports = {
+    requiredPerms: [PermissionFlagsBits.ManageMessages],
+
     data: new SlashCommandBuilder()
         .setName('sureli-duyuru')
-        .setDescription('Belirli kanala veya TÜM kanallara zaman ayarlı periyodik duyuru sistemi kurar.')
+        .setDescription('Belirli kanala veya tüm uygun kanallara zaman ayarlı duyuru kurar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('baslat')
-                .setDescription('Periyodik duyuru döngüsünü başlatır kanka.')
+                .setDescription('Periyodik duyuru döngüsünü başlatır.')
                 .addIntegerOption(option =>
                     option.setName('dakika')
-                        .setDescription('Kaç dakikada bir bu duyuru tekrarlansın?')
+                        .setDescription('Duyuru aralığı (dakika).')
                         .setRequired(true)
                         .setMinValue(1)
-                )
+                        .setMaxValue(10080))
                 .addStringOption(option =>
                     option.setName('mesaj')
-                        .setDescription('Duyurulacak mesaj metni (Markdown destekler).')
+                        .setDescription('Duyurulacak mesaj metni.')
                         .setRequired(true)
-                )
+                        .setMaxLength(3500))
                 .addChannelOption(option =>
                     option.setName('kanal')
-                        .setDescription('Duyurunun atılacağı kanal (Boş bırakırsan bulunduğun kanal seçilir).')
+                        .setDescription('Duyurunun gönderileceği kanal.')
                         .addChannelTypes(ChannelType.GuildText)
-                        .setRequired(false) // ARTIK ZORUNLU DEĞİL KANKA!
-                )
+                        .setRequired(false))
                 .addBooleanOption(option =>
                     option.setName('hepsi')
-                        .setDescription('Duyuru sunucudaki TÜM yazı kanallarına mı kurulsun?')
-                        .setRequired(false)
-                )
-        )
+                        .setDescription('Uygun tüm metin kanallarına kurulsun mu?')
+                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('durdur')
                 .setDescription('Aktif duyuru döngüsünü sonlandırır.')
                 .addChannelOption(option =>
                     option.setName('kanal')
-                        .setDescription('Duyurusu durdurulacak kanal (Boş bırakırsan bulunduğun kanal seçilir).')
+                        .setDescription('Duyurusu durdurulacak kanal.')
                         .addChannelTypes(ChannelType.GuildText)
-                        .setRequired(false)
-                )
+                        .setRequired(false))
                 .addBooleanOption(option =>
                     option.setName('hepsi')
-                        .setDescription('Sunucudaki TÜM süreli duyuruları iptal etmek için True yap.')
-                        .setRequired(false)
-                )
-        ),
+                        .setDescription('Sunucudaki tüm duyuru döngülerini iptal eder.')
+                        .setRequired(false))),
 
     async execute(interaction) {
-        if (!interaction.client.sureliDuyurular) {
-            interaction.client.sureliDuyurular = new Map();
-        }
+        const client = interaction.client;
+        if (!client.sureliDuyurular) client.sureliDuyurular = new Map();
 
+        const guild = interaction.guild;
+        const guildId = guild.id;
         const subcommand = interaction.options.getSubcommand();
-        const guildId = interaction.guild.id;
+        const selectedChannel = interaction.options.getChannel('kanal');
+        const targetChannel = selectedChannel || interaction.channel;
+        const allChannels = interaction.options.getBoolean('hepsi') === true;
 
-        // Kanal seçilmediyse komutun yazıldığı kanalı hedef al kanka
-        const secilenKanal = interaction.options.getChannel('kanal');
-        const hedefKanal = secilenKanal || interaction.channel;
-        const hepsiSecenegi = interaction.options.getBoolean('hepsi') || false;
-
-        // ==========================================
-        // 🚀 DUYURU BAŞLATMA SİSTEMİ
-        // ==========================================
         if (subcommand === 'baslat') {
             const dakika = interaction.options.getInteger('dakika', true);
-            const mesajMetni = interaction.options.getString('mesaj', true);
+            const mesajMetni = interaction.options.getString('mesaj', true).trim();
+
+            if (!mesajMetni) {
+                return interaction.reply({ content: '⚠️ Duyuru mesajı boş olamaz.', ephemeral: true });
+            }
+
+            const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+            if (!botMember) {
+                return interaction.reply({ content: '❌ Botun sunucu üye bilgisi alınamadı.', ephemeral: true });
+            }
 
             const duyuruEmbed = new EmbedBuilder()
                 .setTitle('📢 TMF | OTOMATİK DUYURU')
@@ -76,130 +93,109 @@ module.exports = {
                 .setTimestamp()
                 .setFooter({ text: 'Bu bir periyodik sistem duyurusudur.' });
 
-            // --- DURUM 1: TÜM KANALLARA AYARLAMA ---
-            if (hepsiSecenegi) {
-                // Sunucudaki tüm metin kanallarını buluyoruz kanka
-                const textChannels = interaction.guild.channels.cache.filter(c => c.type === ChannelType.GuildText);
-                let baslatilanKanalSayisi = 0;
+            const preview = mesajMetni.length > 900
+                ? `${mesajMetni.slice(0, 900)}…`
+                : mesajMetni;
 
-                textChannels.forEach(chan => {
-                    const key = `${guildId}_${chan.id}`;
+            const startLoop = channel => {
+                const key = `${guildId}_${channel.id}`;
+                stopLoop(client, key);
 
-                    // Varsa eski döngüyü temizle kanka spam olmasın
-                    if (interaction.client.sureliDuyurular.has(key)) {
-                        clearInterval(interaction.client.sureliDuyurular.get(key));
-                    }
-
-                    const intervalId = setInterval(async () => {
-                        try {
-                            const c = await interaction.guild.channels.fetch(chan.id).catch(() => null);
-                            if (!c) {
-                                clearInterval(intervalId);
-                                interaction.client.sureliDuyurular.delete(key);
-                                return;
-                            }
-                            await c.send({ embeds: [duyuruEmbed] });
-                        } catch (err) {
-                            console.error(`[Duyuru Hatası] ${chan.name} kanalına atılamadı:`, err.message);
+                const timer = setInterval(async () => {
+                    try {
+                        const currentChannel = await guild.channels.fetch(channel.id).catch(() => null);
+                        if (!currentChannel || !canSendEmbed(currentChannel, botMember)) {
+                            stopLoop(client, key);
+                            console.warn(`TMF süreli duyuru durduruldu: ${channel.id} kanalına erişilemiyor.`);
+                            return;
                         }
-                    }, dakika * 60 * 1000);
 
-                    interaction.client.sureliDuyurular.set(key, intervalId);
-                    baslatilanKanalSayisi++;
-                });
+                        await currentChannel.send({ embeds: [duyuruEmbed] });
+                    } catch (error) {
+                        console.error(`[TMF Süreli Duyuru] ${channel.id} gönderim hatası:`, error.message);
+                    }
+                }, dakika * 60 * 1000);
 
-                const hepsiBasariEmbed = new EmbedBuilder()
-                    .setTitle('<a:tik:1505164671081123840> Küresel Duyuru Aktif Edildi')
-                    .setDescription(`Sunucudaki toplam **${baslatilanKanalSayisi}** yazı kanalının tamamında periyodik duyuru başlatıldı kanka!`)
+                timer.unref?.();
+                client.sureliDuyurular.set(key, timer);
+            };
+
+            if (allChannels) {
+                const channels = await guild.channels.fetch();
+                const eligibleChannels = channels.filter(channel =>
+                    channel?.type === ChannelType.GuildText && canSendEmbed(channel, botMember)
+                );
+
+                if (eligibleChannels.size === 0) {
+                    return interaction.reply({
+                        content: '⚠️ Botun mesaj ve embed gönderme izni olan bir metin kanalı bulunamadı.',
+                        ephemeral: true
+                    });
+                }
+
+                for (const channel of eligibleChannels.values()) startLoop(channel);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ TMF | Küresel Duyuru Aktif')
+                    .setDescription(`${eligibleChannels.size} uygun metin kanalında periyodik duyuru başlatıldı.`)
                     .addFields(
-                        { name: '⏰ Süre Periyodu', value: `\`${dakika}\` dakikada bir`, inline: true },
-                        { name: '💬 Mesaj İçeriği', value: `\`\`\`${mesajMetni}\`\`\``, inline: false }
+                        { name: '⏰ Aralık', value: `${dakika} dakika`, inline: true },
+                        { name: '💬 Mesaj Önizlemesi', value: preview, inline: false }
                     )
                     .setColor('#107a29');
 
-                return interaction.reply({ embeds: [hepsiBasariEmbed] });
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
-            // --- DURUM 2: TEK KANALA AYARLAMA (Mevcut veya Seçilen Kanal) ---
-            const key = `${guildId}_${hedefKanal.id}`;
-
-            if (interaction.client.sureliDuyurular.has(key)) {
-                clearInterval(interaction.client.sureliDuyurular.get(key));
-                interaction.client.sureliDuyurular.delete(key);
-            }
-
-            const intervalId = setInterval(async () => {
-                try {
-                    const c = await interaction.guild.channels.fetch(hedefKanal.id).catch(() => null);
-                    if (!c) {
-                        clearInterval(intervalId);
-                        interaction.client.sureliDuyurular.delete(key);
-                        return;
-                    }
-                    await c.send({ embeds: [duyuruEmbed] });
-                } catch (err) {
-                    console.error(`[Duyuru Hatası] ${hedefKanal.name} kanalına atılamadı:`, err.message);
-                }
-            }, dakika * 60 * 1000);
-
-            interaction.client.sureliDuyurular.set(key, intervalId);
-
-            const tekBasariEmbed = new EmbedBuilder()
-                .setTitle('<a:tik:1505164671081123840> Süreli Duyuru Aktif Edildi')
-                .setDescription(`${hedefKanal} kanalında periyodik duyuru sistemi başarıyla başlatıldı kanka.`)
-                .addFields(
-                    { name: '⏰ Süre Periyodu', value: `\`${dakika}\` dakikada bir`, inline: true },
-                    { name: '💬 Mesaj İçeriği', value: `\`\`\`${mesajMetni}\`\`\``, inline: false }
-                )
-                .setColor('#107a29');
-
-            return interaction.reply({ embeds: [tekBasariEmbed] });
-        }
-
-        // ==========================================
-        // 🛑 DUYURU DURDURMA SİSTEMİ
-        // ==========================================
-        if (subcommand === 'durdur') {
-            // --- DURUM 1: TÜM SUNUCUDAKİLERİ DURDUR ---
-            if (hepsiSecenegi) {
-                let durdurulanSayi = 0;
-                
-                // Botun hafızasındaki bu sunucuya ait tüm döngüleri bulup kapatıyoruz kanka
-                for (let [mapKey, value] of interaction.client.sureliDuyurular.entries()) {
-                    if (mapKey.startsWith(`${guildId}_`)) {
-                        clearInterval(value);
-                        interaction.client.sureliDuyurular.delete(mapKey);
-                        durdurulanSayi++;
-                    }
-                }
-
-                const hepsiDurdurulduEmbed = new EmbedBuilder()
-                    .setTitle('<a:tik:1505164671081123840> Tüm Döngüler Kapatıldı')
-                    .setDescription(`Sunucuda aktif çalışan toplam **${durdurulanSayi}** kanallı tüm otomatik duyurular tamamen durduruldu kanka.`)
-                    .setColor('#e74c3c');
-
-                return interaction.reply({ embeds: [hepsiDurdurulduEmbed] });
-            }
-
-            // --- DURUM 2: TEK KANALI DURDUR ---
-            const key = `${guildId}_${hedefKanal.id}`;
-
-            if (!interaction.client.sureliDuyurular.has(key)) {
+            if (!canSendEmbed(targetChannel, botMember)) {
                 return interaction.reply({
-                    content: `⚠️ Kanka, ${hedefKanal} kanalında zaten çalışan periyodik bir duyuru döngüsü yok.`,
+                    content: '⛔ Botun seçilen kanalda Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
                     ephemeral: true
                 });
             }
 
-            clearInterval(interaction.client.sureliDuyurular.get(key));
-            interaction.client.sureliDuyurular.delete(key);
+            startLoop(targetChannel);
 
-            const tekDurdurulduEmbed = new EmbedBuilder()
-                .setTitle('<a:tik:1505164671081123840> Duyuru Durduruldu')
-                .setDescription(`${hedefKanal} kanalındaki otomatik duyuru döngüsü sonlandırıldı kanka.`)
-                .setColor('#e74c3c');
+            const embed = new EmbedBuilder()
+                .setTitle('✅ TMF | Süreli Duyuru Aktif')
+                .setDescription(`${targetChannel} kanalında periyodik duyuru başlatıldı.`)
+                .addFields(
+                    { name: '⏰ Aralık', value: `${dakika} dakika`, inline: true },
+                    { name: '💬 Mesaj Önizlemesi', value: preview, inline: false }
+                )
+                .setColor('#107a29');
 
-            return interaction.reply({ embeds: [tekDurdurulduEmbed] });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+
+        if (subcommand === 'durdur') {
+            if (allChannels) {
+                let stopped = 0;
+
+                for (const key of [...client.sureliDuyurular.keys()]) {
+                    if (key.startsWith(`${guildId}_`) && stopLoop(client, key)) {
+                        stopped++;
+                    }
+                }
+
+                return interaction.reply({
+                    content: `✅ Bu sunucuda ${stopped} süreli duyuru döngüsü durduruldu.`,
+                    ephemeral: true
+                });
+            }
+
+            const key = `${guildId}_${targetChannel.id}`;
+            if (!stopLoop(client, key)) {
+                return interaction.reply({
+                    content: `⚠️ ${targetChannel} kanalında çalışan bir periyodik duyuru döngüsü yok.`,
+                    ephemeral: true
+                });
+            }
+
+            return interaction.reply({
+                content: `✅ ${targetChannel} kanalındaki periyodik duyuru durduruldu.`,
+                ephemeral: true
+            });
         }
     }
 };
