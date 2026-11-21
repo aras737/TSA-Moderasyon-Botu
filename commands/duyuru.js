@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
 
 module.exports = {
+    requiredPerms: [PermissionFlagsBits.ManageMessages],
+
     data: new SlashCommandBuilder()
         .setName('duyuru')
         .setDescription('Sunucuda gelişmiş duyuru gönderir.')
