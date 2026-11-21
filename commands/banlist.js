@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('banlist')
-        .setDescription('TSA sunucusundaki yasaklıları genel, tam yasaklı ve normal diye bölümlere ayırarak listeler.'),
+        .setDescription('TMF sunucusundaki yasaklıları genel, tam yasaklı ve normal diye bölümlere ayırarak listeler.'),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -17,7 +17,7 @@ module.exports = {
                 return interaction.editReply({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle('TSA | Yasaklı Listesi')
+                            .setTitle('TMF | Yasaklı Listesi')
                             .setDescription('<a:tik:1505164671081123840> Sunucuda yasaklı kullanıcı bulunmuyor kanka.')
                             .setColor('Green')
                     ]
@@ -53,9 +53,9 @@ module.exports = {
                 const sayfaVerisi = aktifListe.slice(baslangic, bitis);
 
                 // Başlık metni aktif bölüme göre değişiyor kanka
-                let bolumBasligi = '<:yasaklandi:1505146022588842095> TSA | Genel Yasaklı Listesi';
-                if (mevcutFiltre === 'tam') bolumBasligi = '<:yasaklandi:1505146022588842095> TSA | Tam Yasaklananlar Bölümü';
-                if (mevcutFiltre === 'standart') bolumBasligi = '<:Paper:1505146388596391977> TSA | Standart Sunucu Yasakları Bölümü';
+                let bolumBasligi = '<:yasaklandi:1505146022588842095> TMF | Genel Yasaklı Listesi';
+                if (mevcutFiltre === 'tam') bolumBasligi = '<:yasaklandi:1505146022588842095> TMF | Tam Yasaklananlar Bölümü';
+                if (mevcutFiltre === 'standart') bolumBasligi = '<:Paper:1505146388596391977> TMF | Standart Sunucu Yasakları Bölümü';
 
                 let listeMetni = '';
                 if (aktifListe.length === 0) {
