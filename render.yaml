@@ -13,6 +13,8 @@ services:
         sync: false
       - key: ROBLOX_API_KEY
         sync: false
+      - key: ROWIFI_API_KEY
+        sync: false
       - key: ROBLOX_GRUP_ID
         sync: false
       - key: OWNERS
