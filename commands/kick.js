@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('kick')
-        .setDescription('TSA sunucusundan bir üyeyi atar ve DM bildirimi gönderir.')
+        .setDescription('TMF sunucusundan bir üyeyi atar ve DM bildirimi gönderir.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers)
         .addUserOption(option =>
             option.setName('kullanici')
@@ -42,7 +42,7 @@ module.exports = {
 
         let dmSent = false;
         const dmEmbed = new EmbedBuilder()
-            .setTitle('TSA | Sunucudan Atıldınız')
+            .setTitle('TMF | Sunucudan Atıldınız')
             .setDescription(`**${interaction.guild.name}** sunucusundan uzaklaştırıldınız.`)
             .addFields(
                 { name: 'Sebep', value: reason.slice(0, 1000) },
@@ -63,10 +63,10 @@ module.exports = {
             await member.kick(reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
-                .setTitle('<:icons_kick:1505438748035518464> TSA | İşlem Başarılı')
+                .setTitle('<:icons_kick:1505438748035518464> TMF | İşlem Başarılı')
                 .setDescription(`**${user.tag}** sunucudan atıldı.`)
                 .addFields(
-                    { name: 'Kullanıcı', value: `${user.tag}`, inline: true },
+                    { name: 'Kullanıcı', value: user.tag, inline: true },
                     { name: 'Sebep', value: reason.slice(0, 1000), inline: true },
                     { name: 'DM Durumu', value: dmSent ? '✅ Bildirim gönderildi.' : '⚠️ Kullanıcının DM kutusuna ulaşılamadı.' }
                 )
