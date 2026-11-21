@@ -1,7 +1,7 @@
 {
   "name": "tsa-moderasyon-botu",
   "version": "1.0.0",
-  "description": "TSA Discord Moderasyon Botu",
+  "description": "TMF Discord Moderasyon Botu",
   "main": "index.js",
   "engines": {
     "node": "20.x"
