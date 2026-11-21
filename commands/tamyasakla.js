@@ -48,13 +48,13 @@ module.exports = {
             try {
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('<:yasaklandi:1505146022588842095> KÜRESEL YASAKLAMA BİLDİRİMİ')
-                    .setDescription(`Merhaba **${targetUser.username}**,\nTSA Yönetim Sistemi kararıyla botun bağlı olduğu tüm sunuculardan kalıcı olarak uzaklaştırıldınız.`)
+                    .setDescription(`Merhaba **${targetUser.username}**,\nTMF Yönetim Sistemi kararıyla botun bağlı olduğu tüm sunuculardan kalıcı olarak uzaklaştırıldınız.`)
                     .addFields(
                         { name: '┗ <:Paper:1505146388596391977> Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
                         { name: '┗ <:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
                     )
                     .setColor('#7a0010')
-                    .setFooter({ text: 'TSA Küresel Sıkıyönetim Sistemi' })
+                    .setFooter({ text: 'TMF Küresel Sıkıyönetim Sistemi' })
                     .setTimestamp();
 
                 await targetUser.send({ embeds: [dmEmbed] });
@@ -95,7 +95,7 @@ module.exports = {
         let sunucuListesiMetni = banlananSunucular.map(s => `<a:tik:1505164671081123840> ${s}`).join('\n');
 
         const basariEmbed = new EmbedBuilder()
-            .setTitle('<:yasaklandi:1505146022588842095> TSA | Küresel Sıkıyönetim Operasyonu')
+            .setTitle('<:yasaklandi:1505146022588842095> TMF | Küresel Sıkıyönetim Operasyonu')
             .setDescription(
                 `### <:uzaybot_kullanicilar:1505146190973505567> Kullanıcı Bilgileri\n` +
                 `• **Kullanıcı:** ${targetName}\n` +
@@ -112,7 +112,7 @@ module.exports = {
             .setColor('#7a0010')
             .setThumbnail(targetUser ? targetUser.displayAvatarURL({ dynamic: true }) : null)
             .setFooter({ 
-                text: `TSA Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, 
+                text: `TMF Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, 
                 iconURL: interaction.guild.iconURL({ dynamic: true }) 
             })
             .setTimestamp();
