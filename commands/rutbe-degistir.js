@@ -174,7 +174,7 @@ module.exports = {
 
             if (!rowifiData || !rowifiData.username || rowifiData.username.toLowerCase() !== yetkiliRobloxInput.toLowerCase()) {
                 const rowifiHataEmbed = new EmbedBuilder()
-                    .setTitle('<a:uyari:1505166167189487757> TSA | RoWifi Güvenlik Duvarı')
+                    .setTitle('<a:uyari:1505166167189487757> TMF | RoWifi Güvenlik Duvarı')
                     .setDescription(
                         `Kanka, girdiğin **${yetkiliRobloxInput}** hesabı ile RoWifi üzerindeki doğrulanmış hesabın eşleşmedi!\n\n` +
                         `### 🤖 RoWifi Veri Analizi:\n` +
@@ -295,7 +295,7 @@ module.exports = {
                 )
                 .setColor('#107a29')
                 .setFooter({
-                    text: `TSA Güvenlik Departmanı • RoWifi Entegre Sistemi`,
+                    text: `TMF Güvenlik Departmanı • RoWifi Entegre Sistemi`,
                     iconURL: yetkili.displayAvatarURL({ dynamic: true })
                 })
                 .setTimestamp();
