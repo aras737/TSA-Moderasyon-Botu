@@ -1,21 +1,23 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, REST, Routes } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 
 require('dotenv').config();
 
-// Express server
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-// 1. CLIENT & COMMAND SETUP (PURE GATEWAY MODE)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildBans,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildWebhooks,
         GatewayIntentBits.DirectMessages
     ]
 });
@@ -23,147 +25,208 @@ const client = new Client({
 client.commands = new Collection();
 const slashCommands = [];
 
-// 💡 Komutları yükle
-const commandsPath = path.join(__dirname, 'commands');
-if (fs.existsSync(commandsPath)) {
-    const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
-    for (const file of commandFiles) {
+function loadCommands() {
+    const commandsPath = path.join(__dirname, 'commands');
+    if (!fs.existsSync(commandsPath)) {
+        console.warn(`⚠️ Commands klasörü bulunamadı: ${commandsPath}`);
+        return;
+    }
+
+    for (const file of fs.readdirSync(commandsPath).filter(name => name.endsWith('.js'))) {
         try {
-            const cmd = require(path.join(commandsPath, file));
-            if (cmd.data && cmd.execute) {
-                client.commands.set(cmd.data.name, cmd);
-                slashCommands.push(cmd.data.toJSON());
-                console.log(`✅ Komut yüklendi: ${cmd.data.name}`);
-            } else {
-                console.warn(`⚠️ Komut eksik özellik: ${file} (data ve execute gerekli)`);
+            const command = require(path.join(commandsPath, file));
+            if (!command.data || typeof command.execute !== 'function') {
+                console.warn(`⚠️ Komut yüklenmedi: ${file} (data/execute eksik)`);
+                continue;
             }
-        } catch (err) {
-            console.error(`❌ Komut yüklenirken hata oluştu (${file}):`, err.message || err);
+
+            const json = command.data.toJSON();
+            client.commands.set(json.name, command);
+            slashCommands.push(json);
+            console.log(`✅ Komut yüklendi: ${json.name}`);
+        } catch (error) {
+            console.error(`❌ Komut yüklenemedi (${file}):`, error);
         }
     }
+
     console.log(`📋 Toplam ${slashCommands.length} komut yüklendi.`);
-} else {
-    console.warn(`⚠️ Commands klasörü bulunamadı: ${commandsPath}`);
 }
 
-// Storage
+function loadEvents() {
+    // Çakışan eski bot/üye giriş-çıkış modülleri bilerek yüklenmiyor.
+    // Anti-bot için antibot.js, giriş-çıkış için giriscikis.js kullanılır.
+    const eventModules = [
+        'antibot.js',
+        'gelismislog.js',
+        'giriscikis.js',
+        'korumasistemleri.js',
+        'ses-paneli.js'
+    ];
+    const eventsPath = path.join(__dirname, 'events');
+
+    for (const file of eventModules) {
+        try {
+            const register = require(path.join(eventsPath, file));
+            if (typeof register === 'function') {
+                register(client);
+                console.log(`✅ Olay modülü yüklendi: ${file}`);
+            }
+        } catch (error) {
+            console.error(`❌ Olay modülü yüklenemedi (${file}):`, error);
+        }
+    }
+}
+
+loadCommands();
+
 let Storage;
 try {
     Storage = require('./services/storage');
-} catch (e) {
-    console.log("⚠️ Storage servisi yüklenemedi.");
-    Storage = new Map();
+    client.storage = Storage;
+} catch (error) {
+    console.error('❌ Kalıcı depolama servisi yüklenemedi:', error);
+    process.exit(1);
 }
 
-let registerDatastoreEvents;
 try {
-    registerDatastoreEvents = require('./services/datastore-events');
-} catch (e) {
-    registerDatastoreEvents = null;
+    require('./services/datastore-events')(client);
+} catch (error) {
+    console.error('❌ Datastore olayları başlatılamadı:', error);
 }
 
-client.storage = Storage;
-if (typeof registerDatastoreEvents === 'function') {
-    registerDatastoreEvents(client);
-}
+loadEvents();
 
-// 2. EXPRESS SERVER
-app.get('/', (req, res) => {
-    res.send('TSA Sistemi Aktif ve Görevde! ✅');
+app.get('/', (_req, res) => {
+    res.status(200).send('TSA Sistemi Aktif ve Görevde! ✅');
 });
 
-// Health check endpoint (Render için ping)
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        ok: true, 
+app.get('/health', (_req, res) => {
+    res.status(200).json({
+        ok: true,
         bot: client.user ? client.user.tag : 'Bağlanılıyor...',
-        commands: slashCommands.length 
+        commands: slashCommands.length
     });
 });
 
 const server = app.listen(PORT, () => {
-    console.log(`📡 Express server port ${PORT}'de çalışıyor`);
+    console.log(`📡 Express sunucusu ${PORT} portunda çalışıyor.`);
 });
 
-// 3. READY EVENT - Bot hazır olduğunda
 client.once('ready', async () => {
-    console.log(`✅ Bot giriş yaptı ve aktif: ${client.user.tag}`);
-    
-    // Slash komutları register et
-    if (slashCommands.length > 0 && process.env.TOKEN && process.env.APPLICATION_ID) {
-        try {
-            const { REST, Routes } = require('discord.js');
-            const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-            
-            console.log(`🔄 ${slashCommands.length} slash komut register ediliyor...`);
-            
-            const data = await rest.put(
-                Routes.applicationCommands(process.env.APPLICATION_ID),
-                { body: slashCommands }
-            );
-            
-            console.log(`✅ ${data.length} slash komut başarıyla register edildi!`);
-        } catch (error) {
-            console.error('❌ Slash komut register hatası:', error.message || error);
-        }
+    console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
+
+    if (slashCommands.length === 0) {
+        console.warn('⚠️ Kaydedilecek slash komutu bulunamadı.');
+        return;
     }
-});
-
-// 4. SLASH COMMAND INTERACTION HANDLER
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-
-    if (!command) {
-        console.warn(`⚠️ Komut bulunamadı: ${interaction.commandName}`);
-        return interaction.reply({ 
-            content: '❌ Bu komut sistemde bulunamadı.', 
-            ephemeral: true 
-        });
-    }
-
-    console.log(`🔨 Komut çalıştırılıyor: ${interaction.commandName} (Kullanıcı: ${interaction.user.username})`);
 
     try {
-        await command.execute(interaction);
-        console.log(`✅ Komut başarıyla çalıştırıldı: ${interaction.commandName}`);
+        const applicationId = client.application?.id || process.env.APPLICATION_ID;
+        if (!applicationId) {
+            throw new Error('Discord application ID alınamadı. Bot uygulamasının hazır olduğundan emin olun.');
+        }
+
+        const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+        console.log(`🔄 ${slashCommands.length} slash komutu Discord'a kaydediliyor...`);
+
+        const registered = await rest.put(
+            Routes.applicationCommands(applicationId),
+            { body: slashCommands }
+        );
+
+        console.log(`✅ ${registered.length} slash komut başarıyla kaydedildi.`);
     } catch (error) {
-        console.error(`❌ Komut hatası (${interaction.commandName}):`, error.message || error);
-        
-        const errorMessage = {
-            content: `💥 Komut çalıştırılırken hata oluştu!\nHata: \`${error.message || 'Bilinmeyen hata'}\``,
-            ephemeral: true
+        console.error('❌ Slash komut kayıt hatası:', error);
+    }
+});
+
+client.on('interactionCreate', async (interaction) => {
+    try {
+        if (interaction.isChatInputCommand()) {
+            const command = client.commands.get(interaction.commandName);
+            if (!command) {
+                return interaction.reply({
+                    content: '❌ Bu komut sistemde bulunamadı.',
+                    ephemeral: true
+                });
+            }
+
+            if (Array.isArray(command.requiredPerms) && command.requiredPerms.length > 0) {
+                const permissions = interaction.memberPermissions || interaction.member?.permissions;
+                const allowed = Boolean(
+                    permissions &&
+                    (
+                        permissions.has(PermissionFlagsBits.Administrator) ||
+                        command.requiredPerms.some(permission => permissions.has(permission))
+                    )
+                );
+
+                if (!interaction.inGuild() || !allowed) {
+                    return interaction.reply({
+                        content: '⛔ Bu komutu kullanmak için gerekli sunucu yetkisine sahip değilsin.',
+                        ephemeral: true
+                    });
+                }
+            }
+
+            console.log(`🔨 Komut: /${interaction.commandName} | Kullanıcı: ${interaction.user.tag}`);
+            await command.execute(interaction);
+            console.log(`✅ Komut tamamlandı: /${interaction.commandName}`);
+            return;
+        }
+
+        // Buton, seçim menüsü ve modal etkileşimlerini ilgili komut modüllerine yönlendir.
+        if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+            for (const command of client.commands.values()) {
+                if (typeof command.interactionHandler !== 'function') continue;
+                await command.interactionHandler(interaction);
+
+                if (interaction.replied || interaction.deferred) break;
+            }
+        }
+    } catch (error) {
+        console.error('❌ Etkileşim hatası:', error);
+
+        const response = {
+            content: `💥 İşlem sırasında hata oluştu: \`${error?.message || 'Bilinmeyen hata'}\``
         };
 
-        if (interaction.replied || interaction.deferred) {
-            await interaction.editReply(errorMessage);
-        } else {
-            await interaction.reply(errorMessage);
+        try {
+            if (interaction.deferred) {
+                await interaction.editReply(response);
+            } else if (interaction.replied) {
+                await interaction.followUp({ ...response, ephemeral: true });
+            } else if (interaction.isRepliable()) {
+                await interaction.reply({ ...response, ephemeral: true });
+            }
+        } catch (replyError) {
+            console.error('❌ Hata yanıtı gönderilemedi:', replyError);
         }
     }
 });
 
-// 5. PING SISTEMÜ (Render'ın service'i çökmesini önle)
-setInterval(() => {
-    const botStatus = client.user ? `🟢 ${client.user.tag}` : '🔴 Bağlanılıyor';
-    console.log(`💓 Ping: ${botStatus} | Komutlar: ${slashCommands.length}`);
-}, 60000); // Her 60 saniye
+client.on('error', error => console.error('❌ Discord istemci hatası:', error));
+process.on('unhandledRejection', error => console.error('❌ Yakalanmamış Promise hatası:', error));
+process.on('uncaughtException', error => console.error('❌ Yakalanmamış işlem hatası:', error));
 
-// 6. BOT LOGIN
-if (process.env.TOKEN) {
-    client.login(process.env.TOKEN).catch((err) => {
-        console.error('❌ Bot girişi başarısız oldu:', err);
+const shutdown = signal => {
+    console.log(`🛑 ${signal} alındı. TSA kapatılıyor...`);
+    server.close(() => {
+        client.destroy();
+        process.exit(0);
     });
-} else {
-    console.error('❌ TOKEN env değişkeni bulunamadı!');
+};
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+if (!process.env.TOKEN) {
+    console.error('❌ TOKEN ortam değişkeni bulunamadı!');
     process.exit(1);
 }
 
-// Error handling
-process.on('unhandledRejection', console.error);
-process.on('uncaughtException', console.error);
+client.login(process.env.TOKEN).catch(error => {
+    console.error('❌ Bot girişi başarısız:', error);
+    process.exit(1);
+});
 
-console.log('🚀 Bot başlatılıyor... (Gateway Mode + Express Server)');
-
-module.exports = { app, client };
+console.log('🚀 TSA başlatılıyor...');
