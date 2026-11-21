@@ -148,7 +148,7 @@ module.exports = client => {
                 const approvedEmbed = new EmbedBuilder()
                     .setTitle('✅ TMF | Bot Onaylandı')
                     .setDescription(
-                        `\`${botId}\`` ID'li bot güvenli listeye eklendi. Bot daha önce çıkarıldıysa sunucuya yeniden davet etmelisin.`
+                        `\`${botId}\` ID'li bot güvenli listeye eklendi. Bot daha önce çıkarıldıysa sunucuya yeniden davet etmelisin.`
                     )
                     .setColor('#2ecc71')
                     .setTimestamp();
@@ -173,8 +173,8 @@ module.exports = client => {
                 .setTitle(banned ? '⛔ TMF | Bot Reddedildi' : '⚠️ TMF | Bot Reddedildi, Yasaklama Başarısız')
                 .setDescription(
                     banned
-                        ? `\`${botId}\`` ID'li bot sunucudan yasaklandı. Davet eden kişinin rolleri değiştirilmedi.`
-                        : `\`${botId}\`` ID'li bot reddedildi ancak yasaklanamadı. Botun Ban Members yetkisini kontrol et.`
+                        ? `\`${botId}\` ID'li bot sunucudan yasaklandı. Davet eden kişinin rolleri değiştirilmedi.`
+                        : `\`${botId}\` ID'li bot reddedildi ancak yasaklanamadı. Botun Ban Members yetkisini kontrol et.`
                 )
                 .setColor(banned ? '#da373c' : '#f1c40f')
                 .setTimestamp();
