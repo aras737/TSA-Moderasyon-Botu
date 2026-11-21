@@ -26,7 +26,7 @@ module.exports = {
             .addComponents(
                 new ButtonBuilder()
                     .setLabel('Oyuna Katıl (Roblox)')
-                    .setEmoji('1505166617426923661') // Link emojisi kurallara uygun olarak butonun içine gömüldü
+                    .setEmoji('<:Discord_Link:1505166617426923661>') // Link emojisi kurallara uygun olarak butonun içine gömüldü
                     .setURL('https://www.roblox.com/share?code=02306cd6c6c3314dbdef099e121c508e&type=ExperienceDetails&stamp=1779005500109')
                     .setStyle(ButtonStyle.Link)
             );
