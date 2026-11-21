@@ -13,8 +13,11 @@ module.exports = {
         .addStringOption(option =>
             option.setName('sebep')
                 .setDescription('Yasaklama sebebini belirtin.')
+                .setMaxLength(500)
                 .setRequired(true)
         ),
+
+    requiredPerms: [PermissionFlagsBits.BanMembers],
 
     async execute(interaction) {
         const kisiInput = interaction.options.getString('kisi');
@@ -110,12 +113,10 @@ module.exports = {
                 `${sunucuListesiMetni}`
             )
             .setColor('#7a0010')
-            .setThumbnail(targetUser ? targetUser.displayAvatarURL({ dynamic: true }) : null)
-            .setFooter({ 
-                text: `TMF Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, 
-                iconURL: interaction.guild.iconURL({ dynamic: true }) 
-            })
+            .setFooter({ text: `TMF Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, iconURL: interaction.guild.iconURL({ dynamic: true }) || undefined })
             .setTimestamp();
+
+        if (targetUser) basariEmbed.setThumbnail(targetUser.displayAvatarURL({ dynamic: true }));
 
         return interaction.editReply({ embeds: [basariEmbed] });
     },
