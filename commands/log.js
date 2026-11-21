@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('log')
-        .setDescription('TSA Log sistemini yönetir.')
+        .setDescription('TMF Log sistemini yönetir.')
         .addSubcommand(subcommand =>
             subcommand.setName('kanalı-ayarla')
                 .setDescription('Sunucudaki tüm olayların akacağı log kanalını belirler.')
@@ -42,7 +42,7 @@ module.exports = {
                 }
 
                 const embed = new EmbedBuilder()
-                    .setTitle('<a:acs_ayarlar:1505165015127162994> TSA | Log Sistemi Aktif!')
+                    .setTitle('<a:acs_ayarlar:1505165015127162994> TMF | Log Sistemi Aktif!')
                     .setDescription(`<a:tik:1505164671081123840> Harika! Sunucudaki tüm mesaj, rol, kanal, ses, üye, ban, emoji, sticker ve invite hareketleri artık ${kanal} kanalına raporlanacak.`)
                     .setColor('#2ecc71')
                     .setTimestamp();
