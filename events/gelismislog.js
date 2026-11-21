@@ -69,13 +69,13 @@ module.exports = (client) => {
             }
             durum = dbDurum;
         }
-        if (!durum) return;
+        // Küfür filtresi kendi ayarına bağlıdır; spam/mention/caps kontrolleri bağımsız çalışır.
 
         const logChan = await logKanalGetir(message.guild.id);
         const simdi = Date.now();
 
         // 1. KÜFÜR ENGEL SİSTEMİ
-        if (kufurRegex.test(message.content)) {
+        if (durum && kufurRegex.test(message.content)) {
             await message.delete().catch(() => null);
             const uyariMsg = await message.channel.send({ content: `🤬 Temiz bir dil kullanalım lütfen ${message.author}! Bu sunucuda küfür etmek yasak kanka.` }).catch(() => null);
             if (uyariMsg) setTimeout(() => uyariMsg.delete().catch(() => null), 4000);
@@ -96,14 +96,15 @@ module.exports = (client) => {
         }
 
         // 2. ULTRA HIZLI SPAM KORUMASI (3 Saniyede 5 Mesaj)
-        const kullaniciLog = mesajTakip.get(message.author.id) || [];
+        const takipAnahtari = `${message.guild.id}:${message.author.id}`;
+        const kullaniciLog = mesajTakip.get(takipAnahtari) || [];
         kullaniciLog.push(simdi);
         const filtrelenmisLog = kullaniciLog.filter(ts => simdi - ts < 3000);
-        mesajTakip.set(message.author.id, filtrelenmisLog);
+        mesajTakip.set(takipAnahtari, filtrelenmisLog);
 
         if (filtrelenmisLog.length >= 5) {
             // Hiyerarşi kontrolü: Botun gücü yetiyorsa sustursun
-            if (message.member.manageable) {
+            if (message.member?.manageable) {
                 await message.delete().catch(() => null);
                 await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
@@ -152,33 +153,7 @@ module.exports = (client) => {
         }
     });
 
-    // =========================================================================
-    // 🤖 5. ANTIRAID / ILLEGAL BOT KORUMASI
-    // =========================================================================
-    client.on('guildMemberAdd', async (member) => {
-        if (!member.user.bot) return; 
-        
-        const logChan = await logKanalGetir(member.guild.id);
-        const logEntry = await auditLogCek(member.guild, AuditLogEvent.BotAdd, member.id);
-        const ekleyen = logEntry?.executor;
-
-        // Botun giren botu kovmaya yetkisi var mı?
-        if (member.kickable) {
-            await member.kick('İzinsiz/Kaçak Bot Girişi Engellendi').catch(() => null);
-
-            if (logChan) {
-                const embed = new EmbedBuilder()
-                    .setTitle('<:yasaklandi:1505146022588842095> Sunucuya Kaçak Bot Sokuldu!')
-                    .setDescription(`🚨 Sunucuya izinsiz bir bot eklenmeye çalışıldı ve sistem tarafından anında imha edildi!`)
-                    .addFields(
-                        { name: '🤖 Engellenen Bot', value: `\`${member.user.tag}\` \`(${member.id})\``, inline: true },
-                        { name: '👤 Ekleyen Yetkili', value: ekleyen ? `${ekleyen} \`(${ekleyen.id})\`` : '`Bilinmiyor`', inline: true }
-                    )
-                    .setColor('#960018').setTimestamp();
-                logChan.send({ embeds: [embed] }).catch(() => {});
-            }
-        }
-    });
+    // Anti-bot controls are handled once by events/antibot.js.
 
     // =========================================================================
     // 🛡️ 6. SAĞ TIK ROL/YÖNETİCİ VERME KORUMASI
