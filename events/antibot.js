@@ -50,6 +50,10 @@ module.exports = client => {
 
         try {
             const guild = member.guild;
+
+            // Bot kendi sunucuya katılışını asla yabancı bot gibi değerlendirmemeli.
+            if (client.user && member.id === client.user.id) return;
+
             const safeBots = ayarGetir(guild.id, 'guvenliBotlar', []);
             if (Array.isArray(safeBots) && safeBots.includes(member.id)) return;
 
