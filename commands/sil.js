@@ -27,7 +27,7 @@ module.exports = {
 
             // Şık bir bilgilendirme embed'i oluşturuyoruz
             const silEmbed = new EmbedBuilder()
-                .setTitle(`${korumaEmoji} TSA | Temizlik Başarılı`)
+                .setTitle(`${korumaEmoji} TMF | Temizlik Başarılı`)
                 .setDescription(`Kanal başarıyla temizlendi ve düzen sağlandı.`)
                 .addFields(
                     { name: '<:sil:1505147967907037275> Silinen Mesaj', value: `\`${silinenler.size}\` adet`, inline: true },
