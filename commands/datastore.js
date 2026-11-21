@@ -20,7 +20,7 @@ module.exports = {
         const stats = storageExists ? fs.statSync(storagePath) : null;
 
         const embed = new EmbedBuilder()
-            .setTitle('TSA | Datastore Durumu')
+            .setTitle('TMF | Datastore Durumu')
             .setDescription('Bot ayarlari, kullanici gecmisi, komutlar, loglar, cezalar ve ticket kayitlari PC icindeki JSON dosyasina yaziliyor.')
             .addFields(
                 { name: 'Ana Dosya', value: `\`${storagePath}\``, inline: false },
