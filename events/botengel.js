@@ -8,7 +8,7 @@ module.exports = (client) => {
             try {
                 // Bot'un kendi ID'si mi kontrol et (kendini banlama)
                 if (member.user.id === client.user.id) {
-                    console.log('<a:tik:1505164671081123840> TSA Botu sunucuya eklendi.');
+                    console.log('<a:tik:1505164671081123840> TMF Botu sunucuya eklendi.');
                     return;
                 }
 
@@ -19,7 +19,7 @@ module.exports = (client) => {
                 }
 
                 // Botu ban at
-                await member.ban({ reason: '<:Discord_Bots:1505436085742731346> TSA Sistemi: Yetkisiz Bot Girişi Engellendi' });
+                await member.ban({ reason: '<:Discord_Bots:1505436085742731346> TMF Sistemi: Yetkisiz Bot Girişi Engellendi' });
 
                 // Log kanalına bildir
                 const logKanalId = ayarGetir(member.guild.id, 'logKanal', null);
@@ -34,7 +34,7 @@ module.exports = (client) => {
                             { name: '<:appEmoji_kategori:1505159567879966811> Bot Adı', value: `${member.user.username}`, inline: true },
                             { name: '<:n_id:1505158042738491464> Bot ID', value: `\`${member.user.id}\``, inline: true },
                             { name: '<:duration:1505171054497370275> Zaman', value: `<t:${Math.floor(Date.now() / 1000)}:f>`, inline: false },
-                            { name: '<:Paper:1505146388596391977> İşlem', value: 'Otomatik Ban - TSA Koruma Sistemi' }
+                            { name: '<:Paper:1505146388596391977> İşlem', value: 'Otomatik Ban - TMF Koruma Sistemi' }
                         )
                         .setColor('#ff0000')
                         .setTimestamp();
