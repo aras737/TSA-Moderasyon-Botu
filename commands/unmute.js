@@ -5,44 +5,59 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('unmute')
-        .setDescription('Belirtilen kullanıcının susturma cezasını (Timeout) kaldırır.')
-        .addUserOption(option => 
+        .setDescription('Belirtilen kullanıcının susturma cezasını kaldırır.')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addUserOption(option =>
             option.setName('kullanıcı').setDescription('Cezası kaldırılacak üyeyi seçin.').setRequired(true))
-        .addStringOption(option => 
-            option.setName('sebep').setDescription('Cezayı kaldırma sebebini yazın.').setRequired(false)),
+        .addStringOption(option =>
+            option.setName('sebep').setDescription('Cezayı kaldırma sebebini yazın.').setMaxLength(500).setRequired(false)),
 
     async execute(interaction) {
-        const target = interaction.options.getUser('kullanıcı');
-        const reason = interaction.options.getString('sebep') || 'Sebep belirtilmemiş kanka.';
+        const target = interaction.options.getUser('kullanıcı', true);
+        const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
+
+        if (target.id === interaction.user.id || target.id === interaction.guild.ownerId) {
+            return interaction.reply({ content: '⛔ Kendinin veya sunucu sahibinin cezasını bu komutla kaldıramazsın.', ephemeral: true });
+        }
 
         const member = await interaction.guild.members.fetch(target.id).catch(() => null);
         if (!member) {
-            return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu kullanıcı sunucuda bulunamadı kanka.', ephemeral: true });
+            return interaction.reply({ content: '⚠️ Bu kullanıcı sunucuda bulunamadı.', ephemeral: true });
+        }
+
+        if (interaction.user.id !== interaction.guild.ownerId &&
+            interaction.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+            return interaction.reply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyenin cezasını kaldıramazsın.', ephemeral: true });
         }
 
         if (!member.isCommunicationDisabled()) {
-            return interaction.reply({ content: '<a:uyari:1505166167189487757> Bu kullanıcı zaten susturulmamış (Timeout cezası yok).', ephemeral: true });
+            return interaction.reply({ content: '⚠️ Bu kullanıcı zaten susturulmamış.', ephemeral: true });
+        }
+
+        const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+        if (!botMember || !member.moderatable || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+            return interaction.reply({ content: '⛔ Botun rol hiyerarşisi bu kullanıcının cezasını kaldırmaya izin vermiyor.', ephemeral: true });
         }
 
         try {
-            await member.timeout(null, reason);
+            await member.timeout(null, reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
                 .setTitle('🔊 TSA | Susturma Kaldırıldı')
-                .setDescription(`**${target.tag}** kullanıcısının cezası el ile kaldırıldı.`)
+                .setDescription(`**${target.tag}** kullanıcısının cezası kaldırıldı.`)
                 .addFields(
-                    { name: '<:uzaybot_kullanicilar:1505146190973505567> Üye', value: `${member}`, inline: true },
-                    { name: '<:Yetkili:1505192912680390827> Yetkili', value: `${interaction.user}`, inline: true },
-                    { name: '<:Paper:1505146388596391977> Kaldırma Sebebi', value: `*${reason}*`, inline: false }
+                    { name: 'Üye', value: `${member}`, inline: true },
+                    { name: 'Yetkili', value: `${interaction.user}`, inline: true },
+                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setColor('#2ecc71')
                 .setThumbnail(target.displayAvatarURL())
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed] });
+            return interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error(error);
-            await interaction.reply({ content: '<a:baarsz:1505146967817326675> Ceza kaldırılırken teknik bir hata oluştu!', ephemeral: true });
+            console.error('Unmute komutu hatası:', error);
+            return interaction.reply({ content: '❌ Ceza kaldırılırken hata oluştu. Botun Moderate Members yetkisini kontrol et.', ephemeral: true });
         }
     }
 };
