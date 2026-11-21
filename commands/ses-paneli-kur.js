@@ -3,37 +3,17 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 // Çift event kaydını önleyen koruma kilidi
 let sesSistemiKilitlendi = false;
 
-module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.Administrator],
+function registerSesPanelEvents(client) {
+    if (sesSistemiKilitlendi) return;
 
-    data: new SlashCommandBuilder()
-        .setName('ses-paneli-kur')
-        .setDescription('TMF Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
-        .addChannelOption(option =>
-            option.setName('kategori')
-                .setDescription('Özel odaların açılacağı ana kategoriyi seçin')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildCategory)
-        ),
+    const korumaEmoji = '<:koruma1:1505143174190989352>';
+    const ayarlarEmoji = '<a:acs_ayarlar:1505165015127162994>';
+    const silEmoji = '<:sil:1505147967907037275>';
+    const uyariEmoji = '<a:uyari:1505166167189487757>';
+    const basarisizEmoji = '<a:baarsz:1505146967817326675>';
+    const linkEmoji = '<:Discord_Link:1505166617426923661>';
 
-    async execute(interaction) {
-        const kategori = interaction.options.getChannel('kategori');
-        const client = interaction.client;
-        
-        // Emojilerin kanka
-        const korumaEmoji = '<:koruma1:1505143174190989352>';
-        const ayarlarEmoji = '<a:acs_ayarlar:1505165015127162994>';
-        const kategoriEmoji = '<:appEmoji_kategori:1505159567879966811>';
-        const onlineEmoji = '<a:online:1505145208046878730>';
-        const sesEmoji = '<:Ses:1505167107338535003>';
-        const tikEmoji = '<a:tik:1505164671081123840>';
-        const uyariEmoji = '<a:uyari:1505166167189487757>';
-        const linkEmoji = '<:Discord_Link:1505166617426923661>';
-        const basarisizEmoji = '<a:baarsz:1505146967817326675>';
-        const silEmoji = '<:sil:1505147967907037275>';
 
-        // --- 🤖 HER ŞEYİ KENDİ İÇİNDE YÖNETEN GELİŞMİŞ BACKEND ---
-        if (!sesSistemiKilitlendi) {
             
             client.on('interactionCreate', async (inter) => {
                 if (!inter.isButton()) return;
@@ -45,7 +25,10 @@ module.exports = {
                     const targetKategoriId = inter.customId.split('tsa_ses_olustur_')[1];
 
                     // Aktif oda kontrolü (Dinamik arama)
-                    const odaArat = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name.endsWith(`${member.user.username} Odası`));
+                    const odaArat = guild.channels.cache.find(channel =>
+                        channel.type === ChannelType.GuildVoice &&
+                        channel.topic === `TMF_TEMP_VOICE_OWNER:${member.id}`
+                    );
                     if (odaArat) {
                         return inter.reply({ 
                             content: `${uyariEmoji} **Hata:** Kanka zaten aktif olarak açık bir odan bulunuyor! Kanalın: ${odaArat}`, 
@@ -61,6 +44,7 @@ module.exports = {
                             name: `🔊 ${member.user.username} Odası`,
                             type: ChannelType.GuildVoice,
                             parent: targetKategoriId,
+                            topic: `TMF_TEMP_VOICE_OWNER:${member.id}`,
                             permissionOverwrites: [
                                 {
                                     id: guild.id, // @everyone görebilir ve girebilir
@@ -170,7 +154,43 @@ module.exports = {
 
             sesSistemiKilitlendi = true;
             console.log(`${ayarlarEmoji} [TMF Ses Entegrasyonu] İçten butonlu ve sahiplik korumalı ses modülü başarıyla kilitlendi!`);
-        }
+
+    sesSistemiKilitlendi = true;
+}
+
+module.exports = {
+    register: registerSesPanelEvents,
+    requiredPerms: [PermissionsBitField.Flags.Administrator],
+
+    data: new SlashCommandBuilder()
+        .setName('ses-paneli-kur')
+        .setDescription('TMF Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
+        .addChannelOption(option =>
+            option.setName('kategori')
+                .setDescription('Özel odaların açılacağı ana kategoriyi seçin')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildCategory)
+        ),
+
+    async execute(interaction) {
+        const kategori = interaction.options.getChannel('kategori');
+        const client = interaction.client;
+        registerSesPanelEvents(client);
+        
+        // Emojilerin kanka
+        const korumaEmoji = '<:koruma1:1505143174190989352>';
+        const ayarlarEmoji = '<a:acs_ayarlar:1505165015127162994>';
+        const kategoriEmoji = '<:appEmoji_kategori:1505159567879966811>';
+        const onlineEmoji = '<a:online:1505145208046878730>';
+        const sesEmoji = '<:Ses:1505167107338535003>';
+        const tikEmoji = '<a:tik:1505164671081123840>';
+        const uyariEmoji = '<a:uyari:1505166167189487757>';
+        const linkEmoji = '<:Discord_Link:1505166617426923661>';
+        const basarisizEmoji = '<a:baarsz:1505146967817326675>';
+        const silEmoji = '<:sil:1505147967907037275>';
+
+        // --- 🤖 HER ŞEYİ KENDİ İÇİNDE YÖNETEN GELİŞMİŞ BACKEND ---
+        // Olay dinleyicileri bot açılışında register() ile yüklenir.
 
         // --- 📝 ANA GÖRSEL PANEL KISMI (EMBED) ---
         const panelEmbed = new EmbedBuilder()
