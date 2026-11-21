@@ -24,7 +24,7 @@ module.exports = (client) => {
 
         try {
             // 🚨 ADIM 1: Yabancı botu tehlike yaratmaması için ANINDA sunucudan tekmeliyoruz
-            await member.kick('🚨 TSA Anti-Bot: Sunucu sahibi DM onayı bekleniyor.');
+            await member.kick('🚨 TMF Anti-Bot: Sunucu sahibi DM onayı bekleniyor.');
 
             // 📝 ADIM 2: Gelişmiş Log kanalına ihbarı fırlatıyoruz
             const logKanalId = ayarGetir(guild.id, 'logKanal', null);
@@ -45,7 +45,7 @@ module.exports = (client) => {
 
             // 📩 ADIM 3: Sunucu sahibine DM'den "Kalsın mı, Gitsin mi?" Sorgusu Gönderiyoruz
             const dmEmbed = new EmbedBuilder()
-                .setTitle('🛡️ TSA Otomatik Moderasyon: Bot Karar Merkezi')
+                .setTitle('🛡️ TMF Otomatik Moderasyon: Bot Karar Merkezi')
                 .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
                 .setDescription(`⚠️ Sunucunuzda yetkili bir hesap tarafından bot eklendi. Sistem botu geçici olarak dışarı attı.\n\n**Bu bot sunucuda kalsın mı, yoksa kalıcı olarak gitsin mi kanka?**`)
                 .addFields(
