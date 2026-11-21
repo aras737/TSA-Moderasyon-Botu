@@ -170,7 +170,6 @@ function registerSesPanelEvents(client) {
             sesSistemiKilitlendi = true;
             console.log(`${ayarlarEmoji} [TMF Ses Entegrasyonu] İçten butonlu ve sahiplik korumalı ses modülü başarıyla kilitlendi!`);
 
-    sesSistemiKilitlendi = true;
 }
 
 module.exports = {
