@@ -8,7 +8,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('ses-paneli-kur')
-        .setDescription('TSA Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
+        .setDescription('TMF Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
         .addChannelOption(option =>
             option.setName('kategori')
                 .setDescription('Özel odaların açılacağı ana kategoriyi seçin')
@@ -82,14 +82,14 @@ module.exports = {
 
                         // 🔔 ODA İÇİ KONTROL PANELİ (Oda metin alanına gönderilecek)
                         const icPanelEmbed = new EmbedBuilder()
-                            .setTitle(`${korumaEmoji} TSA | Oda Yönetim Paneli`)
+                            .setTitle(`${korumaEmoji} TMF | Oda Yönetim Paneli`)
                             .setDescription(
                                 `Hoş geldin, **${member.user.username}**! Burası senin tamamen kişisel odandır.\n\n` +
                                 `• İşin bittiğinde odayı aşağıdaki butona basarak anında kapatabilirsin.\n` +
                                 `• **Güvenlik Koruması:** Bu butonu senden başka hiçbir üye tetikleyemez!`
                             )
                             .setColor('#e74c3c')
-                            .setFooter({ text: 'TSA Oda Kontrol Sistemi', iconURL: member.user.displayAvatarURL() })
+                            .setFooter({ text: 'TMF Oda Kontrol Sistemi', iconURL: member.user.displayAvatarURL() })
                             .setTimestamp();
 
                         // Odayı Kapatma Butonu (Oda sahibinin ID'sini customId içine kilitliyoruz!)
@@ -142,7 +142,7 @@ module.exports = {
                     setTimeout(async () => {
                         try {
                             await inter.channel.delete();
-                            console.log(`${silEmoji} [TSA Ses Log] Oda sahibi tarafından kanal silindi: ${inter.channel.name}`);
+                            console.log(`${silEmoji} [TMF Ses Log] Oda sahibi tarafından kanal silindi: ${inter.channel.name}`);
                         } catch (err) {
                             // Kanal zaten silindiyse hata basmasın
                         }
@@ -169,12 +169,12 @@ module.exports = {
             });
 
             sesSistemiKilitlendi = true;
-            console.log(`${ayarlarEmoji} [TSA Ses Entegrasyonu] İçten butonlu ve sahiplik korumalı ses modülü başarıyla kilitlendi!`);
+            console.log(`${ayarlarEmoji} [TMF Ses Entegrasyonu] İçten butonlu ve sahiplik korumalı ses modülü başarıyla kilitlendi!`);
         }
 
         // --- 📝 ANA GÖRSEL PANEL KISMI (EMBED) ---
         const panelEmbed = new EmbedBuilder()
-            .setTitle(`${korumaEmoji} TSA | Özel Oda Yönetim Sistemi`)
+            .setTitle(`${korumaEmoji} TMF | Özel Oda Yönetim Sistemi`)
             .setDescription(
                 `Aşağıdaki butona tıklayarak tamamen size ait, ayarlarını bizzat yöneteceğiniz **Geçici Ses Kanalı** oluşturabilirsiniz!\n\n` +
                 `${ayarlarEmoji} **Gelişmiş Sistem Özellikleri:**\n` +
@@ -185,7 +185,7 @@ module.exports = {
             )
             .addFields(
                 { name: `${kategoriEmoji} Odaların İnşa Edileceği Bölge`, value: `${kategoriEmoji} **${kategori.name}**`, inline: true },
-                { name: `${korumaEmoji} Güvenlik Altyapısı`, value: `${onlineEmoji} Aktif (TSA Koruma v3)`, inline: true }
+                { name: `${korumaEmoji} Güvenlik Altyapısı`, value: `${onlineEmoji} Aktif (TMF Koruma v3)`, inline: true }
             )
             .setColor('#2ecc71')
             .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }) || null)
