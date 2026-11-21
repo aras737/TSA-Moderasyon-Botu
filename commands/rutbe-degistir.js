@@ -106,6 +106,8 @@ function cloudRoleByPublicRole(cloudRoles, publicRole) {
 }
 
 module.exports = {
+    requiredPerms: [PermissionFlagsBits.ManageRoles],
+
     data: new SlashCommandBuilder()
         .setName('rutbe-degistir')
         .setDescription('Roblox grubundaki bir kullanicinin rutbesini degistirir.')
