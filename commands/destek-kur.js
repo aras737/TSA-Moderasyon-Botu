@@ -36,17 +36,32 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const rollerInput = interaction.options.getString('yetkili-roller');
-            const logKanali = interaction.options.getChannel('log-kanali');
+            const rollerInput = interaction.options.getString('yetkili-roller', true);
+            const logKanali = interaction.options.getChannel('log-kanali', true);
             const biletKanali = interaction.options.getChannel('bilimesaj-kanali') || interaction.channel;
-            const rolIDleri = rollerInput.match(/\d+/g); 
+            const rolIDleri = [...new Set(rollerInput.match(/\d{17,20}/g) || [])];
 
-            if (!rolIDleri || rolIDleri.length === 0) {
-                return interaction.reply({ content: "<a:baarsz:1505146967817326675> Geçerli roller girmelisin! Örn: @Rol1 @Rol2", ephemeral: true });
+            if (rolIDleri.length === 0 || rolIDleri.length > 10) {
+                return interaction.reply({ content: '⚠️ 1-10 arasında geçerli yetkili rolü etiketlemelisin.', ephemeral: true });
+            }
+
+            const roller = await Promise.all(rolIDleri.map(id => interaction.guild.roles.fetch(id).catch(() => null)));
+            if (roller.some(role => !role || role.id === interaction.guild.id)) {
+                return interaction.reply({ content: '⚠️ Girilen rollerden biri bu sunucuda bulunamadı. Rol etiketlerini kontrol et.', ephemeral: true });
+            }
+
+            const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+            const panelPermissions = botMember ? biletKanali.permissionsFor(botMember) : null;
+            if (!biletKanali.isTextBased?.() || !panelPermissions?.has(PermissionsBitField.Flags.SendMessages) || !panelPermissions.has(PermissionsBitField.Flags.EmbedLinks)) {
+                return interaction.reply({ content: '⛔ Botun panel kanalında mesaj ve embed gönderme yetkisi olmalı.', ephemeral: true });
             }
 
             ayarKaydet(interaction.guild.id, 'destekRolleri', rolIDleri);
             ayarKaydet(interaction.guild.id, 'logKanaliDestek', logKanali.id);
+            ayarKaydet(interaction.guild.id, 'destekConfig', {
+                roles: rolIDleri,
+                logChannelId: logKanali.id
+            });
 
             const anaEmbed = new EmbedBuilder()
                 .setTitle('<:tac:1505158450538352670> TMF MODERASYON | DESTEK SİSTEMİ')
@@ -64,18 +79,17 @@ module.exports = {
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`tsa_setup_${rolIDleri.join('-')}_${logKanali.id}`)
+                    .setCustomId('tmf_ticket_open')
                     .setLabel('DESTEK OLAYI BAŞLAT')
                     .setStyle(ButtonStyle.Primary)
                     .setEmoji('<:bilet:1505453733969006602>')
             );
 
-            await interaction.reply({ 
-                content: `<a:tik:1505164671081123840> **TMF Destek Sistemi başarıyla kuruldu!**\n\n<:uzaybot_kanal:1505159120074833931> Log Kanalı: ${logKanali}\n👥 Yetkili Roller: ${rolIDleri.length} adet`, 
-                ephemeral: true 
-            });
-
             await biletKanali.send({ embeds: [anaEmbed], components: [row] });
+            return interaction.reply({
+                content: `✅ **TMF Destek Sistemi kuruldu.**\nLog Kanalı: ${logKanali}\nYetkili Rol Sayısı: ${rolIDleri.length}`,
+                ephemeral: true
+            });
         } catch (error) {
             console.error('Destek kurulum hatası:', error);
             return interaction.reply({ content: '<a:baarsz:1505146967817326675> Sistem kurulumunda hata oluştu!', ephemeral: true });
@@ -85,17 +99,31 @@ module.exports = {
     async interactionHandler(interaction) {
         try {
             // --- 1. KATEGORİ SEÇİMİ ---
-            if (interaction.isButton() && interaction.customId.startsWith('tsa_setup_')) {
-                // BUG DÜZELTMESİ: customId'yi '_' ile split etmek rol ID'lerini bozuyordu.
-                // Şimdi prefix'i kaldırıp geri kalanı alıyoruz.
-                const withoutPrefix = interaction.customId.replace('tsa_setup_', '');
-                const lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
-                const roller = withoutPrefix.substring(0, lastUnderscoreIndex);
-                const logID = withoutPrefix.substring(lastUnderscoreIndex + 1);
+            if (interaction.isButton() && (interaction.customId === 'tmf_ticket_open' || interaction.customId.startsWith('tsa_setup_'))) {
+                const modernPanel = interaction.customId === 'tmf_ticket_open';
+                let roller = '';
+                let logID = '';
+
+                if (modernPanel) {
+                    const config = ayarGetir(interaction.guild.id, 'destekConfig', null);
+                    if (!config || !Array.isArray(config.roles) || !config.logChannelId) {
+                        return interaction.reply({ content: '⚠️ Destek sistemi ayarı bulunamadı. Yöneticiden /destek-kur komutunu yeniden çalıştırmasını iste.', ephemeral: true });
+                    }
+                    roller = config.roles.join('-');
+                    logID = config.logChannelId;
+                } else {
+                    const withoutPrefix = interaction.customId.replace('tsa_setup_', '');
+                    const lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
+                    if (lastUnderscoreIndex <= 0) {
+                        return interaction.reply({ content: '⚠️ Eski destek panelinin ayarları geçersiz. Paneli yeniden kurun.', ephemeral: true });
+                    }
+                    roller = withoutPrefix.substring(0, lastUnderscoreIndex);
+                    logID = withoutPrefix.substring(lastUnderscoreIndex + 1);
+                }
 
                 const menuRow = new ActionRowBuilder().addComponents(
                     new StringSelectMenuBuilder()
-                        .setCustomId(`tsa_create_${roller}_${logID}`)
+                        .setCustomId(modernPanel ? 'tmf_ticket_category' : `tsa_create_${roller}_${logID}`)
                         .setPlaceholder('Bilet Kategorisi Seçiniz...')
                         .addOptions([
                             { 
@@ -139,15 +167,31 @@ module.exports = {
             }
 
             // --- 2. BİLET KANALI OLUŞTURMA ---
-            if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tsa_create_')) {
+            if (interaction.isStringSelectMenu() && (interaction.customId === 'tmf_ticket_category' || interaction.customId.startsWith('tsa_create_'))) {
                 await interaction.deferReply({ ephemeral: true });
 
-                // BUG DÜZELTMESİ: Aynı split sorunu burada da vardı.
-                const withoutPrefix = interaction.customId.replace('tsa_create_', '');
-                const lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
-                const roller = withoutPrefix.substring(0, lastUnderscoreIndex).split('-');
-                const logID = withoutPrefix.substring(lastUnderscoreIndex + 1);
+                const modernPanel = interaction.customId === 'tmf_ticket_category';
+                let roller = [];
+                let logID = '';
+
+                if (modernPanel) {
+                    const config = ayarGetir(interaction.guild.id, 'destekConfig', null);
+                    roller = Array.isArray(config?.roles) ? config.roles : [];
+                    logID = config?.logChannelId || '';
+                } else {
+                    const withoutPrefix = interaction.customId.replace('tsa_create_', '');
+                    const lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
+                    if (lastUnderscoreIndex <= 0) {
+                        return interaction.editReply({ content: '⚠️ Destek paneli ayarları geçersiz. Yönetici paneli yeniden kurmalı.' });
+                    }
+                    roller = withoutPrefix.substring(0, lastUnderscoreIndex).split('-').filter(Boolean);
+                    logID = withoutPrefix.substring(lastUnderscoreIndex + 1);
+                }
+
                 const kategori = interaction.values[0];
+                if (!roller.length || !logID) {
+                    return interaction.editReply({ content: '⚠️ Destek sistemi ayarları bulunamadı. Yönetici paneli yeniden kurmalı.' });
+                }
 
                 const kategoriBilgisi = {
                     'Moderatörlük': { emoji: '<:koruma1:1505143174190989352>', renk: '#ff6b6b', prefix: 'mod' },
@@ -157,6 +201,28 @@ module.exports = {
                 };
 
                 const info = kategoriBilgisi[kategori];
+                if (!info) {
+                    return interaction.editReply({ content: '⚠️ Geçersiz destek kategorisi seçildi.' });
+                }
+
+                const existingTicket = interaction.guild.channels.cache.find(channel =>
+                    channel.type === ChannelType.GuildText &&
+                    channel.topic?.includes(`Açan: ${interaction.user.id} |`)
+                );
+                if (existingTicket) {
+                    return interaction.editReply({ content: `⚠️ Zaten açık bir destek biletin var: ${existingTicket}` });
+                }
+
+                const validRoles = [];
+                for (const roleId of roller) {
+                    const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
+                    if (role && role.id !== interaction.guild.id) validRoles.push(role.id);
+                }
+                roller = [...new Set(validRoles)];
+                if (!roller.length) {
+                    return interaction.editReply({ content: '⚠️ Destek yetkili rolleri silinmiş. Yönetici /destek-kur komutunu yeniden çalıştırmalı.' });
+                }
+
                 const kanalAdi = `${info.prefix}-${interaction.user.username.substring(0, 10)}`.toLowerCase();
 
                 const izinler = [
@@ -235,8 +301,8 @@ module.exports = {
                     components: [biletButonlar] 
                 });
 
-                const logKanal = interaction.guild.channels.cache.get(logID);
-                if (logKanal) {
+                const logKanal = await interaction.guild.channels.fetch(logID).catch(() => null);
+                if (logKanal?.isTextBased?.()) {
                     const logEmbed = new EmbedBuilder()
                         .setTitle('<:bilet:1505453733969006602> YENİ BİLET AÇILDI')
                         .addFields(
@@ -249,8 +315,9 @@ module.exports = {
                         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
                         .setFooter({ text: `Bilet #${kanal.id.substring(0, 8).toUpperCase()}` })
                         .setTimestamp();
-                    
-                    await logKanal.send({ embeds: [logEmbed] });
+                    await logKanal.send({ embeds: [logEmbed] }).catch(error => {
+                        console.error('Bilet logu gönderilemedi:', error.message);
+                    });
                 }
 
                 await interaction.editReply({ 
