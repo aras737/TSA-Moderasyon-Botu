@@ -15,7 +15,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('destek-kur')
-        .setDescription('TSA Moderasyon Destek Sistemini kurar.')
+        .setDescription('TMF Moderasyon Destek Sistemini kurar.')
         .addStringOption(option => 
             option.setName('yetkili-roller')
                 .setDescription('Yetkili rolleri etiketle (Örn: @Rol1 @Rol2)')
@@ -49,8 +49,8 @@ module.exports = {
             ayarKaydet(interaction.guild.id, 'logKanaliDestek', logKanali.id);
 
             const anaEmbed = new EmbedBuilder()
-                .setTitle('<:tac:1505158450538352670> TSA MODERASYON | DESTEK SİSTEMİ')
-                .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz.\n\nTalebiniz en kısa sürede TSA yetkililerimiz tarafından yanıtlanacaktır.')
+                .setTitle('<:tac:1505158450538352670> TMF MODERASYON | DESTEK SİSTEMİ')
+                .setDescription('Yardıma mı ihtiyacınız var? Aşağıdaki butona tıklayarak bir destek talebi oluşturabilirsiniz.\n\nTalebiniz en kısa sürede TMF yetkililerimiz tarafından yanıtlanacaktır.')
                 .addFields(
                     { name: '<:koruma1:1505143174190989352> MODERATÖRLÜK ÇÖZÜMLERİ', value: '`Discord içi sorunlar, moderasyon desteği ve disiplin konuları`', inline: false },
                     { name: '<:uzaybot_kullanicilar:1505146190973505567> GENEL DESTEK', value: '`Oyun içi sorunlar, hesap sorunları ve genel danışmanlık`', inline: false },
@@ -59,7 +59,7 @@ module.exports = {
                 )
                 .setColor('#2f3136')
                 .setImage('https://r.resimlink.com/EnN8AFTihKvk.png')
-                .setFooter({ text: '© 2026 TSA Moderasyon Sistemi | Biletiniz kayıtlı tutulacaktır', iconURL: interaction.guild.iconURL() })
+                .setFooter({ text: '© 2026 TMF Moderasyon Sistemi | Biletiniz kayıtlı tutulacaktır', iconURL: interaction.guild.iconURL() })
                 .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
@@ -71,7 +71,7 @@ module.exports = {
             );
 
             await interaction.reply({ 
-                content: `<a:tik:1505164671081123840> **TSA Destek Sistemi başarıyla kuruldu!**\n\n<:uzaybot_kanal:1505159120074833931> Log Kanalı: ${logKanali}\n👥 Yetkili Roller: ${rolIDleri.length} adet`, 
+                content: `<a:tik:1505164671081123840> **TMF Destek Sistemi başarıyla kuruldu!**\n\n<:uzaybot_kanal:1505159120074833931> Log Kanalı: ${logKanali}\n👥 Yetkili Roller: ${rolIDleri.length} adet`, 
                 ephemeral: true 
             });
 
@@ -129,7 +129,7 @@ module.exports = {
                     .setTitle('<:bilet:1505453733969006602> DESTEK OLAYI OLUŞTURMA')
                     .setDescription('Lütfen sorununuzla ilgili **doğru kategoriyi** seçin. Yanlış kategori seçimi destek sürenizi uzatabilir.')
                     .setColor('#5865f2')
-                    .setFooter({ text: 'TSA Destek Sistemi' });
+                    .setFooter({ text: 'TMF Destek Sistemi' });
 
                 await interaction.reply({ 
                     embeds: [confirmEmbed],
@@ -198,7 +198,7 @@ module.exports = {
                 });
 
                 const hosgeldin = new EmbedBuilder()
-                    .setTitle(`${info.emoji} TSA DESTEK SİSTEMİ - BİLET AÇILDI`)
+                    .setTitle(`${info.emoji} TMF DESTEK SİSTEMİ - BİLET AÇILDI`)
                     .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 512 }))
                     .setDescription(`Merhaba ${interaction.user.username}! <:tac:1505158450538352670>\n\nDestek talebiniz başarıyla oluşturuldu. Lütfen sorununuzu **detaylı bir şekilde** açıklayın. Yetkililerimiz size en kısa sürede yardımcı olacaktır.`)
                     .addFields(
@@ -208,7 +208,7 @@ module.exports = {
                         { name: '<:bilet:1505453733969006602> Bilet Numarası', value: `\`#${kanal.id.substring(0, 8).toUpperCase()}\``, inline: true }
                     )
                     .setColor(info.renk)
-                    .setFooter({ text: 'TSA Destek Sistemi | Lütfen sakin ve nazik bir şekilde iletişim kurunuz' })
+                    .setFooter({ text: 'TMF Destek Sistemi | Lütfen sakin ve nazik bir şekilde iletişim kurunuz' })
                     .setTimestamp();
 
                 const biletButonlar = new ActionRowBuilder().addComponents(
