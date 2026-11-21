@@ -73,7 +73,7 @@ module.exports = {
             await member.timeout(durationMs, reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
-                .setTitle('<:Ses:1505164439505342484> TSA | Kullanıcı Susturuldu')
+                .setTitle('<:Ses:1505164439505342484> TMF | Kullanıcı Susturuldu')
                 .setDescription(`**${target.tag}** adlı üye başarıyla susturuldu.`)
                 .addFields(
                     { name: 'Susturulan', value: `${member}`, inline: true },
