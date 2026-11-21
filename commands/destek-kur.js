@@ -74,7 +74,7 @@ module.exports = {
                 )
                 .setColor('#2f3136')
                 .setImage('https://r.resimlink.com/EnN8AFTihKvk.png')
-                .setFooter({ text: '© 2026 TMF Moderasyon Sistemi | Biletiniz kayıtlı tutulacaktır', iconURL: interaction.guild.iconURL() })
+                .setFooter({ text: '© 2026 TMF Moderasyon Sistemi | Biletiniz kayıtlı tutulacaktır', iconURL: interaction.guild.iconURL() || undefined })
                 .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
