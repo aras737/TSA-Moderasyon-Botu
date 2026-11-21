@@ -6,18 +6,23 @@ module.exports = {
         .setDescription('TSA botunun anlık gecikme sürelerini gösterir.'),
 
     async execute(interaction) {
-        const sent = await interaction.deferReply({ fetchReply: true });
-        
-        const botPing = sent.createdTimestamp - interaction.createdTimestamp;
-        const apiPing = Math.round(interaction.client.ws.ping);
+        // deferReply() sonucunu mesaj nesnesi gibi kullanma.
+        // Bazı durumlarda dönüş değeri null/undefined olabilir.
+        const interactionCreatedAt = interaction.createdTimestamp || Date.now();
+        await interaction.deferReply();
+
+        // Komutun alınmasından ilk yanıtın hazırlanmasına kadar geçen süre.
+        const botPing = Math.max(0, Date.now() - interactionCreatedAt);
+        const websocketPing = interaction.client.ws.ping;
+        const apiPing = Number.isFinite(websocketPing) ? Math.round(websocketPing) : 0;
 
         const embed = new EmbedBuilder()
             .setTitle('<:Ping_Pong:1505191883603710077> Pong! TSA Gecikme Değerleri')
             .addFields(
-                { name: '<a:last_yildirim:1505192115565760564> Bot Gecikmesi', value: `\`${botPing}ms\``, inline: true },
-                { name: '<:antena:1505192362270527518> API Gecikmesi', value: `\`${apiPing}ms\``, inline: true }
+                { name: '<a:last_yildirim:1505192115565760564> Bot Gecikmesi', value: `${botPing}ms`, inline: true },
+                { name: '<:antena:1505192362270527518> API Gecikmesi', value: `${apiPing}ms`, inline: true }
             )
-            .setColor(apiPing > 150 ? '#ff4d4d' : '#2ecc71') // Ping yüksekse kırmızı, düşükse yeşil yanar
+            .setColor(apiPing > 150 ? '#ff4d4d' : '#2ecc71')
             .setFooter({ text: 'TSA 7/24 Stabilite Sistemi' })
             .setTimestamp();
 
