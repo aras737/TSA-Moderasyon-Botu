@@ -57,25 +57,25 @@ module.exports = (client) => {
         // Muafiyet Kontrolü
         if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-        // RAM Cache tabanlı ayar sistemi
+        // Koruma ayarları sunucu bazında önbelleğe alınır.
         if (!client.sistemBellegi) client.sistemBellegi = new Map();
-        let durum = client.sistemBellegi.get(message.guild.id)?.kufur;
-        if (durum === undefined) {
-            const dbDurum = await ayarGetir(message.guild.id, 'kufurEngelDurum', false);
-            if (!client.sistemBellegi.has(message.guild.id)) {
-                client.sistemBellegi.set(message.guild.id, { kufur: dbDurum });
-            } else {
-                client.sistemBellegi.get(message.guild.id).kufur = dbDurum;
-            }
-            durum = dbDurum;
+        let korumaAyar = client.sistemBellegi.get(message.guild.id);
+
+        if (!korumaAyar) {
+            korumaAyar = {
+                kufur: ayarGetir(message.guild.id, 'kufurEngelDurum', false) === true,
+                spam: ayarGetir(message.guild.id, 'spamEngelDurum', false) === true,
+                mention: ayarGetir(message.guild.id, 'topluEtiketEngelDurum', false) === true,
+                caps: ayarGetir(message.guild.id, 'capsEngelDurum', false) === true
+            };
+            client.sistemBellegi.set(message.guild.id, korumaAyar);
         }
-        // Küfür filtresi kendi ayarına bağlıdır; spam/mention/caps kontrolleri bağımsız çalışır.
 
         const logChan = await logKanalGetir(message.guild.id);
         const simdi = Date.now();
 
         // 1. KÜFÜR ENGEL SİSTEMİ
-        if (durum && kufurRegex.test(message.content)) {
+        if (korumaAyar.kufur && kufurRegex.test(message.content)) {
             await message.delete().catch(() => null);
             const uyariMsg = await message.channel.send({ content: `🤬 Temiz bir dil kullanalım lütfen ${message.author}! Bu sunucuda küfür etmek yasak kanka.` }).catch(() => null);
             if (uyariMsg) setTimeout(() => uyariMsg.delete().catch(() => null), 4000);
@@ -96,6 +96,7 @@ module.exports = (client) => {
         }
 
         // 2. ULTRA HIZLI SPAM KORUMASI (3 Saniyede 5 Mesaj)
+        if (korumaAyar.spam) {
         const takipAnahtari = `${message.guild.id}:${message.author.id}`;
         const kullaniciLog = mesajTakip.get(takipAnahtari) || [];
         kullaniciLog.push(simdi);
@@ -119,8 +120,10 @@ module.exports = (client) => {
             }
             return;
         }
+        }
 
         // 3. MASS MENTION (TOPLU ETİKET) KORUMASI
+        if (korumaAyar.mention) {
         const toplamEtiket = message.mentions.users.size + message.mentions.roles.size;
         if (toplamEtiket > 5) {
             if (message.member.manageable) {
@@ -138,9 +141,10 @@ module.exports = (client) => {
             }
             return;
         }
+        }
 
         // 4. BÜYÜK HARF (CAPS LOCK) ENGELLEYİCİ
-        if (message.content.length > 10) {
+        if (korumaAyar.caps && message.content.length > 10) {
             const buyukHarfler = message.content.replace(/[^A-ZĞÜŞİÖÇ]/g, "").length;
             const toplamHarf = message.content.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "").length;
             
