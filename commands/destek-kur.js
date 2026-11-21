@@ -225,20 +225,38 @@ module.exports = {
 
                 const kanalAdi = `${info.prefix}-${interaction.user.username.substring(0, 10)}`.toLowerCase();
 
+                const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+                if (!botMember) {
+                    return interaction.editReply({ content: '❌ Bot üye bilgisi alınamadı. Bilet kanalı oluşturulmadı.' });
+                }
+
                 const izinler = [
-                    { 
-                        id: interaction.guild.id, 
-                        deny: [PermissionsBitField.Flags.ViewChannel] 
+                    {
+                        id: interaction.guild.id,
+                        deny: [PermissionsBitField.Flags.ViewChannel]
                     },
-                    { 
-                        id: interaction.user.id, 
+                    {
+                        id: interaction.user.id,
                         allow: [
-                            PermissionsBitField.Flags.ViewChannel, 
-                            PermissionsBitField.Flags.SendMessages, 
-                            PermissionsBitField.Flags.AttachFiles, 
+                            PermissionsBitField.Flags.ViewChannel,
+                            PermissionsBitField.Flags.SendMessages,
+                            PermissionsBitField.Flags.AttachFiles,
                             PermissionsBitField.Flags.ReadMessageHistory,
                             PermissionsBitField.Flags.EmbedLinks
-                        ] 
+                        ]
+                    },
+                    {
+                        // @everyone engellense bile bot oluşturduğu bileti görebilmeli ve yönetebilmeli.
+                        id: botMember.id,
+                        allow: [
+                            PermissionsBitField.Flags.ViewChannel,
+                            PermissionsBitField.Flags.SendMessages,
+                            PermissionsBitField.Flags.AttachFiles,
+                            PermissionsBitField.Flags.ReadMessageHistory,
+                            PermissionsBitField.Flags.EmbedLinks,
+                            PermissionsBitField.Flags.ManageMessages,
+                            PermissionsBitField.Flags.ManageChannels
+                        ]
                     }
                 ];
 
@@ -512,11 +530,24 @@ module.exports = {
                     ephemeral: true
                 });
 
-                const filter = m => m.author.id === interaction.user.id && m.mentions.members.size > 0;
+                const filter = m => {
+                    if (m.author.id !== interaction.user.id) return false;
+                    const target = m.mentions.members.first();
+                    return Boolean(
+                        target &&
+                        target.id !== interaction.user.id &&
+                        target.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)
+                    );
+                };
                 const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
 
                 collector.on('collect', async m => {
                     const hedef = m.mentions.members.first();
+                    if (!hedef || hedef.id === interaction.user.id ||
+                        !hedef.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)) {
+                        await interaction.followUp({ content: '⚠️ Yalnızca bu bilette yetkili izni olan başka bir personeli aktarabilirsin.', ephemeral: true }).catch(() => {});
+                        return;
+                    }
                     await interaction.channel.permissionOverwrites.edit(hedef.id, {
                         ViewChannel: true,
                         SendMessages: true,
