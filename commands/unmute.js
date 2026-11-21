@@ -43,7 +43,7 @@ module.exports = {
             await member.timeout(null, reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
-                .setTitle('🔊 TSA | Susturma Kaldırıldı')
+                .setTitle('🔊 TMF | Susturma Kaldırıldı')
                 .setDescription(`**${target.tag}** kullanıcısının cezası kaldırıldı.`)
                 .addFields(
                     { name: 'Üye', value: `${member}`, inline: true },
