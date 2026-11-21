@@ -328,7 +328,7 @@ module.exports = {
 
             // --- 3. BİLETİ ÜSTLENME ---
             if (interaction.isButton() && interaction.customId === 'tsa_claim') {
-                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+                if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
                         ephemeral: true 
@@ -336,7 +336,10 @@ module.exports = {
                 }
 
                 const originalEmbed = interaction.message.embeds[0];
-                // BUG DÜZELTMESİ: spliceFields(4, 0) embed'de tam 4 field olmayabilir.
+                if (!originalEmbed) {
+                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya embed silinmiş.', ephemeral: true });
+                }
+                // Embed alanları değiştirildiğinde mevcut alanları koru.
                 // Mevcut field sayısına göre ekliyoruz.
                 const claimEmbed = EmbedBuilder.from(originalEmbed)
                     .addFields({ name: '<a:tik:1505164671081123840> ÜSTLENEN YETKİLİ', value: `${interaction.user.tag}\n<t:${Math.floor(Date.now() / 1000)}:R>`, inline: false })
@@ -398,7 +401,7 @@ module.exports = {
 
                 const acanID = topicData.split('Açan: ')[1]?.split(' |')[0]?.trim();
                 const isOwner = interaction.user.id === acanID;
-                const isStaff = interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
+                const isStaff = interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages);
 
                 if (!isStaff && !isOwner) {
                     return interaction.reply({ 
@@ -447,7 +450,7 @@ module.exports = {
 
             // --- 5. YENİDEN AÇ ---
             if (interaction.isButton() && interaction.customId === 'tsa_reopen') {
-                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+                if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
                         ephemeral: true 
@@ -455,6 +458,9 @@ module.exports = {
                 }
 
                 const originalEmbed = interaction.message.embeds[0];
+                if (!originalEmbed?.title) {
+                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya başlık eksik.', ephemeral: true });
+                }
                 // BUG DÜZELTMESİ: spliceFields ile field silmek yerine
                 // son field'ı (üstlenen yetkili) güvenli şekilde kaldırıyoruz.
                 const fields = originalEmbed.fields.filter(f => !f.name.includes('ÜSTLENEN YETKİLİ'));
@@ -494,7 +500,7 @@ module.exports = {
             // --- 6. BAŞKASINA AKTAR (tsa_assign) ---
             // BUG DÜZELTMESİ: Bu buton tanımlıydı ama handler yoktu, hata veriyordu.
             if (interaction.isButton() && interaction.customId === 'tsa_assign') {
-                if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+                if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
                         ephemeral: true 
