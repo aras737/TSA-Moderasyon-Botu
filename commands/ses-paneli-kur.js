@@ -16,9 +16,10 @@ function registerSesPanelEvents(client) {
 
             
             client.on('interactionCreate', async (inter) => {
-                if (!inter.isButton()) return;
+                if (!inter.isButton() || !inter.inGuild()) return;
                 const member = inter.member;
                 const guild = inter.guild;
+                if (!guild || !member) return;
 
                 // 🔥 1. BUTON: ANA PANELDEKİ "ODA OLUŞTUR" BUTONU
                 if (inter.customId.startsWith('tsa_ses_olustur_')) {
@@ -38,9 +39,15 @@ function registerSesPanelEvents(client) {
 
                     await inter.deferReply({ ephemeral: true });
 
+                    let yeniSesKanali = null;
                     try {
+                        const parent = await guild.channels.fetch(targetKategoriId).catch(() => null);
+                        if (!parent || parent.type !== ChannelType.GuildCategory) {
+                            return inter.editReply({ content: `${uyariEmoji} Ses odası kategorisi bulunamadı. Paneli yeniden kur.` });
+                        }
+
                         // Ses kanalını oluşturuyoruz
-                        const yeniSesKanali = await guild.channels.create({
+                        yeniSesKanali = await guild.channels.create({
                             name: `🔊 ${member.user.username} Odası`,
                             type: ChannelType.GuildVoice,
                             parent: targetKategoriId,
@@ -104,6 +111,9 @@ function registerSesPanelEvents(client) {
 
                     } catch (error) {
                         console.error(error);
+                        if (yeniSesKanali) {
+                            await yeniSesKanali.delete('TMF ses odası kurulumu tamamlanamadı').catch(() => {});
+                        }
                         await inter.editReply({ content: `${basarisizEmoji} Oda oluşturulurken teknik bir hata meydana geldi!` });
                     }
                 }
@@ -111,6 +121,11 @@ function registerSesPanelEvents(client) {
                 // 🗑️ 2. BUTON: ODA İÇİNDEKİ "ODAYI SİL" BUTONU
                 if (inter.customId.startsWith('tsa_oda_sil_')) {
                     const odaSahibiId = inter.customId.split('tsa_oda_sil_')[1];
+
+                    // Eski veya taklit edilmiş bir buton, farklı bir kanalı silemesin.
+                    if (inter.channel?.topic !== `TMF_TEMP_VOICE_OWNER:${odaSahibiId}`) {
+                        return inter.reply({ content: `${uyariEmoji} Bu buton geçerli bir TMF geçici odasına ait değil.`, ephemeral: true });
+                    }
 
                     // Güvenlik Duvarı: Basan kişi odayı açan kişi mi?
                     if (inter.user.id !== odaSahibiId) {
@@ -138,13 +153,13 @@ function registerSesPanelEvents(client) {
             client.on('voiceStateUpdate', async (oldState, newState) => {
                 const eskiKanal = oldState.channel;
                 
-                if (eskiKanal && eskiKanal.name.endsWith('Odası')) {
+                if (eskiKanal?.topic?.startsWith('TMF_TEMP_VOICE_OWNER:')) {
                     const kalanInsanSayisi = eskiKanal.members.filter(m => !m.user.bot).size;
                     
                     if (kalanInsanSayisi === 0) {
                         setTimeout(async () => {
                             const teyitKanali = oldState.guild.channels.cache.get(eskiKanal.id);
-                            if (teyitKanali && teyitKanali.members.filter(m => !m.user.bot).size === 0) {
+                            if (teyitKanali?.topic === eskiKanal.topic && teyitKanali.members.filter(m => !m.user.bot).size === 0) {
                                 await teyitKanali.delete().catch(() => {});
                             }
                         }, 1500);
