@@ -8,6 +8,7 @@ module.exports = {
         .addStringOption(option =>
             option.setName('kisi')
                 .setDescription('Yasaklanacak kişinin Discord ID\'sini veya etiketini girin kanka.')
+                .setMaxLength(25)
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -27,7 +28,7 @@ module.exports = {
         // 🧹 Etiket parantezlerini temizleyip saf ID'yi alıyoruz kanka
         const targetId = kisiInput.replace(/[<@!>]/g, '');
 
-        if (!/^\d+$/.test(targetId)) {
+        if (!/^\d{17,20}$/.test(targetId)) {
             const hataEmbed = new EmbedBuilder()
                 .setTitle('❌ Geçersiz Kullanıcı')
                 .setDescription('<a:baarsz:1505146967817326675> Lütfen geçerli bir Discord ID\'si veya kullanıcı etiketi gir kanka!')
