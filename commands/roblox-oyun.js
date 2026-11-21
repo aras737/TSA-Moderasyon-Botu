@@ -19,7 +19,7 @@ module.exports = {
             .setImage('https://images.rbxcdn.com/95995ef1db79d0124de31f7cf6f018e5.png') 
             .setColor('#f1c40f') 
             .setTimestamp()
-            .setFooter({ text: `${interaction.guild.name} | Roblox Etkinliği`, iconURL: interaction.guild.iconURL() });
+            .setFooter({ text: `${interaction.guild.name} | Roblox Etkinliği`, iconURL: interaction.guild.iconURL() || undefined });
 
         // Buton yapısı kurallara uygun hale getirildi kanka
         const butonRow = new ActionRowBuilder()
