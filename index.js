@@ -84,6 +84,18 @@ function loadEvents() {
 
 loadCommands();
 
+// Voice-panel buttons must remain operational after every restart,
+// even when the setup slash command has not been run again.
+const sesPanelCommand = client.commands.get('ses-paneli-kur');
+if (typeof sesPanelCommand?.register === 'function') {
+    try {
+        sesPanelCommand.register(client);
+        console.log('✅ TMF geçici ses odası olayları hazır.');
+    } catch (error) {
+        console.error('❌ Ses odası olayları başlatılamadı:', error);
+    }
+}
+
 let Storage;
 try {
     Storage = require('./services/storage');
