@@ -6,6 +6,23 @@ const {
 } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 
+function getSecurityCache(client, guildId) {
+    if (!client.sistemBellegi) client.sistemBellegi = new Map();
+    let settings = client.sistemBellegi.get(guildId);
+
+    if (!settings) {
+        settings = {
+            kufur: ayarGetir(guildId, 'kufurEngelDurum', false) === true,
+            spam: ayarGetir(guildId, 'spamEngelDurum', false) === true,
+            mention: ayarGetir(guildId, 'topluEtiketEngelDurum', false) === true,
+            caps: ayarGetir(guildId, 'capsEngelDurum', false) === true
+        };
+    }
+
+    client.sistemBellegi.set(guildId, settings);
+    return settings;
+}
+
 module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
 
@@ -14,25 +31,37 @@ module.exports = {
         .setDescription('TMF güvenlik ve giriş-çıkış koruma ayarlarını yönetir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
-            subcommand
-                .setName('durum')
-                .setDescription('Bu sunucunun güvenlik ayarlarını gösterir.'))
+            subcommand.setName('durum').setDescription('Bu sunucunun güvenlik ayarlarını gösterir.'))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('guard')
                 .setDescription('Anti-raid Guard korumasını açar veya kapatır.')
                 .addBooleanOption(option =>
-                    option.setName('aktif')
-                        .setDescription('Guard koruması aktif olsun mu?')
-                        .setRequired(true)))
+                    option.setName('aktif').setDescription('Guard koruması aktif olsun mu?').setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kufur')
                 .setDescription('Küfür filtresini açar veya kapatır.')
                 .addBooleanOption(option =>
-                    option.setName('aktif')
-                        .setDescription('Küfür filtresi aktif olsun mu?')
-                        .setRequired(true)))
+                    option.setName('aktif').setDescription('Küfür filtresi aktif olsun mu?').setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('spam')
+                .setDescription('3 saniyede 5 mesaj spam korumasını yönetir.')
+                .addBooleanOption(option =>
+                    option.setName('aktif').setDescription('Spam koruması aktif olsun mu?').setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('etiket')
+                .setDescription('Toplu etiket korumasını yönetir.')
+                .addBooleanOption(option =>
+                    option.setName('aktif').setDescription('Toplu etiket koruması aktif olsun mu?').setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('caps')
+                .setDescription('Büyük harf (caps lock) korumasını yönetir.')
+                .addBooleanOption(option =>
+                    option.setName('aktif').setDescription('Caps koruması aktif olsun mu?').setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('giris-cikis')
@@ -43,9 +72,7 @@ module.exports = {
                         .addChannelTypes(ChannelType.GuildText)
                         .setRequired(true)))
         .addSubcommand(subcommand =>
-            subcommand
-                .setName('giris-cikis-kapat')
-                .setDescription('Üye giriş-çıkış loglarını kapatır.')),
+            subcommand.setName('giris-cikis-kapat').setDescription('Üye giriş-çıkış loglarını kapatır.')),
 
     async execute(interaction) {
         const guildId = interaction.guild.id;
@@ -54,6 +81,9 @@ module.exports = {
         if (subcommand === 'durum') {
             const guard = ayarGetir(guildId, 'guardAktif', false) === true;
             const kufur = ayarGetir(guildId, 'kufurEngelDurum', false) === true;
+            const spam = ayarGetir(guildId, 'spamEngelDurum', false) === true;
+            const mention = ayarGetir(guildId, 'topluEtiketEngelDurum', false) === true;
+            const caps = ayarGetir(guildId, 'capsEngelDurum', false) === true;
             const girisCikis = ayarGetir(guildId, 'girisCikisDurum', false) === true;
             const channelId = ayarGetir(guildId, 'girisCikisKanal', null);
 
@@ -62,6 +92,9 @@ module.exports = {
                 .addFields(
                     { name: 'Anti-Raid Guard', value: guard ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: 'Küfür Filtresi', value: kufur ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: 'Spam Koruması', value: spam ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: 'Toplu Etiket', value: mention ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: 'Caps Koruması', value: caps ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: 'Giriş-Çıkış Logları', value: girisCikis ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: 'Giriş-Çıkış Kanalı', value: channelId ? `<#${channelId}>` : 'Ayarlanmamış', inline: false }
                 )
@@ -82,21 +115,26 @@ module.exports = {
             });
         }
 
-        if (subcommand === 'kufur') {
-            const enabled = interaction.options.getBoolean('aktif', true);
-            ayarKaydet(guildId, 'kufurEngelDurum', enabled);
+        const filters = {
+            kufur: { cacheKey: 'kufur', dbKey: 'kufurEngelDurum', label: 'Küfür filtresi' },
+            spam: { cacheKey: 'spam', dbKey: 'spamEngelDurum', label: 'Spam koruması' },
+            etiket: { cacheKey: 'mention', dbKey: 'topluEtiketEngelDurum', label: 'Toplu etiket koruması' },
+            caps: { cacheKey: 'caps', dbKey: 'capsEngelDurum', label: 'Caps koruması' }
+        };
 
-            if (!interaction.client.sistemBellegi) {
-                interaction.client.sistemBellegi = new Map();
-            }
-            const settings = interaction.client.sistemBellegi.get(guildId) || {};
-            settings.kufur = enabled;
+        if (filters[subcommand]) {
+            const enabled = interaction.options.getBoolean('aktif', true);
+            const filter = filters[subcommand];
+            ayarKaydet(guildId, filter.dbKey, enabled);
+
+            const settings = getSecurityCache(interaction.client, guildId);
+            settings[filter.cacheKey] = enabled;
             interaction.client.sistemBellegi.set(guildId, settings);
 
             return interaction.reply({
                 content: enabled
-                    ? '✅ Küfür filtresi etkinleştirildi. Spam, etiket ve büyük harf korumaları ayrıca çalışmaya devam eder.'
-                    : '⛔ Küfür filtresi kapatıldı. Spam, etiket ve büyük harf korumaları çalışmaya devam eder.',
+                    ? `✅ ${filter.label} etkinleştirildi.`
+                    : `⛔ ${filter.label} devre dışı bırakıldı.`,
                 ephemeral: true
             });
         }
