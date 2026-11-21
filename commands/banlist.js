@@ -82,7 +82,7 @@ module.exports = {
                         `${listeMetni}`
                     )
                     .setColor(mevcutFiltre === 'tam' ? '#7a0010' : (mevcutFiltre === 'standart' ? '#f1c40f' : '#ff4d4d'))
-                    .setThumbnail(interaction.guild.iconURL())
+                    .setThumbnail(interaction.guild.iconURL() || undefined)
                     .setFooter({ text: `Sayfa: ${mevcutSayfa + 1}/${toplamSayfa} | Bölüm: ${mevcutFiltre.toUpperCase()}`, iconURL: interaction.user.displayAvatarURL() })
                     .setTimestamp();
             };
