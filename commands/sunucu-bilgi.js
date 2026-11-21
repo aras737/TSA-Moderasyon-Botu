@@ -38,7 +38,7 @@ module.exports = {
         // Sunucu Bilgi Embed Paneli
         const bilgiEmbed = new EmbedBuilder()
             .setTitle(`${korumaEmoji} TMF | Sunucu Bilgi Paneli`)
-            .setThumbnail(guild.iconURL({ dynamic: true, size: 512 }) || null)
+            .setThumbnail(guild.iconURL({ dynamic: true, size: 512 }) || undefined)
             .setDescription(`**${guild.name}** sunucusunun anlık genel durum raporu aşağıda listelenmiştir.`)
             .addFields(
                 { name: '<:tac:1505158450538352670> Sunucu Sahibi', value: `<@${guild.ownerId}> \`(${guild.ownerId})\``, inline: false },
