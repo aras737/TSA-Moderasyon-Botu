@@ -126,7 +126,7 @@ module.exports = (client) => {
         if (korumaAyar.mention) {
         const toplamEtiket = message.mentions.users.size + message.mentions.roles.size;
         if (toplamEtiket > 5) {
-            if (message.member.manageable) {
+            if (message.member?.manageable) {
                 await message.delete().catch(() => null);
                 await message.member.timeout(10 * 60 * 1000, 'Toplu Etiket Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} Tek bir mesajda çok fazla kişiyi etiketlediğin için 10 dakika susturuldun kanka!` }).catch(() => null);
