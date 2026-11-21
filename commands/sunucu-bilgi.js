@@ -37,7 +37,7 @@ module.exports = {
 
         // Sunucu Bilgi Embed Paneli
         const bilgiEmbed = new EmbedBuilder()
-            .setTitle(`${korumaEmoji} TSA | Sunucu Bilgi Paneli`)
+            .setTitle(`${korumaEmoji} TMF | Sunucu Bilgi Paneli`)
             .setThumbnail(guild.iconURL({ dynamic: true, size: 512 }) || null)
             .setDescription(`**${guild.name}** sunucusunun anlık genel durum raporu aşağıda listelenmiştir.`)
             .addFields(
