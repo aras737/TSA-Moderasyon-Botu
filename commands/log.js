@@ -9,7 +9,7 @@ module.exports = {
         .setDescription('TMF Log sistemini yönetir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
-            subcommand.setName('kanalı-ayarla')
+            subcommand.setName('kanali-ayarla')
                 .setDescription('Sunucudaki olayların kaydedileceği log kanalını belirler.')
                 .addChannelOption(option =>
                     option.setName('kanal')
@@ -17,8 +17,8 @@ module.exports = {
                         .addChannelTypes(ChannelType.GuildText)
                         .setRequired(true)))
         .addSubcommand(subcommand =>
-            subcommand.setName('göster')
-                .setDescription('Ayarlı log kanalını gösterir.'))
+            subcommand.setName('goster')
+                .setDescription('Ayarlı log kanalını gosterir.'))
         .addSubcommand(subcommand =>
             subcommand.setName('kapat')
                 .setDescription('Log sistemini kapatır.')),
@@ -27,7 +27,7 @@ module.exports = {
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
 
-        if (subcommand === 'kanalı-ayarla') {
+        if (subcommand === 'kanali-ayarla') {
             const channel = interaction.options.getChannel('kanal', true);
             const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
             const permissions = botMember ? channel.permissionsFor(botMember) : null;
@@ -52,11 +52,11 @@ module.exports = {
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
-        if (subcommand === 'göster') {
+        if (subcommand === 'goster') {
             const channelId = ayarGetir(guildId, 'logKanal', null);
             if (!channelId) {
                 return interaction.reply({
-                    content: '⚠️ Henüz log kanalı ayarlanmamış. `/log kanalı-ayarla` kullan.',
+                    content: '⚠️ Henüz log kanalı ayarlanmamış. `/log kanali-ayarla` kullan.',
                     ephemeral: true
                 });
             }
