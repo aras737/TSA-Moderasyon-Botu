@@ -2,49 +2,81 @@ const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits } = require('discord.js
 const { ayarGetir } = require('../utils/db');
 const { yedekAl, yedektenGeriYukle } = require('../services/sunucuYedek');
 
-module.exports = (client) => {
+module.exports = client => {
     const userActions = new Map();
     const activeGuilds = new Set();
+    const backupBlockedGuilds = new Set();
+    const suspectGuildUntil = new Map();
 
-    // --- OTOMATİK YEDEKLEME ---
-    // Guard bir saldırıyı durdurduğunda sunucuyu saldırıdan ÖNCEKİ haline
-    // döndürebilmek için rol + kanal yapısı düzenli aralıklarla yedekleniyor.
-    // Bot açılır açılmaz ilk yedek alınır, sonrasında 5 dakikada bir tazelenir.
-    const YEDEK_ARALIGI_MS = 5 * 60 * 1000;
-
-    const tumSunuculariYedekle = () => {
-        client.guilds.cache.forEach(guild => {
-            yedekAl(guild).catch(() => {});
-        });
-    };
-
-    if (client.isReady()) tumSunuculariYedekle();
-    else client.once('ready', tumSunuculariYedekle);
-
-    const yedeklemeAraligi = setInterval(tumSunuculariYedekle, YEDEK_ARALIGI_MS);
-    yedeklemeAraligi.unref?.();
-
-    // Discord audit-log entries can appear shortly after the gateway event.
-    // A low threshold is intentional: a raid must be stopped before many more
-    // destructive actions are completed.
+    const YEDEK_ARALIGI_MS = 60 * 1000;
     const WINDOW_MS = 1000;
     const THRESHOLD = 5;
-    const AUDIT_MAX_AGE_MS = 15000;
-    const AUDIT_RETRIES = 4;
-    const AUDIT_RETRY_DELAY_MS = 300;
-    const GUILD_COOLDOWN_MS = 10000;
+    const AUDIT_MAX_AGE_MS = 10000;
+    const AUDIT_RETRIES = 3;
+    const AUDIT_RETRY_DELAY_MS = 250;
+    const GUILD_COOLDOWN_MS = 15000;
+    const SUSPECT_BACKUP_PAUSE_MS = 30000;
 
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function tumSunuculariYedekle() {
+        for (const guild of client.guilds.cache.values()) {
+            const now = Date.now();
+            const suspectUntil = suspectGuildUntil.get(guild.id) || 0;
+
+            if (
+                activeGuilds.has(guild.id) ||
+                backupBlockedGuilds.has(guild.id) ||
+                suspectUntil > now
+            ) continue;
+
+            const backup = await yedekAl(guild);
+            if (backup) {
+                console.log(
+                    '[GUARD] ' + guild.name + ': otomatik sunucu yedeği alındı (' +
+                    backup.roller.length + ' rol, ' + backup.kanallar.length + ' kanal).'
+                );
+            }
+        }
+    }
+
+    client.once('ready', () => {
+        tumSunuculariYedekle().catch(error =>
+            console.error('[GUARD] İlk yedekleme başlatılamadı:', error)
+        );
+    });
+
+    const backupInterval = setInterval(() => {
+        tumSunuculariYedekle().catch(error =>
+            console.error('[GUARD] Otomatik yedekleme hatası:', error)
+        );
+    }, YEDEK_ARALIGI_MS);
+    backupInterval.unref?.();
+
+    const cleanupInterval = setInterval(() => {
+        const now = Date.now();
+
+        for (const [key, timestamps] of userActions.entries()) {
+            const active = timestamps.filter(timestamp => now - timestamp < WINDOW_MS);
+            if (active.length) userActions.set(key, active);
+            else userActions.delete(key);
+        }
+
+        for (const [guildId, until] of suspectGuildUntil.entries()) {
+            if (until <= now) suspectGuildUntil.delete(guildId);
+        }
+    }, 10000);
+    cleanupInterval.unref?.();
 
     async function getRecentExecutor(guild, type, targetId) {
         const botMember = guild.members.me;
         if (botMember && !botMember.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
-            console.error(`[GUARD] ${guild.name}: Botta Denetim Kaydını Görüntüle izni yok.`);
+            console.error('[GUARD] ' + guild.name + ': Botta Denetim Kaydını Görüntüle izni yok.');
             return null;
         }
 
         for (let attempt = 0; attempt < AUDIT_RETRIES; attempt++) {
-            const logs = await guild.fetchAuditLogs({ limit: 25, type }).catch(error => {
+            const logs = await guild.fetchAuditLogs({ limit: 20, type }).catch(error => {
                 console.error('[GUARD] Denetim kayıtları alınamadı:', error.message);
                 return null;
             });
@@ -65,11 +97,13 @@ module.exports = (client) => {
             if (attempt < AUDIT_RETRIES - 1) await wait(AUDIT_RETRY_DELAY_MS);
         }
 
-        console.warn(`[GUARD] ${guild.name}: ${type} işlemi için saldırgan denetim kaydında bulunamadı. Gerekli izin ve kayıtları kontrol edin.`);
+        console.warn(
+            '[GUARD] ' + guild.name + ': ' + type +
+            ' işlemini yapan kişi denetim kaydında bulunamadı.'
+        );
         return null;
     }
 
-    // Yönetici (Administrator) izinli, @everyone ve entegrasyon olmayan rolleri bulur.
     function yoneticiRolleriniBul(guild) {
         return guild.roles.cache.filter(role =>
             role.id !== guild.id &&
@@ -78,105 +112,144 @@ module.exports = (client) => {
         );
     }
 
-    async function sendGuardLog(guild, executorId, eylem, count, status) {
+    async function sendGuardLog(guild, executorId, eylem, count, status, restoreResult = null) {
+        const warnings = restoreResult?.warnings?.length
+            ? '\n**Uyarılar:**\n' + restoreResult.warnings.slice(0, 5).map(item => '• ' + item).join('\n')
+            : '';
+
         const embed = new EmbedBuilder()
             .setTitle('🚨 TMF | GUARD MÜDAHALESİ')
             .setDescription(
-                `**Saldırgan:** \`${executorId}\`\n**İşlem:** ${count} kez ${eylem}\n**Durum:** ${status}`
+                '**Saldırgan:** `' + executorId + '`\n' +
+                '**İşlem:** ' + count + ' kez ' + eylem + '\n' +
+                '**Son güvenli yedek:** ' + (restoreResult?.alinmaZamani || 'Kullanılamadı') + '\n' +
+                '**Geri yükleme:** ' + status + warnings
             )
             .setColor('#960018')
             .setTimestamp();
 
-        // 1) LOG KANALI + YÖNETİCİ ROLLERİNİ ETİKETLE
         const logId = ayarGetir(guild.id, 'logKanal', null);
         const botMember = guild.members.me;
 
         if (logId) {
             const log = await client.channels.fetch(logId).catch(() => null);
-            if (log?.isTextBased?.() &&
+            if (
+                log?.isTextBased?.() &&
                 botMember &&
-                log.permissionsFor(botMember)?.has(PermissionFlagsBits.SendMessages)) {
-                const yoneticiRolleri = yoneticiRolleriniBul(guild);
-                const etiketMetni = yoneticiRolleri.size > 0
-                    ? yoneticiRolleri.map(role => role.toString()).join(' ')
-                    : undefined;
-
+                log.permissionsFor(botMember)?.has(PermissionFlagsBits.SendMessages)
+            ) {
+                const adminRoles = yoneticiRolleriniBul(guild);
+                const mentions = adminRoles.map(role => role.id);
                 await log.send({
-                    content: etiketMetni,
+                    content: mentions.length ? adminRoles.map(role => role.toString()).join(' ') : undefined,
                     embeds: [embed],
-                    allowedMentions: { roles: yoneticiRolleri.map(role => role.id) }
-                }).catch(error => {
-                    console.error('Guard log gönderilemedi:', error.message);
-                });
+                    allowedMentions: { roles: mentions }
+                }).catch(error => console.error('[GUARD] Log gönderilemedi:', error.message));
             }
         }
 
-        // 2) SUNUCU SAHİBİNE DM OLARAK RAPOR AT
-        // Log kanalı ayarlı olmasa bile sahip her zaman bilgilendirilsin.
-        const sahip = await guild.fetchOwner().catch(() => null);
-        if (sahip) {
-            await sahip.send({ embeds: [embed] }).catch(() => {
-                // DM'leri kapalıysa sessizce geç; log kanalı ve rol etiketi zaten uyardı.
-            });
+        const owner = await guild.fetchOwner().catch(() => null);
+        if (owner) {
+            await owner.send({ embeds: [embed] }).catch(() => {});
         }
+    }
+
+    async function removeAttacker(guild, executorId) {
+        if (executorId === guild.ownerId || executorId === client.user.id) {
+            return 'Sunucu sahibi veya bot olduğu için otomatik uzaklaştırma uygulanmadı.';
+        }
+
+        const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+        if (!botMember) return 'Bot üyelik bilgisi alınamadığı için saldırgan uzaklaştırılamadı.';
+
+        const targetMember = await guild.members.fetch(executorId).catch(() => null);
+
+        if (targetMember && botMember.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
+            return 'Saldırganın rolü botun rolüne eşit/yüksek. Discord rol hiyerarşisi nedeniyle uzaklaştırılamadı.';
+        }
+
+        if (botMember.permissions.has(PermissionFlagsBits.BanMembers)) {
+            try {
+                await guild.members.ban(executorId, {
+                    reason: 'TMF Anti-Raid: ' + THRESHOLD + ' veya daha fazla korunan işlem / ' + WINDOW_MS + ' ms'
+                });
+                return 'Saldırgan sunucudan yasaklandı.';
+            } catch (error) {
+                console.error('[GUARD] Ban başarısız:', error.message);
+            }
+        }
+
+        if (targetMember?.kickable && botMember.permissions.has(PermissionFlagsBits.KickMembers)) {
+            try {
+                await targetMember.kick('TMF Anti-Raid: şüpheli toplu sunucu işlemi');
+                return 'Ban başarısız olduğu için saldırgan sunucudan atıldı (kick).';
+            } catch (error) {
+                console.error('[GUARD] Kick başarısız:', error.message);
+                return 'Ban/kick başarısız: ' + error.message;
+            }
+        }
+
+        return 'Saldırgan tespit edildi ancak botta yeterli Ban/Kick izni veya rol üstünlüğü yok.';
     }
 
     async function lockdown(guild, executorId, eylem, count) {
         if (activeGuilds.has(guild.id)) return;
         activeGuilds.add(guild.id);
+        backupBlockedGuilds.add(guild.id);
 
-        let status;
+        let removalStatus = 'Uzaklaştırma denenmedi.';
+        let restoreResult = null;
+        let restoreStatus = 'Geri yükleme başlatılamadı.';
+
         try {
-            if (executorId === guild.ownerId || executorId === client.user.id) return;
+            removalStatus = await removeAttacker(guild, executorId);
 
-            const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
-            if (!botMember?.permissions.has(PermissionFlagsBits.BanMembers)) {
-                status = 'Saldırgan tespit edildi ancak botta Üyeleri Yasakla izni yok. Bot rolü ve izinleri kontrol edilmeli.';
-                return;
-            }
-
-            const targetMember = await guild.members.fetch(executorId).catch(() => null);
-            if (!targetMember) {
-                status = 'Saldırgan sunucuda bulunamadı; tekrar işlem yapması beklenmiyor.';
-                return;
-            }
-
-            if (botMember.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
-                status = 'Saldırgan tespit edildi ancak botun rolü saldırganın rolünden yüksek değil. Bot rolünü yükseltin.';
-                return;
-            }
-
-            await guild.members.ban(executorId, {
-                reason: `TMF Anti-Raid: ${count} kez / ${WINDOW_MS} ms içinde ${eylem}`.slice(0, 500)
-            });
-
-            status = 'Saldırgan otomatik olarak banlandı.';
-
-            // Saldırgan uzaklaştırıldıktan sonra eksik kalan rol/kanalları son
-            // yedekten geri getirmeyi dene (sadece eksik olanları ekler, mevcutlara
-            // dokunmaz).
-            const geriYukleme = await yedektenGeriYukle(
+            restoreResult = await yedektenGeriYukle(
                 guild,
-                `TMF Anti-Raid: ${eylem} sonrası otomatik geri yükleme`
+                'TMF Anti-Raid: ' + eylem + ' sonrası otomatik geri yükleme'
             ).catch(error => {
                 console.error('[GUARD] Geri yükleme başarısız:', error);
-                return { calisti: false, roller: 0, kanallar: 0 };
+                return {
+                    calisti: false,
+                    hata: error.message,
+                    roller: 0,
+                    kanallar: 0,
+                    warnings: []
+                };
             });
 
-            status += geriYukleme.calisti
-                ? ` ${geriYukleme.roller} rol, ${geriYukleme.kanallar} kanal geri yüklendi.`
-                : ` Geri yükleme yapılamadı${geriYukleme.hata ? ` (${geriYukleme.hata})` : ''}.`;
+            if (!restoreResult?.calisti) {
+                restoreStatus = 'Başarısız: ' + (restoreResult?.hata || 'bilinmeyen hata');
+            } else {
+                restoreStatus =
+                    restoreResult.roller + ' rol ve ' + restoreResult.kanallar +
+                    ' kanal yeniden oluşturuldu; ' +
+                    (restoreResult.silinenRoller || 0) + ' yeni rol ve ' +
+                    (restoreResult.silinenKanallar || 0) + ' yeni kanal temizlendi.';
 
-            // Temiz duruma dönüldüğü için güncel hali yeni yedek olarak kaydet.
-            await yedekAl(guild).catch(() => {});
+                if (restoreResult.warnings?.length) {
+                    restoreStatus += ' ' + restoreResult.warnings.length +
+                        ' uyarı oluştu; güvenli yedek üzerine yazılmadı.';
+                } else {
+                    const freshBackup = await yedekAl(guild);
+                    if (freshBackup) {
+                        backupBlockedGuilds.delete(guild.id);
+                        restoreStatus += ' Yeni temiz yedek kaydedildi.';
+                    } else {
+                        restoreStatus += ' Yeni yedek kaydedilemedi; önceki yedek korundu.';
+                    }
+                }
+            }
         } catch (error) {
-            status = `Otomatik ban başarısız: ${error.message}`;
-            console.error('[GUARD] Saldırgana müdahale edilemedi:', error);
+            restoreStatus = 'Kurtarma sırasında hata: ' + error.message;
+            console.error('[GUARD] Müdahale hatası:', error);
         } finally {
-            await sendGuardLog(guild, executorId, eylem, count, status || 'Müdahale tamamlanamadı.');
-            // Prevent a burst of concurrent event handlers from repeatedly
-            // trying to ban the same actor while Discord processes the ban.
-            setTimeout(() => activeGuilds.delete(guild.id), GUILD_COOLDOWN_MS).unref?.();
+            const status = removalStatus + '\n' + restoreStatus;
+            await sendGuardLog(guild, executorId, eylem, count, status, restoreResult);
+
+            setTimeout(() => {
+                activeGuilds.delete(guild.id);
+            }, GUILD_COOLDOWN_MS).unref?.();
         }
     }
 
@@ -185,8 +258,10 @@ module.exports = (client) => {
         if (ayarGetir(guild.id, 'guardAktif', false) !== true) return;
         if (activeGuilds.has(guild.id)) return;
 
-        const key = `${guild.id}:${executorId}`;
         const now = Date.now();
+        suspectGuildUntil.set(guild.id, now + SUSPECT_BACKUP_PAUSE_MS);
+
+        const key = guild.id + ':' + executorId;
         const actions = (userActions.get(key) || []).filter(timestamp => now - timestamp < WINDOW_MS);
         actions.push(now);
         userActions.set(key, actions);
@@ -207,6 +282,11 @@ module.exports = (client) => {
         if (executorId) await guardKontrol(role.guild, executorId, 'Rol oluşturma');
     });
 
+    client.on('roleUpdate', async (_oldRole, newRole) => {
+        const executorId = await getRecentExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
+        if (executorId) await guardKontrol(newRole.guild, executorId, 'Rol düzenleme/izin değiştirme');
+    });
+
     client.on('channelDelete', async channel => {
         if (!channel.guild) return;
         const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
@@ -217,6 +297,12 @@ module.exports = (client) => {
         if (!channel.guild) return;
         const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
         if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal oluşturma');
+    });
+
+    client.on('channelUpdate', async (_oldChannel, newChannel) => {
+        if (!newChannel.guild) return;
+        const executorId = await getRecentExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
+        if (executorId) await guardKontrol(newChannel.guild, executorId, 'Kanal/izin düzenleme');
     });
 
     client.on('guildBanAdd', async ban => {
@@ -246,15 +332,4 @@ module.exports = (client) => {
         const latest = entries.filter(Boolean).sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
         if (latest?.executorId) await guardKontrol(channel.guild, latest.executorId, 'Webhook işlemi');
     });
-
-    // Remove expired counters so this map cannot grow indefinitely.
-    const cleanup = setInterval(() => {
-        const now = Date.now();
-        for (const [key, timestamps] of userActions.entries()) {
-            const active = timestamps.filter(timestamp => now - timestamp < WINDOW_MS);
-            if (active.length) userActions.set(key, active);
-            else userActions.delete(key);
-        }
-    }, 60000);
-    cleanup.unref?.();
 };
