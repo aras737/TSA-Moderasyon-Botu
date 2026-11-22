@@ -197,8 +197,23 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
+            const commandStartedAt = Date.now();
             console.log(`🔨 /${interaction.commandName} | ${interaction.user.tag}`);
             await command.execute(interaction);
+
+            const acknowledged = interaction.replied || interaction.deferred;
+            console.log(
+                (acknowledged ? '✅' : '⚠️') +
+                ` /${interaction.commandName} tamamlandı: ${Date.now() - commandStartedAt}ms, ` +
+                `yanıt durumu: ${interaction.replied ? 'replied' : interaction.deferred ? 'deferred' : 'MISSING'}`
+            );
+
+            if (!acknowledged && interaction.isRepliable()) {
+                await interaction.reply({
+                    content: '⚠️ Komut çalıştı ancak bir yanıt oluşturmadı. Lütfen tekrar dene.',
+                    ephemeral: true
+                });
+            }
             return;
         }
 
