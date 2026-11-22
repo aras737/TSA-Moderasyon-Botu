@@ -4,8 +4,8 @@ const { ayarGetir } = require('../utils/db');
 module.exports = (client) => {
     const userActions = new Map();
     const lockedGuilds = new Set();
-    const WINDOW_MS = 1000;
-    const THRESHOLD = 3;
+    const WINDOW_MS = 3000;
+    const THRESHOLD = 5;
     const AUDIT_MAX_AGE_MS = 10000;
 
     async function getRecentExecutor(guild, type, targetId) {
