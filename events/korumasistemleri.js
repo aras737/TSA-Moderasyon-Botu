@@ -35,7 +35,12 @@ module.exports = client => {
                 suspectUntil > now
             ) continue;
 
-            const backup = await yedekAl(guild);
+            const backup = await yedekAl(guild, {
+                shouldAbort: () => activeGuilds.has(guild.id) ||
+                    backupBlockedGuilds.has(guild.id) ||
+                    ayarGetir(guild.id, 'guardYedekBloke', false) === true ||
+                    (suspectGuildUntil.get(guild.id) || 0) > Date.now()
+            });
             if (backup) {
                 console.log(
                     '[GUARD] ' + guild.name + ': otomatik sunucu yedeği alındı (' +
@@ -295,46 +300,60 @@ module.exports = client => {
         }
     }
 
+    function markPotentialRaid(guild) {
+        if (ayarGetir(guild.id, 'guardAktif', false) === true) {
+            suspectGuildUntil.set(guild.id, Date.now() + SUSPECT_BACKUP_PAUSE_MS);
+        }
+    }
+
     client.on('roleDelete', async role => {
+        markPotentialRaid(role.guild);
         const executorId = await getRecentExecutor(role.guild, AuditLogEvent.RoleDelete, role.id);
         if (executorId) await guardKontrol(role.guild, executorId, 'Rol silme');
     });
 
     client.on('roleCreate', async role => {
+        markPotentialRaid(role.guild);
         const executorId = await getRecentExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
         if (executorId) await guardKontrol(role.guild, executorId, 'Rol oluşturma');
     });
 
     client.on('roleUpdate', async (_oldRole, newRole) => {
+        markPotentialRaid(newRole.guild);
         const executorId = await getRecentExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
         if (executorId) await guardKontrol(newRole.guild, executorId, 'Rol düzenleme/izin değiştirme');
     });
 
     client.on('channelDelete', async channel => {
         if (!channel.guild) return;
+        markPotentialRaid(channel.guild);
         const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
         if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal silme');
     });
 
     client.on('channelCreate', async channel => {
         if (!channel.guild) return;
+        markPotentialRaid(channel.guild);
         const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
         if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal oluşturma');
     });
 
     client.on('channelUpdate', async (_oldChannel, newChannel) => {
         if (!newChannel.guild) return;
+        markPotentialRaid(newChannel.guild);
         const executorId = await getRecentExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
         if (executorId) await guardKontrol(newChannel.guild, executorId, 'Kanal/izin düzenleme');
     });
 
     client.on('guildBanAdd', async ban => {
+        markPotentialRaid(ban.guild);
         const executorId = await getRecentExecutor(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
         if (executorId) await guardKontrol(ban.guild, executorId, 'Üye banlama');
     });
 
     client.on('webhookUpdate', async channel => {
         if (!channel.guild) return;
+        markPotentialRaid(channel.guild);
 
         const eventTypes = [
             AuditLogEvent.WebhookDelete,
