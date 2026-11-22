@@ -63,7 +63,7 @@ module.exports = {
                     listeMetni = '*<a:uyari:1505166167189487757> Bu bölümde listelenecek herhangi bir yasaklı üye bulunmuyor kanka.*';
                 } else {
                     listeMetni = sayfaVerisi.map((ban, index) => {
-                        const sebep = ban.reason ? ban.reason : 'Sebep belirtilmemiş.';
+                        const sebep = (ban.reason || 'Sebep belirtilmemiş.').slice(0, 200);
                         const isGlobal = ban.reason && ban.reason.includes('Küresel Sıkıyönetim');
                         const rozet = isGlobal ? '🔴 `[KÜRESEL TAM YASAK]`' : '🟡 `[SUNUCU YASAĞI]`';
 
@@ -163,10 +163,17 @@ module.exports = {
                     mevcutSayfa = 0;
                 }
 
-                await buttonInteraction.update({
-                    embeds: [sayfaEmbedOlustur()],
-                    components: butonlariOlustur()
-                });
+                try {
+                    await buttonInteraction.update({
+                        embeds: [sayfaEmbedOlustur()],
+                        components: butonlariOlustur()
+                    });
+                } catch (error) {
+                    console.error('Ban listesi sayfa güncelleme hatası:', error);
+                    if (!buttonInteraction.replied && !buttonInteraction.deferred) {
+                        await buttonInteraction.reply({ content: '⚠️ Liste güncellenemedi. Komutu yeniden çalıştır.', ephemeral: true }).catch(() => {});
+                    }
+                }
             });
 
             collector.on('end', () => {
