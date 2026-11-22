@@ -113,7 +113,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('rutbe-degistir')
-        .setDescription('Roblox grubundaki bir kullanicinin rutbesini degistirir.')
+        .setDescription('🏅 Roblox grubundaki bir kullanicinin rutbesini degistirir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .addStringOption(option =>
             option.setName('isim')
@@ -140,11 +140,11 @@ module.exports = {
                 .setDescription('Rutbe degisim sebebi.')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'Transfer', value: 'Transfer' },
-                    { name: 'Terfi', value: 'Terfi' },
-                    { name: 'Atama', value: 'Atama' },
-                    { name: 'Tenzil', value: 'Tenzil' },
-                    { name: 'Duzeltme', value: 'Duzeltme' }
+                    { name: '📌 Transfer', value: 'Transfer' },
+                    { name: '📌 Terfi', value: 'Terfi' },
+                    { name: '📌 Atama', value: 'Atama' },
+                    { name: '📌 Tenzil', value: 'Tenzil' },
+                    { name: '📌 Duzeltme', value: 'Duzeltme' }
                 )
         ),
 
@@ -208,7 +208,7 @@ module.exports = {
 
             if (!robloxUser) {
                 const kayitsizEmbed = new EmbedBuilder()
-                    .setTitle('Roblox Hesabi Bulunamadi')
+                    .setTitle('🏅 Roblox Hesabi Bulunamadi')
                     .setDescription(`<a:baarsz:1505146967817326675> **${robloxAdiInput}** adinda bir Roblox kullanicisi bulunamadi.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [kayitsizEmbed] });
@@ -216,7 +216,7 @@ module.exports = {
 
             if (!yetkiliRobloxUser) {
                 const yetkiliYokEmbed = new EmbedBuilder()
-                    .setTitle('Yetkili Roblox Hesabi Bulunamadi')
+                    .setTitle('🏅 Yetkili Roblox Hesabi Bulunamadi')
                     .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxInput}** adinda bir Roblox kullanicisi bulunamadi.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [yetkiliYokEmbed] });
@@ -231,7 +231,7 @@ module.exports = {
 
             if (!membership) {
                 const uyeDegilEmbed = new EmbedBuilder()
-                    .setTitle('Grup Uyeligi Bulunamadi')
+                    .setTitle('🏅 Grup Uyeligi Bulunamadi')
                     .setDescription(`<a:uyari:1505166167189487757> **${robloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [uyeDegilEmbed] });
@@ -239,7 +239,7 @@ module.exports = {
 
             if (!yetkiliMembership) {
                 const yetkiliUyeDegilEmbed = new EmbedBuilder()
-                    .setTitle('Yetkili Grup Uyeligi Bulunamadi')
+                    .setTitle('🏅 Yetkili Grup Uyeligi Bulunamadi')
                     .setDescription(`<a:uyari:1505166167189487757> **${yetkiliRobloxUser.name}** kullanicisi \`${ROBLOX_GRUP_ID}\` ID'li grupta bulunmuyor.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [yetkiliUyeDegilEmbed] });
@@ -249,7 +249,7 @@ module.exports = {
             const hedefRol = cloudRoleByPublicRole(roles, hedefPublicRol);
             if (!hedefRol) {
                 const rolYokEmbed = new EmbedBuilder()
-                    .setTitle('Rutbe Bulunamadi')
+                    .setTitle('🏅 Rutbe Bulunamadi')
                     .setDescription(`\`${yeniRutbeId}\` ID/rank degerine sahip rutbe bu grupta bulunamadi. Dogru deger icin \`/grup_listele\` kullan.`)
                     .setColor('#7a0010');
                 return interaction.editReply({ embeds: [rolYokEmbed] });
@@ -268,11 +268,11 @@ module.exports = {
 
             if (hedefRank < 0 || yetkiliRank < 0 || hedefRank >= yetkiliRank) {
                 const yetkiEmbed = new EmbedBuilder()
-                    .setTitle('Rutbe Yetkisi Yetersiz')
+                    .setTitle('🏅 Rutbe Yetkisi Yetersiz')
                     .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
                     .addFields(
-                        { name: 'Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
-                        { name: 'Verilmek Istenen Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
+                        { name: '📌 Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
+                        { name: '📌 Verilmek Istenen Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
                     )
                     .setColor('#7a0010');
 
@@ -305,11 +305,11 @@ module.exports = {
                 .setTitle('<a:tik:1505164671081123840> Roblox Grubunda Rütbe Değiştirildi')
                 .setDescription(`**${robloxUser.name}** adlı kişinin Roblox grubundaki rütbesi başarıyla güncellendi kanka.`)
                 .addFields(
-                    { name: '┗ <:uzaybot_kullanicilar:1505146190973505567> Roblox Adı / ID', value: `\`${robloxUser.name}\` (${robloxUser.id})`, inline: true },
-                    { name: '┗ <:Paper:1505146388596391977> Eski Rütbe', value: `\`${eskiRutbeAdi}\``, inline: true },
-                    { name: '┗ <:Paper:1505146388596391977> Yeni Rütbe', value: `\`${yeniRutbeAdi}\` *[Rank: ${hedefRank}]*`, inline: true },
-                    { name: '┗ 👑 İşlem Yapan Yetkili', value: `${yetkili} — RoWifi Onaylı: \`${yetkiliRobloxUser.name}\` *(${yetkiliRutbeAdi})*`, inline: false },
-                    { name: '┗ ✨ Değişim Sebebi', value: `\`${sebep}\``, inline: false }
+                    { name: '📌 ┗ <:uzaybot_kullanicilar:1505146190973505567> Roblox Adı / ID', value: `\`${robloxUser.name}\` (${robloxUser.id})`, inline: true },
+                    { name: '📌 ┗ <:Paper:1505146388596391977> Eski Rütbe', value: `\`${eskiRutbeAdi}\``, inline: true },
+                    { name: '📌 ┗ <:Paper:1505146388596391977> Yeni Rütbe', value: `\`${yeniRutbeAdi}\` *[Rank: ${hedefRank}]*`, inline: true },
+                    { name: '📌 ┗ 👑 İşlem Yapan Yetkili', value: `${yetkili} — RoWifi Onaylı: \`${yetkiliRobloxUser.name}\` *(${yetkiliRutbeAdi})*`, inline: false },
+                    { name: '📌 ┗ ✨ Değişim Sebebi', value: `\`${sebep}\``, inline: false }
                 )
                 .setColor('#107a29')
                 .setFooter({
@@ -323,7 +323,7 @@ module.exports = {
             console.error('Roblox rutbe degisim hatasi:', error.response ? error.response.data : error.message);
 
             const apiHataEmbed = new EmbedBuilder()
-                .setTitle('Rutbe Degistirilemedi')
+                .setTitle('🏅 Rutbe Degistirilemedi')
                 .setDescription(parseRobloxError(error))
                 .setColor('#7a0010');
 
