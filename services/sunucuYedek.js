@@ -117,7 +117,7 @@ function normalizeBackup(backup) {
     return { ...backup, roller, kanallar };
 }
 
-async function yedekAl(guild) {
+async function yedekAl(guild, options = {}) {
     try {
         // Cache eksikse yedek boş/eksik çıkmasın diye Discord'dan güncel yapıyı çek.
         await Promise.all([
@@ -147,6 +147,10 @@ async function yedekAl(guild) {
             roller,
             kanallar
         };
+
+        // Otomatik snapshot hazırlanırken raid olayı geldiyse hasarlı/yarım
+        // durumu mevcut güvenli yedeğin üstüne yazma.
+        if (typeof options.shouldAbort === 'function' && options.shouldAbort()) return null;
 
         ayarKaydet(guild.id, YEDEK_ANAHTARI, backup);
         return backup;
