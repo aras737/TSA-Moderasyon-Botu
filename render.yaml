@@ -12,6 +12,8 @@ services:
         value: production
       - key: TOKEN
         sync: false
+      - key: BOT_OWNER_ID
+        sync: false
       - key: ROBLOX_API_KEY
         sync: false
       - key: ROWIFI_API_KEY
