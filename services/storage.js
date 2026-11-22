@@ -266,6 +266,7 @@ class Storage {
       };
 
       data.punishments.push(entry);
+      if (data.punishments.length > 10000) data.punishments = data.punishments.slice(-10000);
       return entry;
     });
   }
@@ -294,6 +295,7 @@ class Storage {
       };
 
       data.tickets.push(entry);
+      if (data.tickets.length > 10000) data.tickets = data.tickets.slice(-10000);
       return entry;
     });
   }
