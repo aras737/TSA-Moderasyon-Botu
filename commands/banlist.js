@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 
 module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.BanMembers, PermissionsBitField.Flags.Administrator],
+    requiredPerms: [PermissionsBitField.Flags.BanMembers],
 
     data: new SlashCommandBuilder()
         .setName('banlist')
