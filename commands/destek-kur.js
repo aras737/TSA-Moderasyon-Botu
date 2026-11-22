@@ -9,6 +9,8 @@ const {
     StringSelectMenuBuilder
 } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
+const Storage = require('../services/storage');
+const ticketCreateLocks = new Set();
 
 module.exports = {
     requiredPerms: [PermissionsBitField.Flags.Administrator],
@@ -219,6 +221,14 @@ module.exports = {
                     return interaction.editReply({ content: '⚠️ Geçersiz destek kategorisi seçildi.' });
                 }
 
+                // Prevent two fast panel clicks from creating duplicate tickets.
+                const lockKey = `${interaction.guild.id}:${interaction.user.id}`;
+                if (ticketCreateLocks.has(lockKey)) {
+                    return interaction.editReply({ content: '⏳ Biletin zaten oluşturuluyor. Birkaç saniye bekle.' });
+                }
+                ticketCreateLocks.add(lockKey);
+
+                try {
                 const existingTicket = interaction.guild.channels.cache.find(channel =>
                     channel.type === ChannelType.GuildText &&
                     channel.topic?.includes(`Açan: ${interaction.user.id} |`)
@@ -365,10 +375,25 @@ module.exports = {
                     });
                 }
 
+                try {
+                    Storage.addTicket({
+                        guildId: interaction.guild.id,
+                        channelId: kanal.id,
+                        userId: interaction.user.id,
+                        category: kategori,
+                        status: 'open'
+                    });
+                } catch (storageError) {
+                    console.error('Bilet kaydı datastore içine yazılamadı:', storageError.message);
+                }
+
                 await interaction.editReply({ 
                     content: `<a:tik:1505164671081123840> **Bilet başarıyla oluşturuldu!**\n\n<:uzaybot_kanal:1505159120074833931> Bilet Kanalı: ${kanal}\n📂 Kategori: ${info.emoji} ${kategori}`, 
                     components: []
                 });
+                } finally {
+                    ticketCreateLocks.delete(lockKey);
+                }
             }
 
             // --- 3. BİLETİ ÜSTLENME ---
@@ -484,6 +509,15 @@ module.exports = {
                         
                         await logKanal.send({ embeds: [logEmbed] });
                     }
+                }
+
+                try {
+                    Storage.updateTicket(
+                        { guildId: interaction.guild.id, channelId: interaction.channel.id, status: 'open' },
+                        { status: 'closed', closedAt: new Date().toISOString(), closedBy: interaction.user.id }
+                    );
+                } catch (storageError) {
+                    console.error('Bilet kapanış kaydı güncellenemedi:', storageError.message);
                 }
 
                 setTimeout(async () => {
