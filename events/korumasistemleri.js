@@ -1,9 +1,28 @@
 const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
 const { ayarGetir } = require('../utils/db');
+const { yedekAl, yedektenGeriYukle } = require('../services/sunucuYedek');
 
 module.exports = (client) => {
     const userActions = new Map();
     const activeGuilds = new Set();
+
+    // --- OTOMATİK YEDEKLEME ---
+    // Guard bir saldırıyı durdurduğunda sunucuyu saldırıdan ÖNCEKİ haline
+    // döndürebilmek için rol + kanal yapısı düzenli aralıklarla yedekleniyor.
+    // Bot açılır açılmaz ilk yedek alınır, sonrasında 5 dakikada bir tazelenir.
+    const YEDEK_ARALIGI_MS = 5 * 60 * 1000;
+
+    const tumSunuculariYedekle = () => {
+        client.guilds.cache.forEach(guild => {
+            yedekAl(guild).catch(() => {});
+        });
+    };
+
+    if (client.isReady()) tumSunuculariYedekle();
+    else client.once('ready', tumSunuculariYedekle);
+
+    const yedeklemeAraligi = setInterval(tumSunuculariYedekle, YEDEK_ARALIGI_MS);
+    yedeklemeAraligi.unref?.();
 
     // Discord audit-log entries can appear shortly after the gateway event.
     // A low threshold is intentional: a raid must be stopped before many more
@@ -103,6 +122,24 @@ module.exports = (client) => {
             });
 
             status = 'Saldırgan otomatik olarak banlandı.';
+
+            // Saldırgan uzaklaştırıldıktan sonra eksik kalan rol/kanalları son
+            // yedekten geri getirmeyi dene (sadece eksik olanları ekler, mevcutlara
+            // dokunmaz).
+            const geriYukleme = await yedektenGeriYukle(
+                guild,
+                `TMF Anti-Raid: ${eylem} sonrası otomatik geri yükleme`
+            ).catch(error => {
+                console.error('[GUARD] Geri yükleme başarısız:', error);
+                return { calisti: false, roller: 0, kanallar: 0 };
+            });
+
+            status += geriYukleme.calisti
+                ? ` ${geriYukleme.roller} rol, ${geriYukleme.kanallar} kanal geri yüklendi.`
+                : ` Geri yükleme yapılamadı${geriYukleme.hata ? ` (${geriYukleme.hata})` : ''}.`;
+
+            // Temiz duruma dönüldüğü için güncel hali yeni yedek olarak kaydet.
+            await yedekAl(guild).catch(() => {});
         } catch (error) {
             status = `Otomatik ban başarısız: ${error.message}`;
             console.error('[GUARD] Saldırgana müdahale edilemedi:', error);
