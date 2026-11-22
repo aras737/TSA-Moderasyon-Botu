@@ -14,8 +14,8 @@ module.exports = (client) => {
 
             if (!kanalId || !durum) return;
 
-            const kanal = member.guild.channels.cache.get(kanalId);
-            if (!kanal) return;
+            const kanal = await member.guild.channels.fetch(kanalId).catch(() => null);
+            if (!kanal?.isTextBased?.() || !kanal.send) return;
 
             // Hoşgeldiniz embed'i
             const avatar = member.user.displayAvatarURL({ extension: 'png', size: 256 });
@@ -23,7 +23,7 @@ module.exports = (client) => {
             const resimUrl = `https://dummyimage.com/800x350/2b2d31/f2f3f5.png?text=HOSGELDINIZ+${encodeURIComponent(member.user.username)}%0A%0ASunucuda+${memberCount}.+Uyesi`;
 
             const girisBilgisi = new EmbedBuilder()
-                .setTitle('📥 Yeni Bir Kan Sunucuya Katıldı!')
+                .setTitle('📥 Yeni Bir Kullanıcı Sunucuya Katıldı!')
                 .setDescription(`**${member.user}** aramıza hoş geldi!\n\n🎉 Sunucu Üye Sayısı: **${memberCount}**\n⏰ Hesap Açılış Tarihi: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
                 .setThumbnail(avatar)
                 .setImage(resimUrl)
@@ -58,7 +58,7 @@ module.exports = (client) => {
             const resimUrl = `https://dummyimage.com/800x350/2b2d31/f2f3f5.png?text=GULE+GULE+${encodeURIComponent(member.user.username)}%0A%0ASunucuda+${memberCount}.+Uyesi+Kaldi`;
 
             const cikisBilgisi = new EmbedBuilder()
-                .setTitle('📤 Bir Kan Sunucudan Ayrıldı!')
+                .setTitle('📤 Bir Kullanıcı Sunucudan Ayrıldı!')
                 .setDescription(`**${member.user.tag}** sunucudan ayrıldı...\n\n😢 Sunucu Üye Sayısı: **${memberCount}**\n⏰ Ayrılış Tarihi: <t:${Math.floor(Date.now() / 1000)}:F>`)
                 .setThumbnail(avatar)
                 .setImage(resimUrl)
