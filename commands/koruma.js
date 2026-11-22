@@ -88,6 +88,7 @@ module.exports = {
 
         if (subcommand === 'durum') {
             const guard = ayarGetir(guildId, 'guardAktif', false) === true;
+            const guardBackupBlocked = ayarGetir(guildId, 'guardYedekBloke', false) === true;
             const kufur = ayarGetir(guildId, 'kufurEngelDurum', false) === true;
             const spam = ayarGetir(guildId, 'spamEngelDurum', false) === true;
             const mention = ayarGetir(guildId, 'topluEtiketEngelDurum', false) === true;
@@ -95,10 +96,37 @@ module.exports = {
             const girisCikis = ayarGetir(guildId, 'girisCikisDurum', false) === true;
             const channelId = ayarGetir(guildId, 'girisCikisKanal', null);
 
+            const botMember = interaction.guild.members.me ||
+                await interaction.guild.members.fetchMe().catch(() => null);
+            const guardMissingPermissions = [];
+            if (!botMember?.permissions.has(PermissionFlagsBits.ViewAuditLog)) guardMissingPermissions.push('Denetim Kaydını Görüntüle');
+            if (!botMember?.permissions.has(PermissionFlagsBits.ManageChannels)) guardMissingPermissions.push('Kanalları Yönet');
+            if (!botMember?.permissions.has(PermissionFlagsBits.ManageRoles)) guardMissingPermissions.push('Rolleri Yönet');
+            if (
+                !botMember?.permissions.has(PermissionFlagsBits.BanMembers) &&
+                !botMember?.permissions.has(PermissionFlagsBits.KickMembers)
+            ) guardMissingPermissions.push('Üyeleri Yasakla veya Üyeleri At');
+
+            const guardStatus = !guard
+                ? '⛔ Kapalı'
+                : guardMissingPermissions.length
+                    ? '⚠️ Açık görünüyor; eksik izinler var'
+                    : '✅ Açık';
+
             const embed = new EmbedBuilder()
                 .setTitle('🛡️ TMF | Güvenlik Ayarları')
                 .addFields(
-                    { name: '📌 Anti-Raid Guard', value: guard ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Anti-Raid Guard', value: guardStatus, inline: true },
+                    {
+                        name: '📌 Kurtarma Yedeği',
+                        value: !guard ? '—' : guardBackupBlocked
+                            ? '⚠️ Bloke — /koruma yedek-al ile yeni güvenli yedek al'
+                            : '✅ Kullanılabilir',
+                        inline: false
+                    },
+                    ...(guard && guardMissingPermissions.length
+                        ? [{ name: '📌 Eksik Bot İzinleri', value: guardMissingPermissions.join(', '), inline: false }]
+                        : []),
                     { name: '📌 Küfür Filtresi', value: kufur ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: '📌 Spam Koruması', value: spam ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: '📌 Toplu Etiket', value: mention ? '✅ Açık' : '⛔ Kapalı', inline: true },
