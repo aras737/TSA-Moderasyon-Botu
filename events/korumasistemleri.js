@@ -255,7 +255,7 @@ module.exports = client => {
         }
     }
 
-    async function guardKontrol(guild, executorId, eylem) {
+    async function guardKontrol(guild, executorId, eylem, actionWeight = 1) {
         if (!executorId || executorId === client.user.id || executorId === guild.ownerId) return;
         if (ayarGetir(guild.id, 'guardAktif', false) !== true) return;
         if (activeGuilds.has(guild.id)) return;
@@ -265,7 +265,8 @@ module.exports = client => {
 
         const key = guild.id + ':' + executorId;
         const actions = (userActions.get(key) || []).filter(timestamp => now - timestamp < WINDOW_MS);
-        actions.push(now);
+        const weight = Math.max(1, Math.min(THRESHOLD, Number(actionWeight) || 1));
+        for (let i = 0; i < weight; i++) actions.push(now);
         userActions.set(key, actions);
 
         if (actions.length >= THRESHOLD) {
@@ -277,16 +278,29 @@ module.exports = client => {
     const GUARD_ACTION_LABELS = new Map([
         [AuditLogEvent.ChannelDelete, 'Kanal silme'],
         [AuditLogEvent.ChannelCreate, 'Kanal oluşturma'],
-        [AuditLogEvent.ChannelUpdate, 'Kanal/izin düzenleme'],
+        [AuditLogEvent.ChannelUpdate, 'Kanal düzenleme'],
+        [AuditLogEvent.ChannelOverwriteCreate, 'Kanal izni oluşturma'],
+        [AuditLogEvent.ChannelOverwriteUpdate, 'Kanal izni değiştirme'],
+        [AuditLogEvent.ChannelOverwriteDelete, 'Kanal izni silme'],
+        [AuditLogEvent.ChannelPositionUpdate, 'Kanal sırası değiştirme'],
         [AuditLogEvent.RoleDelete, 'Rol silme'],
         [AuditLogEvent.RoleCreate, 'Rol oluşturma'],
         [AuditLogEvent.RoleUpdate, 'Rol/izin düzenleme'],
+        [AuditLogEvent.RolePositionUpdate, 'Rol sırası değiştirme'],
         [AuditLogEvent.MemberBanAdd, 'Üye banlama'],
         [AuditLogEvent.MemberKick, 'Üye atma'],
+        [AuditLogEvent.MemberPrune, 'Toplu üye temizleme'],
         [AuditLogEvent.MemberRoleUpdate, 'Üye rol değiştirme'],
         [AuditLogEvent.WebhookCreate, 'Webhook oluşturma'],
         [AuditLogEvent.WebhookUpdate, 'Webhook düzenleme'],
-        [AuditLogEvent.WebhookDelete, 'Webhook silme']
+        [AuditLogEvent.WebhookDelete, 'Webhook silme'],
+        [AuditLogEvent.GuildUpdate, 'Sunucu ayarı değiştirme'],
+        [AuditLogEvent.EmojiDelete, 'Emoji silme'],
+        [AuditLogEvent.StickerDelete, 'Çıkartma silme'],
+        [AuditLogEvent.MessageBulkDelete, 'Toplu mesaj silme'],
+        [AuditLogEvent.AutoModerationRuleCreate, 'Otomatik moderasyon kuralı oluşturma'],
+        [AuditLogEvent.AutoModerationRuleUpdate, 'Otomatik moderasyon kuralı değiştirme'],
+        [AuditLogEvent.AutoModerationRuleDelete, 'Otomatik moderasyon kuralı silme']
     ]);
 
     // Discord'un Audit Log Entry gateway olayı, her işlem için API'yi tekrar
@@ -309,7 +323,10 @@ module.exports = client => {
             if (ayarGetir(guild.id, 'guardAktif', false) !== true) return;
             suspectGuildUntil.set(guild.id, Date.now() + SUSPECT_BACKUP_PAUSE_MS);
 
-            await guardKontrol(guild, executorId, eylem);
+            const removedMembers = eylem === 'Toplu üye temizleme'
+                ? Number(entry.extra?.membersRemoved || 1)
+                : 1;
+            await guardKontrol(guild, executorId, eylem, removedMembers);
         } catch (error) {
             console.error('[GUARD] Audit gateway olayı işlenemedi:', error);
         }
