@@ -78,6 +78,45 @@ function serializeChannel(channel) {
     };
 }
 
+function normalizeBackup(backup) {
+    const roller = (Array.isArray(backup.roller) ? backup.roller : []).map(role => ({
+        ...role,
+        id: role.id || null,
+        name: role.name || role.ad || 'Recovered role',
+        color: role.color ?? role.renk ?? 0,
+        hoist: Boolean(role.hoist),
+        mentionable: Boolean(role.mentionable),
+        permissions: role.permissions || '0'
+    }));
+
+    const kanallar = (Array.isArray(backup.kanallar) ? backup.kanallar : []).map(channel => ({
+        ...channel,
+        id: channel.id || null,
+        name: channel.name || channel.ad || 'recovered-channel',
+        type: channel.type ?? channel.tip,
+        parentId: channel.parentId || null,
+        parentName: channel.parentName || channel.ustKategori || null,
+        topic: channel.topic ?? channel.konu ?? null,
+        nsfw: Boolean(channel.nsfw),
+        rateLimitPerUser: channel.rateLimitPerUser ?? channel.yavasMod ?? 0,
+        bitrate: channel.bitrate ?? channel.bitrate ?? null,
+        userLimit: channel.userLimit ?? channel.kullaniciLimiti ?? null,
+        overwrites: (channel.overwrites || []).map(overwrite => {
+            const type = overwrite.type ?? (overwrite.tip === 'role' ? 0 : 1);
+            return {
+                id: overwrite.id || (type === 1 ? overwrite.userId : null),
+                type,
+                roleName: overwrite.roleName || (type === 0 ? overwrite.ad : null),
+                userId: overwrite.userId || (type === 1 ? overwrite.id : null),
+                allow: overwrite.allow || '0',
+                deny: overwrite.deny || '0'
+            };
+        })
+    }));
+
+    return { ...backup, roller, kanallar };
+}
+
 async function yedekAl(guild) {
     try {
         // Cache eksikse yedek boş/eksik çıkmasın diye Discord'dan güncel yapıyı çek.
@@ -206,7 +245,8 @@ function channelEditOptions(snapshot, parentId, overwrites, includePosition) {
 }
 
 async function yedektenGeriYukle(guild, sebep = 'TMF Anti-Raid: son güvenli yedekten geri yükleme') {
-    const backup = ayarGetir(guild.id, YEDEK_ANAHTARI, null);
+    const rawBackup = ayarGetir(guild.id, YEDEK_ANAHTARI, null);
+    const backup = rawBackup ? normalizeBackup(rawBackup) : null;
 
     if (!backup || !Array.isArray(backup.roller) || !Array.isArray(backup.kanallar)) {
         return {
