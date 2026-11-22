@@ -144,7 +144,7 @@ const server = app.listen(PORT, () => {
     console.log(`📡 Web sağlık sunucusu ${PORT} portunda çalışıyor.`);
 });
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
 
     if (slashCommands.length === 0) {
