@@ -154,7 +154,7 @@ module.exports = (client) => {
 
         // 3. MASS MENTION (TOPLU ETİKET) KORUMASI
         if (korumaAyar.mention) {
-        const toplamEtiket = message.mentions.users.size + message.mentions.roles.size;
+        const toplamEtiket = message.mentions.users.size + message.mentions.roles.size + (message.mentions.everyone ? 1 : 0);
         if (toplamEtiket > 5) {
             if (message.member?.moderatable) {
                 await message.delete().catch(() => null);
