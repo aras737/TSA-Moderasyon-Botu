@@ -20,9 +20,17 @@ function registerSesPanelEvents(client) {
                 if (!inter.isButton() || !inter.inGuild()) return;
                 const guild = inter.guild;
                 if (!guild) return;
+                if (
+                    !inter.customId.startsWith('tsa_ses_olustur_') &&
+                    !inter.customId.startsWith('tsa_oda_sil_')
+                ) return;
+
+                // Member fetch / storage lookup can exceed Discord's 3s ACK window.
+                await inter.deferReply({ ephemeral: true });
+
                 const member = await guild.members.fetch(inter.user.id).catch(() => null);
                 if (!member) {
-                    return inter.reply({ content: `${uyariEmoji} Üye bilgisi alınamadı. İşlemi yeniden dene.`, ephemeral: true });
+                    return inter.editReply({ content: `${uyariEmoji} Üye bilgisi alınamadı. İşlemi yeniden dene.` });
                 }
 
                 // 🔥 1. BUTON: ANA PANELDEKİ "ODA OLUŞTUR" BUTONU
@@ -36,13 +44,10 @@ function registerSesPanelEvents(client) {
                         ownerRecords[`tempVoiceOwner:${channel.id}`] === member.id
                     );
                     if (odaArat) {
-                        return inter.reply({ 
-                            content: `${uyariEmoji} **Hata:** Kanka zaten aktif olarak açık bir odan bulunuyor! Kanalın: ${odaArat}`, 
-                            ephemeral: true 
+                        return inter.editReply({ 
+                            content: `${uyariEmoji} **Hata:** Kanka zaten aktif olarak açık bir odan bulunuyor! Kanalın: ${odaArat}` 
                         });
                     }
-
-                    await inter.deferReply({ ephemeral: true });
 
                     let yeniSesKanali = null;
                     try {
@@ -153,19 +158,18 @@ function registerSesPanelEvents(client) {
                     // Eski veya taklit edilmiş bir buton, farklı bir kanalı silemesin.
                     const registeredOwnerId = inter.channelId ? Storage.get(`tempVoiceOwner:${inter.channelId}`) : null;
                     if (!inter.channel?.isVoiceBased?.() || registeredOwnerId !== odaSahibiId) {
-                        return inter.reply({ content: `${uyariEmoji} Bu buton geçerli bir TMF geçici odasına ait değil.`, ephemeral: true });
+                        return inter.editReply({ content: `${uyariEmoji} Bu buton geçerli bir TMF geçici odasına ait değil.` });
                     }
 
                     // Güvenlik Duvarı: Basan kişi odayı açan kişi mi?
                     if (inter.user.id !== odaSahibiId) {
-                        return inter.reply({ 
-                            content: `${uyariEmoji} **Hata:** Kanka bu odayı sen açmadın! Sadece oda sahibi (**<@${odaSahibiId}>**) bu odayı imha edebilir.`, 
-                            ephemeral: true 
+                        return inter.editReply({ 
+                            content: `${uyariEmoji} **Hata:** Kanka bu odayı sen açmadın! Sadece oda sahibi (**<@${odaSahibiId}>**) bu odayı imha edebilir.` 
                         });
                     }
 
                     // Eğer sahibi bastıysa kanalı saniyeler içinde yok et
-                    await inter.reply({ content: `${silEmoji} Kanal imha ediliyor...` });
+                    await inter.editReply({ content: `${silEmoji} Kanal imha ediliyor...` });
                     
                     setTimeout(async () => {
                         try {
