@@ -53,23 +53,25 @@ module.exports = {
             return interaction.reply({ content: '⛔ Kendini veya sunucu sahibini susturamazsın.', ephemeral: true });
         }
 
+        await interaction.deferReply({ ephemeral: true });
+
         const member = await interaction.guild.members.fetch(target.id).catch(() => null);
         if (!member) {
-            return interaction.reply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.', ephemeral: true });
+            return interaction.editReply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.', ephemeral: true });
         }
 
         const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
         if (!moderator) {
-            return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
         }
         if (moderator.id !== interaction.guild.ownerId &&
             moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.reply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi susturamazsın.', ephemeral: true });
+            return interaction.editReply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi susturamazsın.', ephemeral: true });
         }
 
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
         if (!botMember || !member.moderatable || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.reply({ content: '⛔ Botun rol hiyerarşisi bu üyeyi susturmaya izin vermiyor.', ephemeral: true });
+            return interaction.editReply({ content: '⛔ Botun rol hiyerarşisi bu üyeyi susturmaya izin vermiyor.', ephemeral: true });
         }
 
         try {
@@ -88,10 +90,10 @@ module.exports = {
                 .setThumbnail(target.displayAvatarURL())
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Mute komutu hatası:', error);
-            return interaction.reply({ content: '❌ Susturma işlemi sırasında hata oluştu. Botun Moderate Members yetkisini kontrol et.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Susturma işlemi sırasında hata oluştu. Botun Moderate Members yetkisini kontrol et.', ephemeral: true });
         }
     }
 };
