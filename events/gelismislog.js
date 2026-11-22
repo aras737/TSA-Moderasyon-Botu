@@ -112,7 +112,9 @@ module.exports = (client) => {
 
         if (filtrelenmisLog.length >= 5) {
             // Hiyerarşi kontrolü: Botun gücü yetiyorsa sustursun
-            if (message.member?.manageable) {
+            // Eşik geçildiğinde sayacı hemen sıfırla; sonraki her mesajda tekrar ceza verme.
+            mesajTakip.delete(takipAnahtari);
+            if (message.member?.moderatable) {
                 await message.delete().catch(() => null);
                 await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
@@ -133,7 +135,7 @@ module.exports = (client) => {
         if (korumaAyar.mention) {
         const toplamEtiket = message.mentions.users.size + message.mentions.roles.size;
         if (toplamEtiket > 5) {
-            if (message.member?.manageable) {
+            if (message.member?.moderatable) {
                 await message.delete().catch(() => null);
                 await message.member.timeout(10 * 60 * 1000, 'Toplu Etiket Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} Tek bir mesajda çok fazla kişiyi etiketlediğin için 10 dakika susturuldun kanka!` }).catch(() => null);
