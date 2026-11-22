@@ -8,8 +8,8 @@ module.exports = (client) => {
     // Discord audit-log entries can appear shortly after the gateway event.
     // A low threshold is intentional: a raid must be stopped before many more
     // destructive actions are completed.
-    const WINDOW_MS = 2500;
-    const THRESHOLD = 2;
+    const WINDOW_MS = 1000;
+    const THRESHOLD = 5;
     const AUDIT_MAX_AGE_MS = 15000;
     const AUDIT_RETRIES = 4;
     const AUDIT_RETRY_DELAY_MS = 300;
