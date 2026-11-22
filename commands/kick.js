@@ -30,8 +30,13 @@ module.exports = {
             return interaction.reply({ content: '⚠️ Bu kullanıcı sunucuda bulunamadı.', ephemeral: true });
         }
 
-        if (interaction.user.id !== interaction.guild.ownerId &&
-            interaction.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+        const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (!moderator) {
+            return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
+        }
+
+        if (moderator.id !== interaction.guild.ownerId &&
+            moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
             return interaction.reply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi atamazsın.', ephemeral: true });
         }
 
