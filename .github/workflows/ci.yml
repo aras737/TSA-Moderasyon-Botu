@@ -21,3 +21,9 @@ jobs:
         run: npm ci
       - name: Check JavaScript syntax
         run: npm run check
+      - name: Report production dependency vulnerabilities
+        continue-on-error: true
+        shell: bash
+        run: |
+          npm audit --omit=dev --json > npm-audit.json || true
+          node -e "const a=require('./npm-audit.json'); const vulns=a.vulnerabilities||{}; const entries=Object.entries(vulns); console.log('Production dependency vulnerabilities:', a.metadata?.vulnerabilities||{}); for (const [name,v] of entries) console.log(name+': '+v.severity+'; direct='+v.isDirect+'; fix='+JSON.stringify(v.fixAvailable));"
