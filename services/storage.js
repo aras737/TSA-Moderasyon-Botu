@@ -244,9 +244,25 @@ class Storage {
   }
 
   static pendingLogs = [];
+  static pendingUsers = new Map();
 
   // Batch high-volume gateway logs so every Discord message does not cause
   // multiple synchronous full-file reads, copies and writes on the event loop.
+  static queueUserUpsert(user, guildId = null, extra = {}) {
+    if (!user?.id) return;
+    this.pendingUsers.set(user.id, {
+      id: user.id,
+      username: user.username || null,
+      tag: user.tag || null,
+      bot: Boolean(user.bot),
+      avatarURL: typeof user.displayAvatarURL === 'function'
+        ? user.displayAvatarURL({ dynamic: true })
+        : null,
+      guildId,
+      extra: { ...extra }
+    });
+  }
+
   static queueLog(type, payload = {}) {
     const entry = {
       id: makeId('log'),
@@ -268,10 +284,33 @@ class Storage {
   }
 
   static flushQueuedLogs() {
-    if (!this.pendingLogs?.length) return 0;
+    if (!this.pendingLogs?.length && !this.pendingUsers?.size) return 0;
 
     const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
+    const users = [...this.pendingUsers.values()];
+    this.pendingUsers.clear();
     this.update((data) => {
+      for (const update of users) {
+        const previous = data.users[update.id] || { guilds: {} };
+        data.users[update.id] = {
+          ...previous,
+          id: update.id,
+          username: update.username,
+          tag: update.tag,
+          bot: update.bot,
+          avatarURL: update.avatarURL,
+          guilds: previous.guilds || {},
+          lastSeenAt: now(),
+          ...update.extra
+        };
+        if (update.guildId) {
+          data.users[update.id].guilds[update.guildId] = {
+            ...(data.users[update.id].guilds[update.guildId] || {}),
+            lastSeenAt: now(),
+            ...update.extra
+          };
+        }
+      }
       data.logs.push(...batch);
       if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
     });
