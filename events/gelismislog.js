@@ -11,26 +11,43 @@ module.exports = (client) => {
         return kanalId ? (client.channels.cache.get(kanalId) || await client.channels.fetch(kanalId).catch(() => null)) : null;
     };
 
+    const auditCache = new Map();
+    const auditInflight = new Map();
+
     const auditLogCek = async (guild, type, hedefId = null) => {
-        // Reuse the dedicated audit gateway monitor for immediate guard action.
-        // The log-only lookup is intentionally short to avoid competing with
-        // interaction responses and Discord REST rate limits.
-        for (let attempt = 0; attempt < 2; attempt++) {
-            const logs = await guild.fetchAuditLogs({ limit: 10, type }).catch(() => null);
-            if (logs) {
-                const now = Date.now();
-                const entry = logs.entries.find(item => {
-                    const age = now - item.createdTimestamp;
-                    return item.executorId &&
-                        age >= 0 &&
-                        age <= 15000 &&
-                        (!hedefId || item.target?.id === hedefId);
-                });
-                if (entry) return entry;
+        const cacheKey = guild.id + ':' + String(type);
+        const now = Date.now();
+        const cached = auditCache.get(cacheKey);
+        let logs = cached && now - cached.loadedAt <= 200 ? cached.logs : null;
+
+        if (!logs) {
+            let pending = auditInflight.get(cacheKey);
+            if (!pending) {
+                pending = guild.fetchAuditLogs({ limit: 25, type })
+                    .then(result => {
+                        auditCache.set(cacheKey, { loadedAt: Date.now(), logs: result });
+                        return result;
+                    })
+                    .catch(error => {
+                        console.warn('[LOG] Denetim kaydı alınamadı:', error.message);
+                        return null;
+                    })
+                    .finally(() => auditInflight.delete(cacheKey));
+                auditInflight.set(cacheKey, pending);
             }
-            if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 250));
+            logs = await pending;
         }
-        return null;
+
+        if (!logs) return null;
+        return logs.entries.find(item => {
+            const createdAt = Number(item?.createdTimestamp);
+            const age = Date.now() - createdAt;
+            return Boolean(item?.executorId) &&
+                Number.isFinite(createdAt) &&
+                age >= 0 &&
+                age <= 15000 &&
+                (!hedefId || item.target?.id === hedefId);
+        }) || null;
     };
 
     const kufurRegex = /(amcık|yarrak|sik|piç|orospu|sikiş|göt|meme|orospu çocuğu|amk|aq|pç|skm|amına)/i;
@@ -178,65 +195,96 @@ module.exports = (client) => {
     // =========================================================================
     client.on('guildMemberUpdate', async (oldMember, newMember) => {
         const logChan = await logKanalGetir(newMember.guild.id);
-        
-        if (oldMember.roles.cache.size < newMember.roles.cache.size) {
-            const eklenenRol = newMember.roles.cache.filter(r => !oldMember.roles.cache.has(r.id)).first();
-            if (!eklenenRol) return;
+        const verilenRoller = newMember.roles.cache.filter(role => !oldMember.roles.cache.has(role.id));
+        const alinanRoller = oldMember.roles.cache.filter(role => !newMember.roles.cache.has(role.id));
 
+        if (verilenRoller.size > 0) {
             const tehlikeliYetkiler = [
                 PermissionFlagsBits.Administrator,
                 PermissionFlagsBits.BanMembers,
                 PermissionFlagsBits.KickMembers,
                 PermissionFlagsBits.ManageRoles
             ];
+            const tehlikeliRoller = verilenRoller.filter(role =>
+                tehlikeliYetkiler.some(permission => role.permissions.has(permission))
+            );
 
-            const tehlikeliMi = tehlikeliYetkiler.some(yetki => eklenenRol.permissions.has(yetki));
-
-            if (tehlikeliMi) {
-                const logEntry = await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
+            if (tehlikeliRoller.size > 0) {
+                const logEntry = await auditLogCek(
+                    newMember.guild,
+                    AuditLogEvent.MemberRoleUpdate,
+                    newMember.id
+                );
                 const işlemiYapan = logEntry?.executor;
+                const ownerIslem = işlemiYapan?.id === newMember.guild.ownerId;
+                const botIslem = işlemiYapan?.id === client.user.id;
 
-                // Yetkiyi bot vermediyse ve geri alma yetkisi varsa işlemi iptal et
-                if (işlemiYapan && işlemiYapan.id !== client.user.id && newMember.manageable) {
-                    await newMember.roles.remove(eklenenRol, 'Tehlikeli Rol Verme Koruması').catch(() => null);
+                // Sunucu sahibinin bilinçli yetki atamalarını engelleme.
+                // Diğer yetkililer için tehlikeli yetki yükseltmesini geri al.
+                if (
+                    işlemiYapan &&
+                    !ownerIslem &&
+                    !botIslem &&
+                    newMember.manageable
+                ) {
+                    try {
+                        await newMember.roles.remove(
+                            [...tehlikeliRoller.keys()],
+                            'TMF: Sunucu sahibi dışındaki bir kullanıcı kritik yetki verdi.'
+                        );
 
-                    if (logChan) {
-                        const embed = new EmbedBuilder()
-                            .setTitle('<:koruma1:1505143174190989352> Tehlikeli Yetki Verme Engellendi!')
-                            .setDescription(`🚨 Sunucuda sağ tık ile kritik yetkili bir rol verilmeye çalışıldı, sistem rolü anında geri aldı!`)
-                            .addFields(
-                                { name: '<:rol:1505201454615629845> Verilmeye Çalışılan Rol', value: `${eklenenRol} \`(${eklenenRol.id})\`` },
-                                { name: '<:uzaybot_kullanicilar:1505146190973505567> Rol Verilen Üye', value: `${newMember.user}`, inline: true },
-                                { name: '<:sil:1505147967907037275> Rolü Vermeye Çalışan', value: `${işlemiYapan}`, inline: true }
-                            )
-                            .setColor('#c0392b').setTimestamp();
-                        logChan.send({ embeds: [embed] }).catch(() => {});
+                        if (logChan) {
+                            const embed = new EmbedBuilder()
+                                .setTitle('🛡️ TMF | Tehlikeli Rol Ataması Geri Alındı')
+                                .setDescription('Sunucu sahibi dışındaki bir kullanıcı kritik yönetim yetkisi verdi. Yeni rol(ler) geri alındı.')
+                                .addFields(
+                                    { name: 'Verilen Tehlikeli Rol(ler)', value: tehlikeliRoller.map(role => String(role)).join(', ').slice(0, 1000) },
+                                    { name: 'Rol Verilen Üye', value: String(newMember.user), inline: true },
+                                    { name: 'İşlemi Yapan', value: String(işlemiYapan), inline: true }
+                                )
+                                .setColor('#c0392b')
+                                .setTimestamp();
+                            logChan.send({ embeds: [embed] }).catch(() => {});
+                        }
+                        return;
+                    } catch (error) {
+                        console.error('[ROLE-GUARD] Kritik rol geri alınamadı:', error.message);
+                        if (logChan) {
+                            logChan.send({
+                                content: '🚨 Kritik rol ataması tespit edildi ancak bot rol hiyerarşisi/izinleri nedeniyle geri alamadı. Sunucu yöneticisi hemen kontrol etmeli.',
+                                allowedMentions: { parse: [] }
+                            }).catch(() => {});
+                        }
                     }
-                    return; // Standart log akışını keselim ki mükerrer log basmasın
                 }
             }
         }
 
-        // STANDART ROL LOGLARI
-        if (oldMember.roles.cache.size !== newMember.roles.cache.size) {
-            const verilenRoller = newMember.roles.cache.filter(r => !oldMember.roles.cache.has(r.id));
-            const alinanRoller  = oldMember.roles.cache.filter(r => !newMember.roles.cache.has(r.id));
-            
-            if (verilenRoller.size > 0 && verilenRoller.first().permissions.has(PermissionFlagsBits.Administrator) && (await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id))?.executor?.id !== client.user.id) return;
+        // Rol sayısı değişmese bile eklenen/çıkarılan gerçek rolleri kaydet.
+        if (verilenRoller.size > 0 || alinanRoller.size > 0) {
+            const logEntry = await auditLogCek(
+                newMember.guild,
+                AuditLogEvent.MemberRoleUpdate,
+                newMember.id
+            );
+            const yapan = logEntry?.executor ? String(logEntry.executor) : '`Bilinmiyor`';
 
-            const logEntry = await auditLogCek(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
-            const yapan = logEntry?.executor ? `${logEntry.executor}` : '`Bilinmiyor`';
-
-            if (!logChan) return;
-            const embed = new EmbedBuilder()
-                .setTitle('<:koruma1:1505143174190989352> Üye Rol Güncellemesi!')
-                .setDescription(`<:uzaybot_kullanicilar:1505146190973505567> **Üye:** ${newMember.user} \`(${newMember.user.tag})\``)
-                .addFields({ name: '<:change:1505202806666170501> İşlemi Yapan', value: yapan })
-                .setThumbnail(newMember.user.displayAvatarURL() || null).setColor('#34495e').setTimestamp();
-
-            if (verilenRoller.size > 0) embed.addFields({ name: '<a:online:1505145208046878730> Verilen Rol(ler)', value: verilenRoller.map(r => `${r}`).join(', ') });
-            if (alinanRoller.size > 0) embed.addFields({ name: '<:Ofline:1505145553925832704> Alınan Rol(ler)', value: alinanRoller.map(r => `${r}`).join(', ') });
-            logChan.send({ embeds: [embed] }).catch(() => {});
+            if (logChan) {
+                const embed = new EmbedBuilder()
+                    .setTitle('🛡️ TMF | Üye Rol Güncellemesi')
+                    .setDescription(`Üye: ${newMember.user} (${newMember.user.tag})`)
+                    .addFields({ name: 'İşlemi Yapan', value: yapan });
+                if (verilenRoller.size > 0) {
+                    embed.addFields({ name: 'Verilen Roller', value: verilenRoller.map(role => String(role)).join(', ').slice(0, 1000) });
+                }
+                if (alinanRoller.size > 0) {
+                    embed.addFields({ name: 'Alınan Roller', value: alinanRoller.map(role => String(role)).join(', ').slice(0, 1000) });
+                }
+                embed.setThumbnail(newMember.user.displayAvatarURL() || null)
+                    .setColor('#34495e')
+                    .setTimestamp();
+                logChan.send({ embeds: [embed] }).catch(() => {});
+            }
         }
 
         // TIMEOUT LOGLARI
