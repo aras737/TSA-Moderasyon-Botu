@@ -63,6 +63,7 @@ module.exports = {
                         .setRequired(false))),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const client = interaction.client;
         if (!client.sureliDuyurular) client.sureliDuyurular = new Map();
 
@@ -78,12 +79,12 @@ module.exports = {
             const mesajMetni = interaction.options.getString('mesaj', true).trim();
 
             if (!mesajMetni) {
-                return interaction.reply({ content: '⚠️ Duyuru mesajı boş olamaz.', ephemeral: true });
+                return interaction.editReply({ content: '⚠️ Duyuru mesajı boş olamaz.' });
             }
 
             const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
             if (!botMember) {
-                return interaction.reply({ content: '❌ Botun sunucu üye bilgisi alınamadı.', ephemeral: true });
+                return interaction.editReply({ content: '❌ Botun sunucu üye bilgisi alınamadı.' });
             }
 
             const duyuruEmbed = new EmbedBuilder()
@@ -127,9 +128,8 @@ module.exports = {
                 );
 
                 if (eligibleChannels.size === 0) {
-                    return interaction.reply({
-                        content: '⚠️ Botun mesaj ve embed gönderme izni olan bir metin kanalı bulunamadı.',
-                        ephemeral: true
+                    return interaction.editReply({
+                        content: '⚠️ Botun mesaj ve embed gönderme izni olan bir metin kanalı bulunamadı.'
                     });
                 }
 
@@ -144,13 +144,12 @@ module.exports = {
                     )
                     .setColor('#107a29');
 
-                return interaction.reply({ embeds: [embed], ephemeral: true });
+                return interaction.editReply({ embeds: [embed] });
             }
 
             if (!canSendEmbed(targetChannel, botMember)) {
-                return interaction.reply({
-                    content: '⛔ Botun seçilen kanalda Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '⛔ Botun seçilen kanalda Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.'
                 });
             }
 
@@ -165,7 +164,7 @@ module.exports = {
                 )
                 .setColor('#107a29');
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         if (subcommand === 'durdur') {
@@ -178,23 +177,20 @@ module.exports = {
                     }
                 }
 
-                return interaction.reply({
-                    content: `✅ Bu sunucuda ${stopped} süreli duyuru döngüsü durduruldu.`,
-                    ephemeral: true
+                return interaction.editReply({
+                    content: `✅ Bu sunucuda ${stopped} süreli duyuru döngüsü durduruldu.`
                 });
             }
 
             const key = `${guildId}_${targetChannel.id}`;
             if (!stopLoop(client, key)) {
-                return interaction.reply({
-                    content: `⚠️ ${targetChannel} kanalında çalışan bir periyodik duyuru döngüsü yok.`,
-                    ephemeral: true
+                return interaction.editReply({
+                    content: `⚠️ ${targetChannel} kanalında çalışan bir periyodik duyuru döngüsü yok.`
                 });
             }
 
-            return interaction.reply({
-                content: `✅ ${targetChannel} kanalındaki periyodik duyuru durduruldu.`,
-                ephemeral: true
+            return interaction.editReply({
+                content: `✅ ${targetChannel} kanalındaki periyodik duyuru durduruldu.`
             });
         }
     }
