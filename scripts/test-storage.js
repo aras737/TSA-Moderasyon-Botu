@@ -70,10 +70,16 @@ try {
         status: 'open'
     });
     assert.ok(ticket.id);
-    Storage.updateTicket(
+    Storage.queueTicketUpdate(
         { guildId: 'guild-1', channelId: 'ticket-1', status: 'open' },
         { status: 'closed' }
     );
+    assert.equal(
+        Storage.getDatabase().tickets.find(item => item.channelId === 'ticket-1').status,
+        'open',
+        'Queued ticket updates must not mutate storage before flush'
+    );
+    assert.equal(Storage.flushQueuedLogs(), 1);
     assert.equal(
         Storage.getDatabase().tickets.find(item => item.channelId === 'ticket-1').status,
         'closed'
