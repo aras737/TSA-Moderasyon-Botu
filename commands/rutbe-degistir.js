@@ -118,16 +118,21 @@ module.exports = {
         .addStringOption(option =>
             option.setName('isim')
                 .setDescription('Rutbesi degistirilecek Roblox kullanici adi.')
+                .setMinLength(3)
+                .setMaxLength(20)
                 .setRequired(true)
         )
         .addStringOption(option =>
             option.setName('rutbe_id')
                 .setDescription('Verilecek Roblox rol ID veya rank. /grup_listele ile gorebilirsin.')
+                .setMaxLength(20)
                 .setRequired(true)
         )
         .addStringOption(option =>
             option.setName('yetkili_roblox')
                 .setDescription('Komutu kullanan yetkilinin Roblox kullanici adi.')
+                .setMinLength(3)
+                .setMaxLength(20)
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -149,6 +154,10 @@ module.exports = {
         const yetkiliRobloxInput = interaction.options.getString('yetkili_roblox', true).trim();
         const sebep = interaction.options.getString('sebep', true);
         const yetkili = interaction.user;
+
+        if (!/^\\d+$/.test(ROBLOX_GRUP_ID)) {
+            return interaction.reply({ content: 'ROBLOX_GRUP_ID geçerli bir sayısal grup kimliği olmalı.', ephemeral: true });
+        }
 
         if (!ROBLOX_API_KEY) {
             return interaction.reply({
