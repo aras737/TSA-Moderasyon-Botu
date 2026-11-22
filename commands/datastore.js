@@ -15,6 +15,7 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const data = Storage.getDatabase();
         const storageExists = fs.existsSync(storagePath);
         const backupExists = fs.existsSync(backupPath);
@@ -38,6 +39,6 @@ module.exports = {
             .setColor('#2ecc71')
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.editReply({ embeds: [embed] });
     }
 };
