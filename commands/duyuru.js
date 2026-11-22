@@ -19,6 +19,7 @@ module.exports = {
         .addBooleanOption(opt => opt.setName('everyone').setDescription('@everyone ile gönderilsin mi?').setRequired(false)),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const baslik = interaction.options.getString('baslik', true);
         const icerik = interaction.options.getString('icerik', true);
         const hedefKanal = interaction.options.getChannel('hedef') || interaction.channel;
@@ -30,21 +31,21 @@ module.exports = {
         const moderatorPermissions = interaction.memberPermissions;
         if (everyone && !moderatorPermissions?.has(PermissionFlagsBits.MentionEveryone) &&
             !moderatorPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '⛔ @everyone kullanmak için Mention Everyone yetkisine sahip olmalısın.', ephemeral: true });
+            return interaction.editReply({ content: '⛔ @everyone kullanmak için Mention Everyone yetkisine sahip olmalısın.' });
         }
 
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
         if (!botMember) {
-            return interaction.reply({ content: '❌ Bot üye bilgisi alınamadı.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Bot üye bilgisi alınamadı.' });
         }
 
         const botPermissions = hedefKanal.permissionsFor(botMember);
         if (!botPermissions?.has(PermissionFlagsBits.SendMessages) ||
             (tip === 'embed' && !botPermissions.has(PermissionFlagsBits.EmbedLinks))) {
-            return interaction.reply({ content: '❌ Botun seçilen kanalda mesaj veya embed gönderme yetkisi yok.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Botun seçilen kanalda mesaj veya embed gönderme yetkisi yok.' });
         }
         if (everyone && !botPermissions.has(PermissionFlagsBits.MentionEveryone)) {
-            return interaction.reply({ content: '❌ Botun seçilen kanalda @everyone etiketleme yetkisi yok.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Botun seçilen kanalda @everyone etiketleme yetkisi yok.' });
         }
 
         if (resim) {
@@ -52,13 +53,13 @@ module.exports = {
                 const parsed = new URL(resim);
                 if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('URL scheme');
             } catch {
-                return interaction.reply({ content: '⚠️ Görsel için geçerli bir HTTP/HTTPS URL adresi gir.', ephemeral: true });
+                return interaction.editReply({ content: '⚠️ Görsel için geçerli bir HTTP/HTTPS URL adresi gir.' });
             }
         }
 
         const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
         if (!moderator) {
-            return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Yetkili bilgisi alınamadı.' });
         }
         const roleName = moderator.roles.highest?.name || 'Yetkili';
         const byline = `[ ${roleName} ] ${interaction.user.username} tarafından.`;
@@ -86,15 +87,15 @@ module.exports = {
 
                 // Discord mesaj sınırına sığmayan icerikleri sessizce kırpmak yerine reddet.
                 if (text.length > 2000) {
-                    return interaction.reply({ content: '⚠️ Düz yazı duyurusu 2.000 karakter sınırını aşıyor.', ephemeral: true });
+                    return interaction.editReply({ content: '⚠️ Düz yazı duyurusu 2.000 karakter sınırını aşıyor.' });
                 }
                 await hedefKanal.send({ content: text, allowedMentions });
             }
 
-            return interaction.reply({ content: `✅ Duyuru ${hedefKanal} kanalına gönderildi.`, ephemeral: true });
+            return interaction.editReply({ content: `✅ Duyuru ${hedefKanal} kanalına gönderildi.` });
         } catch (error) {
             console.error('Duyuru gönderme hatası:', error);
-            return interaction.reply({ content: '❌ Duyuru gönderilemedi. Kanal izinlerini ve görsel adresini kontrol et.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Duyuru gönderilemedi. Kanal izinlerini ve görsel adresini kontrol et.' });
         }
     }
 };
