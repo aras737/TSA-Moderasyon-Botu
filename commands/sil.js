@@ -4,6 +4,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('sil')
         .setDescription('Belirtilen miktarda mesajı kanaldan temizler.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addIntegerOption(option =>
             option.setName('miktar')
                 .setDescription('Silinecek mesaj sayısı (1 - 100 arası)')
