@@ -85,6 +85,26 @@ try {
         'closed'
     );
 
+    Storage.queuePunishment({
+        type: 'ban',
+        guildId: 'guild-1',
+        userId: 'user-2',
+        reason: 'test'
+    });
+    assert.equal(Storage.flushQueuedLogs(), 1);
+    assert.equal(
+        Storage.getDatabase().punishments.find(item => item.userId === 'user-2').active,
+        true
+    );
+    Storage.queueClosePunishment(
+        { type: 'ban', guildId: 'guild-1', userId: 'user-2', active: true },
+        { removedUserId: 'user-2' }
+    );
+    assert.equal(Storage.flushQueuedLogs(), 1);
+    const closedCase = Storage.getDatabase().punishments.find(item => item.userId === 'user-2');
+    assert.equal(closedCase.active, false);
+    assert.equal(closedCase.removedUserId, 'user-2');
+
     assert.ok(fs.existsSync(storageFile), 'Primary storage file should be written');
     assert.ok(fs.existsSync(backupFile), 'Previous valid storage should be backed up');
 
