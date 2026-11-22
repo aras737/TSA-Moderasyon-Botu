@@ -199,7 +199,7 @@ class Storage {
       }
     });
 
-    return settings;
+    return clone(settings);
   }
 
   static deleteGuild(guildId) {
@@ -260,9 +260,25 @@ class Storage {
 
   static pendingLogs = [];
   static pendingUsers = new Map();
+  static pendingGuilds = new Map();
 
   // Batch high-volume gateway logs so every Discord message does not cause
   // multiple synchronous full-file reads, copies and writes on the event loop.
+  static queueGuildUpsert(guild) {
+    if (!guild?.id) return;
+    this.pendingGuilds.set(guild.id, {
+      id: guild.id,
+      name: guild.name || null,
+      ownerId: guild.ownerId || null,
+      memberCount: guild.memberCount ?? null,
+      iconURL: typeof guild.iconURL === 'function' ? guild.iconURL() : null
+    });
+    if (this.pendingGuilds.size > 250) {
+      const oldestId = this.pendingGuilds.keys().next().value;
+      if (oldestId) this.pendingGuilds.delete(oldestId);
+    }
+  }
+
   static queueUserUpsert(user, guildId = null, extra = {}) {
     if (!user?.id) return;
     this.pendingUsers.set(user.id, {
@@ -299,13 +315,19 @@ class Storage {
   }
 
   static flushQueuedLogs() {
-    if (!this.pendingLogs?.length && !this.pendingUsers?.size) return 0;
+    if (!this.pendingLogs?.length && !this.pendingUsers?.size && !this.pendingGuilds?.size) return 0;
 
     const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
     const users = [...this.pendingUsers.values()];
+    const guilds = [...this.pendingGuilds.values()];
     this.pendingUsers.clear();
+    this.pendingGuilds.clear();
     try {
       this.update((data) => {
+      for (const guild of guilds) {
+        const previous = data.guilds[guild.id] || {};
+        data.guilds[guild.id] = { ...previous, ...guild, lastSeenAt: now() };
+      }
       for (const update of users) {
         const previous = data.users[update.id] || { guilds: {} };
         data.users[update.id] = {
@@ -330,11 +352,14 @@ class Storage {
       data.logs.push(...batch);
         if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
       });
-      return batch.length + users.length;
+      return batch.length + users.length + guilds.length;
     } catch (error) {
       this.pendingLogs.unshift(...batch);
       for (const user of users) {
         if (!this.pendingUsers.has(user.id)) this.pendingUsers.set(user.id, user);
+      }
+      for (const guild of guilds) {
+        if (!this.pendingGuilds.has(guild.id)) this.pendingGuilds.set(guild.id, guild);
       }
       throw error;
     }
