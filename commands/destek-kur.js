@@ -53,8 +53,21 @@ module.exports = {
 
             const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
             const panelPermissions = botMember ? biletKanali.permissionsFor(botMember) : null;
-            if (!biletKanali.isTextBased?.() || !panelPermissions?.has(PermissionsBitField.Flags.SendMessages) || !panelPermissions.has(PermissionsBitField.Flags.EmbedLinks)) {
-                return interaction.reply({ content: '⛔ Botun panel kanalında mesaj ve embed gönderme yetkisi olmalı.', ephemeral: true });
+            const logPermissions = botMember ? logKanali.permissionsFor(botMember) : null;
+            const requiredChannelPermissions = [
+                PermissionsBitField.Flags.ViewChannel,
+                PermissionsBitField.Flags.SendMessages,
+                PermissionsBitField.Flags.EmbedLinks
+            ];
+            if (!botMember ||
+                !biletKanali.isTextBased?.() ||
+                !requiredChannelPermissions.every(permission => panelPermissions?.has(permission)) ||
+                !logKanali.isTextBased?.() ||
+                !requiredChannelPermissions.every(permission => logPermissions?.has(permission))) {
+                return interaction.reply({
+                    content: '⛔ Botun hem panel hem log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
+                    ephemeral: true
+                });
             }
 
             ayarKaydet(interaction.guild.id, 'destekRolleri', rolIDleri);
@@ -232,6 +245,14 @@ module.exports = {
                 if (!botMember) {
                     return interaction.editReply({ content: '❌ Bot üye bilgisi alınamadı. Bilet kanalı oluşturulmadı.' });
                 }
+                const ticketLogChannel = await interaction.guild.channels.fetch(logID).catch(() => null);
+                const logPermissions = ticketLogChannel?.permissionsFor(botMember);
+                if (!ticketLogChannel?.isTextBased?.() ||
+                    !logPermissions?.has(PermissionsBitField.Flags.ViewChannel) ||
+                    !logPermissions.has(PermissionsBitField.Flags.SendMessages) ||
+                    !logPermissions.has(PermissionsBitField.Flags.EmbedLinks)) {
+                    return interaction.editReply({ content: '⚠️ Destek log kanalı bulunamadı veya botun mesaj/embed izni yok. Yönetici paneli yeniden kurmalı.' });
+                }
 
                 const izinler = [
                     {
@@ -327,7 +348,7 @@ module.exports = {
                     throw sendError;
                 }
 
-                const logKanal = await interaction.guild.channels.fetch(logID).catch(() => null);
+                const logKanal = ticketLogChannel;
                 if (logKanal?.isTextBased?.()) {
                     const logEmbed = new EmbedBuilder()
                         .setTitle('<:bilet:1505453733969006602> YENİ BİLET AÇILDI')
