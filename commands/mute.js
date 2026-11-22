@@ -27,7 +27,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('mute')
-        .setDescription('Belirtilen kullaniciyı sunucuda susturur (Timeout).')
+        .setDescription('🔇 Belirtilen kullaniciyı sunucuda susturur (Timeout).')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
         .addUserOption(option =>
             option.setName('kullanici').setDescription('Susturulacak üyeyi seçin.').setRequired(true))
@@ -81,10 +81,10 @@ module.exports = {
                 .setTitle('<:Ses:1505164439505342484> TMF | Kullanıcı Susturuldu')
                 .setDescription(`**${target.tag}** adlı üye başarıyla susturuldu.`)
                 .addFields(
-                    { name: 'Susturulan', value: `${member}`, inline: true },
-                    { name: 'Yetkili', value: `${interaction.user}`, inline: true },
-                    { name: 'Süre', value: `\`${durationString}\``, inline: true },
-                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
+                    { name: '📌 Susturulan', value: `${member}`, inline: true },
+                    { name: '📌 Yetkili', value: `${interaction.user}`, inline: true },
+                    { name: '📌 Süre', value: `\`${durationString}\``, inline: true },
+                    { name: '📌 Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setColor('#f1c40f')
                 .setThumbnail(target.displayAvatarURL())
