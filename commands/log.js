@@ -24,6 +24,7 @@ module.exports = {
                 .setDescription('Log sistemini kapatır.')),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
 
@@ -35,9 +36,8 @@ module.exports = {
             if (!permissions?.has(PermissionFlagsBits.ViewChannel) ||
                 !permissions.has(PermissionFlagsBits.SendMessages) ||
                 !permissions.has(PermissionFlagsBits.EmbedLinks)) {
-                return interaction.reply({
-                    content: '⛔ Botun seçilen log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '⛔ Botun seçilen log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.'
                 });
             }
 
@@ -49,15 +49,14 @@ module.exports = {
                 .setColor('#2ecc71')
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         if (subcommand === 'goster') {
             const channelId = ayarGetir(guildId, 'logKanal', null);
             if (!channelId) {
-                return interaction.reply({
-                    content: '⚠️ Henüz log kanalı ayarlanmamış. `/log kanali-ayarla` kullan.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '⚠️ Henüz log kanalı ayarlanmamış. `/log kanali-ayarla` kullan.'
                 });
             }
 
@@ -72,14 +71,13 @@ module.exports = {
                 .setColor('#3498db')
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.editReply({ embeds: [embed] });
         }
 
         if (subcommand === 'kapat') {
             ayarKaydet(guildId, 'logKanal', null);
-            return interaction.reply({
-                content: '⛔ Bu sunucu için log sistemi kapatıldı.',
-                ephemeral: true
+            return interaction.editReply({
+                content: '⛔ Bu sunucu için log sistemi kapatıldı.'
             });
         }
     }
