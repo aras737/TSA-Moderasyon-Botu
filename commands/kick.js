@@ -1,87 +1,91 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.KickMembers],
+    requiredPerms: [PermissionFlagsBits.KickMembers],
 
     data: new SlashCommandBuilder()
         .setName('kick')
-        .setDescription('TMF sunucusundan bir üyeyi atar ve DM bildirimi gönderir.')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers)
+        .setDescription('TMF sunucusundan bir üyeyi atar.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
         .addUserOption(option =>
             option.setName('kullanici')
                 .setDescription('Atılacak üyeyi seçin')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('sebep')
-                .setDescription('Atılma sebebini belirtin')
+                .setDescription('Atılma sebebi')
                 .setMaxLength(500)
                 .setRequired(false)),
 
     async execute(interaction) {
+        // Üye/rol/DM sorgularından önce Discord etkileşimini onayla.
+        await interaction.deferReply();
+
+        const guild = interaction.guild;
         const user = interaction.options.getUser('kullanici', true);
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
 
-        if (user.id === interaction.user.id || user.id === interaction.guild.ownerId) {
-            return interaction.reply({ content: '⛔ Kendini veya sunucu sahibini atamazsın.', ephemeral: true });
-        }
-
-        const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-        if (!member) {
-            return interaction.reply({ content: '⚠️ Bu kullanıcı sunucuda bulunamadı.', ephemeral: true });
-        }
-
-        const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-        if (!moderator) {
-            return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
-        }
-
-        if (moderator.id !== interaction.guild.ownerId &&
-            moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.reply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi atamazsın.', ephemeral: true });
-        }
-
-        const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
-        if (!botMember || !member.kickable || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.reply({ content: '⛔ Botun rol hiyerarşisi bu üyeyi atmaya izin vermiyor.', ephemeral: true });
-        }
-
-        let dmSent = false;
-        const dmEmbed = new EmbedBuilder()
-            .setTitle('TMF | Sunucudan Atıldınız')
-            .setDescription(`**${interaction.guild.name}** sunucusundan uzaklaştırıldınız.`)
-            .addFields(
-                { name: 'Sebep', value: reason.slice(0, 1000) },
-                { name: 'Atan Yetkili', value: interaction.user.tag }
-            )
-            .setColor('#e67e22')
-            .setTimestamp()
-            .setFooter({ text: 'Tekrar katılmak için sunucu kurallarına uyunuz.' });
-
-        try {
-            await user.send({ embeds: [dmEmbed] });
-            dmSent = true;
-        } catch {
-            dmSent = false;
+        if (user.id === interaction.user.id || user.id === guild.ownerId) {
+            return interaction.editReply('⛔ Kendini veya sunucu sahibini atamazsın.');
         }
 
         try {
+            const botMember = guild.members.me || await guild.members.fetchMe();
+            if (!botMember.permissions.has(PermissionFlagsBits.KickMembers)) {
+                return interaction.editReply('⛔ Botta **Üyeleri At** izni yok.');
+            }
+
+            const member = await guild.members.fetch(user.id).catch(() => null);
+            if (!member) {
+                return interaction.editReply('⚠️ Bu kullanıcı sunucuda bulunamadı.');
+            }
+
+            const moderator = await guild.members.fetch(interaction.user.id).catch(() => null);
+            if (!moderator) {
+                return interaction.editReply('❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.');
+            }
+
+            if (moderator.id !== guild.ownerId &&
+                moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+                return interaction.editReply('⛔ Eşit veya daha yüksek rütbeli bir üyeyi atamazsın.');
+            }
+
+            if (!member.kickable ||
+                botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+                return interaction.editReply('⛔ Botun rol sırası bu üyeyi atmaya yetmiyor.');
+            }
+
             await member.kick(reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
-                .setTitle('<:icons_kick:1505438748035518464> TMF | İşlem Başarılı')
-                .setDescription(`**${user.tag}** sunucudan atıldı.`)
+                .setTitle('TMF | Kullanıcı Atıldı')
+                .setDescription('**' + user.tag + '** sunucudan atıldı.')
                 .addFields(
                     { name: 'Kullanıcı', value: user.tag, inline: true },
-                    { name: 'Sebep', value: reason.slice(0, 1000), inline: true },
-                    { name: 'DM Durumu', value: dmSent ? '✅ Bildirim gönderildi.' : '⚠️ Kullanıcının DM kutusuna ulaşılamadı.' }
+                    { name: 'Yetkili', value: interaction.user.tag, inline: true },
+                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setColor('#f1c40f')
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
+
+            user.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle('TMF | Sunucudan Atıldınız')
+                    .setDescription('**' + guild.name + '** sunucusundan atıldınız.')
+                    .addFields(
+                        { name: 'Sebep', value: reason.slice(0, 1000) },
+                        { name: 'Atan yetkili', value: interaction.user.tag }
+                    )
+                    .setColor('#e67e22')
+                    .setTimestamp()]
+            }).catch(() => {});
         } catch (error) {
-            console.error('Kick komutu hatası:', error);
-            return interaction.reply({ content: '❌ Kick işlemi sırasında hata oluştu. Botun Kick Members yetkisini kontrol et.', ephemeral: true });
+            console.error('[KICK] Komut hatası:', error);
+            await interaction.editReply({
+                content: '❌ Kick işlemi başarısız: ' + (error?.message || 'Bilinmeyen Discord API hatası')
+            }).catch(replyError => console.error('[KICK] Hata yanıtı gönderilemedi:', replyError.message));
         }
     }
 };
