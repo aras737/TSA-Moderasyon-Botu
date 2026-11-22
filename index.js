@@ -234,7 +234,7 @@ client.on('interactionCreate', async interaction => {
     } catch (error) {
         console.error('❌ Etkileşim hatası:', error);
         const response = {
-            content: `💥 İşlem sırasında hata oluştu: \`${error?.message || 'Bilinmeyen hata'}\``
+            content: '💥 İşlem sırasında beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar dene veya yöneticilere bildir.'
         };
 
         try {
