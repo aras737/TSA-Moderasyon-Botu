@@ -36,6 +36,13 @@ module.exports = {
             return interaction.reply({ embeds: [hataEmbed], ephemeral: true });
         }
 
+        if (targetId === interaction.user.id || targetId === interaction.client.user.id) {
+            return interaction.reply({
+                content: '⛔ Kendini veya botun kendi hesabını küresel olarak yasaklayamazsın.',
+                ephemeral: true
+            });
+        }
+
         await interaction.deferReply();
 
         let targetUser = null;
