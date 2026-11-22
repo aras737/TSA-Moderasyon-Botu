@@ -256,6 +256,20 @@ module.exports = (client) => {
                             }).catch(() => {});
                         }
                     }
+                } else if (
+                    işlemiYapan &&
+                    !ownerIslem &&
+                    !botIslem &&
+                    !newMember.manageable
+                ) {
+                    if (logChan) {
+                        logChan.send({
+                            content:
+                                '🚨 **KRİTİK:** Sunucu sahibi dışındaki bir kullanıcı, botun rol hiyerarşisinin üzerinde bulunan bir üyeye yönetici yetkili rol verdi. TMF botu rolü geri alamadı; sunucu sahibi hemen müdahale etmeli.',
+                            allowedMentions: { parse: [] }
+                        }).catch(() => {});
+                    }
+                    return;
                 }
             }
         }
