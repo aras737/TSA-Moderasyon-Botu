@@ -164,7 +164,7 @@ module.exports = client => {
                 ayarKaydet(guild.id, 'guvenliBotlar', updatedSafeBots);
 
                 const approvedEmbed = new EmbedBuilder()
-                    .setTitle('✅ TMF | Bot Onaylandı')
+                    .setTitle('🤖 ✅ TMF | Bot Onaylandı')
                     .setDescription(
                         `\`${botId}\` ID'li bot güvenli listeye eklendi. Bot daha önce çıkarıldıysa sunucuya yeniden davet etmelisin.`
                     )
