@@ -155,7 +155,7 @@ module.exports = {
         const sebep = interaction.options.getString('sebep', true);
         const yetkili = interaction.user;
 
-        if (!/^\\d+$/.test(ROBLOX_GRUP_ID)) {
+        if (!/^\d+$/.test(ROBLOX_GRUP_ID)) {
             return interaction.reply({ content: 'ROBLOX_GRUP_ID geçerli bir sayısal grup kimliği olmalı.', ephemeral: true });
         }
 
@@ -279,7 +279,7 @@ module.exports = {
                 return interaction.editReply({ embeds: [yetkiEmbed] });
             }
 
-            if (!membershipId || !/^\\d+$/.test(membershipId)) {
+            if (!membershipId || !/^\d+$/.test(membershipId)) {
                 throw new Error('Roblox grup üyeliği kimliği API yanıtında bulunamadı.');
             }
 
