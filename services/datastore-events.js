@@ -162,7 +162,7 @@ module.exports = function registerDatastoreEvents(client) {
 
   client.on('guildBanAdd', (ban) => {
     Storage.queueUserUpsert(ban.user, ban.guild.id, { status: 'banned' });
-    Storage.addPunishment({
+    Storage.queuePunishment({
       type: 'ban',
       guildId: ban.guild.id,
       userId: ban.user.id,
@@ -173,7 +173,7 @@ module.exports = function registerDatastoreEvents(client) {
 
   client.on('guildBanRemove', (ban) => {
     Storage.queueUserUpsert(ban.user, ban.guild.id, { status: 'unbanned' });
-    Storage.closePunishment(
+    Storage.queueClosePunishment(
       { type: 'ban', guildId: ban.guild.id, userId: ban.user.id, active: true },
       { removedUserId: ban.user.id }
     );
