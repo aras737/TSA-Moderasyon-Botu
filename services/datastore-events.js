@@ -38,6 +38,15 @@ function safeContent(content) {
 }
 
 module.exports = function registerDatastoreEvents(client) {
+  const logFlushTimer = setInterval(() => {
+    try {
+      Storage.flushQueuedLogs();
+    } catch (error) {
+      console.error('[DATASTORE] Log kuyruğu diske yazılamadı:', error.message);
+    }
+  }, 5000);
+  logFlushTimer.unref?.();
+
   client.on('guildCreate', (guild) => {
     Storage.upsertGuild(guild);
     Storage.queueLog('guildCreate', { guild: serializeGuild(guild) });
