@@ -46,6 +46,10 @@ function registerSesPanelEvents(client) {
                         if (!parent || parent.type !== ChannelType.GuildCategory) {
                             return inter.editReply({ content: `${uyariEmoji} Ses odası kategorisi bulunamadı. Paneli yeniden kur.` });
                         }
+                        const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+                        if (!botMember) {
+                            return inter.editReply({ content: `${uyariEmoji} Bot üye bilgisi alınamadı.` });
+                        }
 
                         // Ses kanalını oluşturuyoruz
                         yeniSesKanali = await guild.channels.create({
@@ -56,6 +60,19 @@ function registerSesPanelEvents(client) {
                                 {
                                     id: guild.id, // @everyone görebilir ve girebilir
                                     deny: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
+                                },
+                                {
+                                    id: botMember.id,
+                                    allow: [
+                                        PermissionsBitField.Flags.ViewChannel,
+                                        PermissionsBitField.Flags.Connect,
+                                        PermissionsBitField.Flags.SendMessages,
+                                        PermissionsBitField.Flags.EmbedLinks,
+                                        PermissionsBitField.Flags.AttachFiles,
+                                        PermissionsBitField.Flags.ReadMessageHistory,
+                                        PermissionsBitField.Flags.ManageChannels,
+                                        PermissionsBitField.Flags.ManageRoles
+                                    ]
                                 },
                                 {
                                     id: member.id, // Oda Sahibi (Full Yetki)
