@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('ping')
-        .setDescription('TMF botunun anlık gecikme sürelerini gösterir.'),
+        .setDescription('🏓 TMF botunun anlık gecikme sürelerini gösterir.'),
 
     async execute(interaction) {
         const interactionCreatedAt = interaction.createdTimestamp || Date.now();
