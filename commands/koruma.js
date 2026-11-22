@@ -5,6 +5,7 @@ const {
     ChannelType
 } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
+const { yedekAl } = require('../services/sunucuYedek');
 
 function getSecurityCache(client, guildId) {
     if (!client.sistemBellegi) client.sistemBellegi = new Map();
@@ -38,6 +39,10 @@ module.exports = {
                 .setDescription('Anti-raid Guard korumasını açar veya kapatır.')
                 .addBooleanOption(option =>
                     option.setName('aktif').setDescription('Guard koruması aktif olsun mu?').setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand.setName('yedek-al').setDescription('Sunucunun rol, kanal ve izin yapısının anlık yedeğini alır.'))
+        .addSubcommand(subcommand =>
+            subcommand.setName('yedek-durum').setDescription('Son sunucu yedeğinin tarihini ve kapsamını gösterir.'))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kufur')
@@ -104,13 +109,49 @@ module.exports = {
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
+        if (subcommand === 'yedek-al') {
+            await interaction.deferReply({ ephemeral: true });
+            const backup = await yedekAl(interaction.guild);
+            if (!backup) {
+                return interaction.editReply('❌ Yedek alınamadı. Botun kanal ve rol bilgilerini görüntüleme izinlerini kontrol et.');
+            }
+            return interaction.editReply(
+                '✅ Sunucu yedeği alındı. ' + backup.roller.length + ' rol ve ' +
+                backup.kanallar.length + ' kanal kaydedildi. Tarih: ' + backup.alinmaZamani
+            );
+        }
+
+        if (subcommand === 'yedek-durum') {
+            const backup = ayarGetir(guildId, 'sunucuYedek', null);
+            if (!backup?.alinmaZamani) {
+                return interaction.reply({ content: '⚠️ Henüz sunucu yedeği yok. Önce /koruma yedek-al komutunu kullan.', ephemeral: true });
+            }
+            return interaction.reply({
+                content: '🗂️ Son yedek: ' + new Date(backup.alinmaZamani).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) +
+                    '\\nRoller: ' + (backup.roller?.length || 0) +
+                    '\\nKanallar: ' + (backup.kanallar?.length || 0),
+                ephemeral: true
+            });
+        }
+
         if (subcommand === 'guard') {
             const enabled = interaction.options.getBoolean('aktif', true);
-            ayarKaydet(guildId, 'guardAktif', enabled);
+            if (enabled) {
+                await interaction.deferReply({ ephemeral: true });
+                const backup = await yedekAl(interaction.guild);
+                if (!backup) {
+                    return interaction.editReply('⛔ Yedek alınamadığı için Anti-Raid açılmadı. Önce bot izinlerini düzelt.');
+                }
+                ayarKaydet(guildId, 'guardAktif', true);
+                return interaction.editReply(
+                    '✅ TMF Anti-Raid etkinleştirildi. Ön güvenlik yedeği alındı: ' +
+                    backup.roller.length + ' rol, ' + backup.kanallar.length + ' kanal.'
+                );
+            }
+
+            ayarKaydet(guildId, 'guardAktif', false);
             return interaction.reply({
-                content: enabled
-                    ? '✅ TMF Anti-Raid Guard bu sunucuda etkinleştirildi.'
-                    : '⛔ TMF Anti-Raid Guard bu sunucuda devre dışı bırakıldı.',
+                content: '⛔ TMF Anti-Raid Guard bu sunucuda devre dışı bırakıldı.',
                 ephemeral: true
             });
         }
