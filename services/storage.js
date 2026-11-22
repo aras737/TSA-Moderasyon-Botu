@@ -262,6 +262,8 @@ class Storage {
   static pendingUsers = new Map();
   static pendingGuilds = new Map();
   static pendingTicketUpdates = new Map();
+  static pendingPunishmentAdds = [];
+  static pendingPunishmentCloses = [];
 
   // Batch high-volume gateway logs so every Discord message does not cause
   // multiple synchronous full-file reads, copies and writes on the event loop.
@@ -301,6 +303,25 @@ class Storage {
     }
   }
 
+  static queuePunishment(payload = {}) {
+    this.pendingPunishmentAdds.push({
+      id: makeId('case'),
+      createdAt: now(),
+      active: true,
+      ...payload
+    });
+    if (this.pendingPunishmentAdds.length > 1000) {
+      this.pendingPunishmentAdds.splice(0, this.pendingPunishmentAdds.length - 1000);
+    }
+  }
+
+  static queueClosePunishment(filter = {}, payload = {}) {
+    this.pendingPunishmentCloses.push({ filter: { ...filter }, payload: { ...payload } });
+    if (this.pendingPunishmentCloses.length > 1000) {
+      this.pendingPunishmentCloses.splice(0, this.pendingPunishmentCloses.length - 1000);
+    }
+  }
+
   static queueTicketUpdate(filter = {}, payload = {}) {
     const channelId = filter.channelId;
     if (!channelId) return;
@@ -332,12 +353,14 @@ class Storage {
   }
 
   static flushQueuedLogs() {
-    if (!this.pendingLogs?.length && !this.pendingUsers?.size && !this.pendingGuilds?.size && !this.pendingTicketUpdates?.size) return 0;
+    if (!this.pendingLogs?.length && !this.pendingUsers?.size && !this.pendingGuilds?.size && !this.pendingTicketUpdates?.size && !this.pendingPunishmentAdds?.length && !this.pendingPunishmentCloses?.length) return 0;
 
     const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
     const users = [...this.pendingUsers.values()];
     const guilds = [...this.pendingGuilds.values()];
     const ticketUpdates = [...this.pendingTicketUpdates.values()];
+    const punishmentAdds = this.pendingPunishmentAdds.splice(0, this.pendingPunishmentAdds.length);
+    const punishmentCloses = this.pendingPunishmentCloses.splice(0, this.pendingPunishmentCloses.length);
     this.pendingUsers.clear();
     this.pendingGuilds.clear();
     this.pendingTicketUpdates.clear();
@@ -368,6 +391,14 @@ class Storage {
           };
         }
       }
+      data.punishments.push(...punishmentAdds);
+      if (data.punishments.length > 10000) data.punishments = data.punishments.slice(-10000);
+      for (const update of punishmentCloses) {
+        const entry = [...data.punishments].reverse().find(item =>
+          Object.entries(update.filter).every(([key, value]) => item[key] === value)
+        );
+        if (entry) Object.assign(entry, update.payload, { active: false, closedAt: now() });
+      }
       for (const update of ticketUpdates) {
         const ticket = [...data.tickets].reverse().find(item =>
           Object.entries(update.filter).every(([key, value]) => item[key] === value)
@@ -377,7 +408,7 @@ class Storage {
       data.logs.push(...batch);
         if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
       });
-      return batch.length + users.length + guilds.length + ticketUpdates.length;
+      return batch.length + users.length + guilds.length + ticketUpdates.length + punishmentAdds.length + punishmentCloses.length;
     } catch (error) {
       this.pendingLogs.unshift(...batch);
       for (const user of users) {
@@ -391,6 +422,8 @@ class Storage {
         const channelId = update.filter.channelId;
         if (channelId && !this.pendingTicketUpdates.has(channelId)) this.pendingTicketUpdates.set(channelId, update);
       }
+      this.pendingPunishmentAdds.unshift(...punishmentAdds);
+      this.pendingPunishmentCloses.unshift(...punishmentCloses);
       throw error;
     }
   }
