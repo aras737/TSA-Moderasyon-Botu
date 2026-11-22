@@ -24,6 +24,22 @@ module.exports = {
         const kisiInput = interaction.options.getString('kisi');
         const sebep = interaction.options.getString('sebep');
         const yetkili = interaction.user;
+        const botOwnerId = (process.env.BOT_OWNER_ID || '').trim();
+
+        // Bu komut botun bulunduğu bütün sunucuları etkilediği için yalnızca
+        // bot sahibi kullanabilir. Sunucu yöneticisi olmak tek başına yeterli değil.
+        if (!botOwnerId) {
+            return interaction.reply({
+                content: '⚠️ BOT_OWNER_ID ortam değişkeni ayarlanmamış. Küresel yasaklama güvenlik nedeniyle devre dışı.',
+                ephemeral: true
+            });
+        }
+        if (yetkili.id !== botOwnerId) {
+            return interaction.reply({
+                content: '⛔ Bu komut yalnızca TMF bot sahibine açıktır.',
+                ephemeral: true
+            });
+        }
 
         // 🧹 Etiket parantezlerini temizleyip saf ID'yi alıyoruz kanka
         const targetId = kisiInput.replace(/[<@!>]/g, '');
