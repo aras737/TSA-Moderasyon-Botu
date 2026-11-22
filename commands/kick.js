@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('kick')
-        .setDescription('TMF sunucusundan bir üyeyi atar.')
+        .setDescription('👢 TMF sunucusundan bir üyeyi atar.'))
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
         .addUserOption(option =>
             option.setName('kullanici')
@@ -58,12 +58,12 @@ module.exports = {
             await member.kick(reason.slice(0, 500));
 
             const embed = new EmbedBuilder()
-                .setTitle('TMF | Kullanıcı Atıldı')
+                .setTitle('✨ TMF | Kullanıcı Atıldı')
                 .setDescription('**' + user.tag + '** sunucudan atıldı.')
                 .addFields(
-                    { name: 'Kullanıcı', value: user.tag, inline: true },
-                    { name: 'Yetkili', value: interaction.user.tag, inline: true },
-                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
+                    { name: '👤 Kullanıcı', value: user.tag, inline: true },
+                    { name: '🛡️ Yetkili', value: interaction.user.tag, inline: true },
+                    { name: '📝 Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setColor('#f1c40f')
                 .setTimestamp();
@@ -72,10 +72,10 @@ module.exports = {
 
             user.send({
                 embeds: [new EmbedBuilder()
-                    .setTitle('TMF | Sunucudan Atıldınız')
+                    .setTitle('✨ TMF | Sunucudan Atıldınız')
                     .setDescription('**' + guild.name + '** sunucusundan atıldınız.')
                     .addFields(
-                        { name: 'Sebep', value: reason.slice(0, 1000) },
+                        { name: '📝 Sebep', value: reason.slice(0, 1000) },
                         { name: 'Atan yetkili', value: interaction.user.tag }
                     )
                     .setColor('#e67e22')
