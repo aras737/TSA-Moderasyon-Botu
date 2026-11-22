@@ -112,9 +112,11 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-    res.status(200).json({
-        ok: true,
-        bot: client.user ? client.user.tag : 'Bağlanılıyor...',
+    const ready = client.isReady();
+    res.status(ready ? 200 : 503).json({
+        ok: ready,
+        status: ready ? 'ready' : 'connecting',
+        bot: ready ? client.user.tag : null,
         commands: slashCommands.length
     });
 });
