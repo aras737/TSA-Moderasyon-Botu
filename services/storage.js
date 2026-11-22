@@ -39,6 +39,7 @@ function makeId(prefix) {
 }
 
 class Storage {
+  static cache = null;
   static normalize(data) {
     const normalized = {
       ...clone(DEFAULT_DATA),
@@ -66,17 +67,19 @@ class Storage {
   }
 
   static loadData() {
+    if (this.cache) return this.cache;
     ensureDir();
 
     try {
       if (!fs.existsSync(STORAGE_FILE)) {
         const fresh = this.normalize({});
         this.saveData(fresh);
-        return fresh;
+        return this.cache || fresh;
       }
 
       const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
-      return this.normalize(raw.trim() ? JSON.parse(raw) : {});
+      this.cache = this.normalize(raw.trim() ? JSON.parse(raw) : {});
+      return this.cache;
     } catch (error) {
       console.error('Veri yükleme hatası, yedek deneniyor:', error.message);
 
@@ -90,13 +93,15 @@ class Storage {
           const restoreFile = `${STORAGE_FILE}.restore.tmp`;
           fs.writeFileSync(restoreFile, JSON.stringify(restored, null, 2));
           fs.renameSync(restoreFile, STORAGE_FILE);
-          return restored;
+          this.cache = restored;
+          return this.cache;
         }
       } catch (backupError) {
         console.error('Yedek veri de okunamadı:', backupError.message);
       }
 
-      return this.normalize({});
+      this.cache = this.normalize({});
+      return this.cache;
     }
   }
 
@@ -114,15 +119,22 @@ class Storage {
       const tempFile = `${STORAGE_FILE}.tmp`;
       fs.writeFileSync(tempFile, JSON.stringify(normalized, null, 2));
       fs.renameSync(tempFile, STORAGE_FILE);
+      this.cache = normalized;
+      return true;
     } catch (error) {
       console.error('Veri kayıt hatası:', error.message);
+      return false;
     }
   }
 
   static update(mutator) {
-    const data = this.loadData();
+    // Mutators work on a private copy so a failed disk write cannot corrupt
+    // the in-memory read cache.
+    const data = clone(this.loadData());
     const result = mutator(data);
-    this.saveData(data);
+    if (!this.saveData(data)) {
+      throw new Error('TMF veri dosyasına yazılamadı; değişiklik kaydedilmedi.');
+    }
     return result;
   }
 
@@ -276,10 +288,6 @@ class Storage {
       this.pendingLogs.splice(0, this.pendingLogs.length - 2000);
     }
 
-    if (this.pendingLogs.length >= 250) {
-      this.flushQueuedLogs();
-    }
-
     return entry;
   }
 
@@ -289,7 +297,8 @@ class Storage {
     const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
     const users = [...this.pendingUsers.values()];
     this.pendingUsers.clear();
-    this.update((data) => {
+    try {
+      this.update((data) => {
       for (const update of users) {
         const previous = data.users[update.id] || { guilds: {} };
         data.users[update.id] = {
@@ -312,10 +321,16 @@ class Storage {
         }
       }
       data.logs.push(...batch);
-      if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
-    });
-
-    return batch.length;
+        if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
+      });
+      return batch.length + users.length;
+    } catch (error) {
+      this.pendingLogs.unshift(...batch);
+      for (const user of users) {
+        if (!this.pendingUsers.has(user.id)) this.pendingUsers.set(user.id, user);
+      }
+      throw error;
+    }
   }
 
   static addLog(type, payload = {}) {
