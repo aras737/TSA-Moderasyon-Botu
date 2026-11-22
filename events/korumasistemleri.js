@@ -7,6 +7,8 @@ module.exports = client => {
     const activeGuilds = new Set();
     const backupBlockedGuilds = new Set();
     const suspectGuildUntil = new Map();
+    const auditCache = new Map();
+    const auditInflight = new Map();
 
     const YEDEK_ARALIGI_MS = 60 * 1000;
     const WINDOW_MS = 1000;
@@ -14,6 +16,7 @@ module.exports = client => {
     const AUDIT_MAX_AGE_MS = 10000;
     const AUDIT_RETRIES = 3;
     const AUDIT_RETRY_DELAY_MS = 250;
+    const AUDIT_CACHE_MS = 200;
     const GUILD_COOLDOWN_MS = 15000;
     const SUSPECT_BACKUP_PAUSE_MS = 30000;
 
@@ -69,6 +72,26 @@ module.exports = client => {
     }, 10000);
     cleanupInterval.unref?.();
 
+    async function fetchAuditLogsCached(guild, type) {
+        const key = guild.id + ':' + String(type);
+        const cached = auditCache.get(key);
+        if (cached && Date.now() - cached.loadedAt < AUDIT_CACHE_MS) return cached.logs;
+
+        const pending = auditInflight.get(key);
+        if (pending) return pending;
+
+        const request = guild.fetchAuditLogs({ limit: 50, type }).then(logs => {
+            auditCache.set(key, { loadedAt: Date.now(), logs });
+            return logs;
+        }).catch(error => {
+            console.error('[GUARD] Denetim kayıtları alınamadı:', error.message);
+            return null;
+        }).finally(() => auditInflight.delete(key));
+
+        auditInflight.set(key, request);
+        return request;
+    }
+
     async function getRecentExecutor(guild, type, targetId) {
         const botMember = guild.members.me;
         if (botMember && !botMember.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
@@ -77,31 +100,20 @@ module.exports = client => {
         }
 
         for (let attempt = 0; attempt < AUDIT_RETRIES; attempt++) {
-            const logs = await guild.fetchAuditLogs({ limit: 20, type }).catch(error => {
-                console.error('[GUARD] Denetim kayıtları alınamadı:', error.message);
-                return null;
-            });
-
+            const logs = await fetchAuditLogsCached(guild, type);
             if (logs) {
                 const now = Date.now();
                 const entry = logs.entries.find(item => {
                     const age = now - item.createdTimestamp;
-                    return item.target?.id === targetId &&
-                        item.executorId &&
-                        age >= 0 &&
-                        age <= AUDIT_MAX_AGE_MS;
+                    return item.target?.id === targetId && item.executorId &&
+                        age >= 0 && age <= AUDIT_MAX_AGE_MS;
                 });
-
                 if (entry?.executorId) return entry.executorId;
             }
-
             if (attempt < AUDIT_RETRIES - 1) await wait(AUDIT_RETRY_DELAY_MS);
         }
 
-        console.warn(
-            '[GUARD] ' + guild.name + ': ' + type +
-            ' işlemini yapan kişi denetim kaydında bulunamadı.'
-        );
+        console.warn('[GUARD] ' + guild.name + ': ' + type + ' işlemini yapan kişi denetim kaydında bulunamadı.');
         return null;
     }
 
