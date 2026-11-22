@@ -200,7 +200,7 @@ module.exports = function registerDatastoreEvents(client) {
 
     // Keep ticket history accurate when a moderator deletes a ticket manually.
     try {
-      Storage.updateTicket(
+      Storage.queueTicketUpdate(
         { guildId: channel.guild.id, channelId: channel.id, status: 'open' },
         { status: 'deleted', deletedAt: new Date().toISOString() }
       );
