@@ -9,6 +9,7 @@ module.exports = client => {
     const suspectGuildUntil = new Map();
     const auditCache = new Map();
     const auditInflight = new Map();
+    const consumedAuditEntries = new Map();
 
     const YEDEK_ARALIGI_MS = 60 * 1000;
     const WINDOW_MS = 1000;
@@ -69,6 +70,9 @@ module.exports = client => {
         for (const [guildId, until] of suspectGuildUntil.entries()) {
             if (until <= now) suspectGuildUntil.delete(guildId);
         }
+        for (const [entryId, timestamp] of consumedAuditEntries.entries()) {
+            if (now - timestamp > 60000) consumedAuditEntries.delete(entryId);
+        }
     }, 10000);
     cleanupInterval.unref?.();
 
@@ -106,9 +110,13 @@ module.exports = client => {
                 const entry = logs.entries.find(item => {
                     const age = now - item.createdTimestamp;
                     return item.target?.id === targetId && item.executorId &&
+                        !consumedAuditEntries.has(item.id) &&
                         age >= 0 && age <= AUDIT_MAX_AGE_MS;
                 });
-                if (entry?.executorId) return entry.executorId;
+                if (entry?.executorId) {
+                    consumedAuditEntries.set(entry.id, Date.now());
+                    return entry.executorId;
+                }
             }
             if (attempt < AUDIT_RETRIES - 1) await wait(AUDIT_RETRY_DELAY_MS);
         }
@@ -339,12 +347,16 @@ module.exports = client => {
             return logs?.entries.find(item =>
                 item.target?.channelId === channel.id &&
                 item.executorId &&
+                !consumedAuditEntries.has(item.id) &&
                 Date.now() - item.createdTimestamp >= 0 &&
                 Date.now() - item.createdTimestamp <= AUDIT_MAX_AGE_MS
             ) || null;
         }));
 
         const latest = entries.filter(Boolean).sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
-        if (latest?.executorId) await guardKontrol(channel.guild, latest.executorId, 'Webhook işlemi');
+        if (latest?.executorId) {
+            consumedAuditEntries.set(latest.id, Date.now());
+            await guardKontrol(channel.guild, latest.executorId, 'Webhook işlemi');
+        }
     });
 };
