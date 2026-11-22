@@ -20,22 +20,15 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Regenerate lockfile from pinned security updates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm install --package-lock-only --ignore-scripts
       - name: Install dependencies
-        run: npm ci
-      - name: Apply compatible npm security fixes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm audit fix --package-lock-only --ignore-scripts
-      - name: Reinstall patched dependencies
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm ci
       - name: Check JavaScript syntax
         run: npm run check
-      - name: Report production dependency vulnerabilities
-        continue-on-error: true
-        shell: bash
-        run: |
-          npm audit --omit=dev --json > npm-audit.json || true
-          node -e "const a=require('./npm-audit.json'); const vulns=a.vulnerabilities||{}; const entries=Object.entries(vulns); console.log('Production dependency vulnerabilities:', a.metadata?.vulnerabilities||{}); for (const [name,v] of entries) console.log(name+': '+v.severity+'; direct='+v.isDirect+'; fix='+JSON.stringify(v.fixAvailable));"
+      - name: Block builds with production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=moderate
 
       - name: Commit patched dependency lock
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
