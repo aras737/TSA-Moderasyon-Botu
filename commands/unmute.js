@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('unmute')
-        .setDescription('Belirtilen kullanicinın susturma cezasını kaldırır.')
+        .setDescription('🔊 Belirtilen kullanicinın susturma cezasını kaldırır.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
         .addUserOption(option =>
             option.setName('kullanici').setDescription('Cezası kaldırılacak üyeyi seçin.').setRequired(true))
@@ -53,9 +53,9 @@ module.exports = {
                 .setTitle('🔊 TMF | Susturma Kaldırıldı')
                 .setDescription(`**${target.tag}** kullanicisının cezası kaldırıldı.`)
                 .addFields(
-                    { name: 'Üye', value: `${member}`, inline: true },
-                    { name: 'Yetkili', value: `${interaction.user}`, inline: true },
-                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
+                    { name: '📌 Üye', value: `${member}`, inline: true },
+                    { name: '📌 Yetkili', value: `${interaction.user}`, inline: true },
+                    { name: '📌 Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setColor('#2ecc71')
                 .setThumbnail(target.displayAvatarURL())
