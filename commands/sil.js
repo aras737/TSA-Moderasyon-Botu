@@ -16,45 +16,27 @@ module.exports = {
     requiredPerms: [PermissionFlagsBits.ManageMessages],
 
     async execute(interaction) {
-        const miktar = interaction.options.getInteger('miktar');
-        
-        // Sabit özel emoji sistemin kanka
-        const korumaEmoji = '<:koruma1:1505143174190989352>';
+        await interaction.deferReply({ ephemeral: true });
+        const miktar = interaction.options.getInteger('miktar', true);
 
         try {
-            // Kanaldan mesajları toplu olarak siliyoruz
             const silinenler = await interaction.channel.bulkDelete(miktar, true);
-
-            // Şık bir bilgilendirme embed'i oluşturuyoruz
             const silEmbed = new EmbedBuilder()
-                .setTitle(`${korumaEmoji} TMF | Temizlik Başarılı`)
-                .setDescription(`Kanal başarıyla temizlendi ve düzen sağlandı.`)
+                .setTitle('🛡️ TMF | Temizlik Tamamlandı')
+                .setDescription('Kanal temizleme işlemi tamamlandı.')
                 .addFields(
-                    { name: '<:sil:1505147967907037275> Silinen Mesaj', value: `\`${silinenler.size}\` adet`, inline: true },
-                    { name: '<:koruma1:1505143174190989352> Yetkili', value: `${interaction.user}`, inline: true }
+                    { name: 'Silinen Mesaj', value: `${silinenler.size} adet`, inline: true },
+                    { name: 'Yetkili', value: `${interaction.user}`, inline: true },
+                    { name: 'Not', value: '14 günden eski mesajlar Discord tarafından toplu silinemez.', inline: false }
                 )
-                .setColor('#3498db') // Şık bir mavi tonu
-                .setTimestamp()
-                .setFooter({ text: 'Bu mesaj 4 saniye içinde otomatik olarak silinecektir.' });
+                .setColor('#3498db')
+                .setTimestamp();
 
-            // Mesajı gönderiyoruz
-            await interaction.reply({ embeds: [silEmbed] });
-
-            // Kanalda kalabalık yapmasın diye 4 saniye sonra botun yanıtını siliyoruz
-            setTimeout(async () => {
-                try {
-                    await interaction.deleteReply();
-                } catch (err) {
-                    // Mesaj zaten silindiyse hata vermemesi için koruma
-                }
-            }, 4000);
-
+            return interaction.editReply({ embeds: [silEmbed] });
         } catch (error) {
-            console.error(error);
-            // Discord 14 günden eski mesajların toplu silinmesine izin vermez, bu durumu yakalıyoruz
-            await interaction.reply({ 
-                content: '<:sil:1505147967907037275> **Hata:** Mesajlar silinemedi! (Discord kuralları gereği 14 günden eski mesajları toplu olarak silemem kanka).', 
-                ephemeral: true 
+            console.error('Mesaj temizleme hatası:', error);
+            return interaction.editReply({
+                content: '❌ Mesajlar silinemedi. Botun Mesajları Yönet iznini ve kanal izinlerini kontrol et.'
             });
         }
     }
