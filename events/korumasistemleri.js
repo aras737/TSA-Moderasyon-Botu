@@ -133,7 +133,7 @@ module.exports = client => {
             });
         }
 
-        const botOwnerId = (process.env.BOT_OWNER_ID || '1389930042200559706').trim();
+        const botOwnerId = (process.env.BOT_OWNER_ID || '').trim();
         if (/^\d{17,20}$/.test(botOwnerId) &&
             botOwnerId !== serverOwner?.id &&
             botOwnerId !== client.user.id) {
