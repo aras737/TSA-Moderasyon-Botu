@@ -18,9 +18,12 @@ function registerSesPanelEvents(client) {
             
             client.on('interactionCreate', async (inter) => {
                 if (!inter.isButton() || !inter.inGuild()) return;
-                const member = inter.member;
                 const guild = inter.guild;
-                if (!guild || !member) return;
+                if (!guild) return;
+                const member = await guild.members.fetch(inter.user.id).catch(() => null);
+                if (!member) {
+                    return inter.reply({ content: `${uyariEmoji} Üye bilgisi alınamadı. İşlemi yeniden dene.`, ephemeral: true });
+                }
 
                 // 🔥 1. BUTON: ANA PANELDEKİ "ODA OLUŞTUR" BUTONU
                 if (inter.customId.startsWith('tsa_ses_olustur_')) {
