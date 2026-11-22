@@ -69,16 +69,16 @@ module.exports = (client) => {
         return null;
     }
 
+    // Yönetici (Administrator) izinli, @everyone ve entegrasyon olmayan rolleri bulur.
+    function yoneticiRolleriniBul(guild) {
+        return guild.roles.cache.filter(role =>
+            role.id !== guild.id &&
+            !role.managed &&
+            role.permissions.has(PermissionFlagsBits.Administrator)
+        );
+    }
+
     async function sendGuardLog(guild, executorId, eylem, count, status) {
-        const logId = ayarGetir(guild.id, 'logKanal', null);
-        if (!logId) return;
-
-        const log = await client.channels.fetch(logId).catch(() => null);
-        const botMember = guild.members.me;
-        if (!log?.isTextBased?.() ||
-            !botMember ||
-            !log.permissionsFor(botMember)?.has(PermissionFlagsBits.SendMessages)) return;
-
         const embed = new EmbedBuilder()
             .setTitle('🚨 TMF | GUARD MÜDAHALESİ')
             .setDescription(
@@ -87,9 +87,38 @@ module.exports = (client) => {
             .setColor('#960018')
             .setTimestamp();
 
-        await log.send({ embeds: [embed] }).catch(error => {
-            console.error('Guard log gönderilemedi:', error.message);
-        });
+        // 1) LOG KANALI + YÖNETİCİ ROLLERİNİ ETİKETLE
+        const logId = ayarGetir(guild.id, 'logKanal', null);
+        const botMember = guild.members.me;
+
+        if (logId) {
+            const log = await client.channels.fetch(logId).catch(() => null);
+            if (log?.isTextBased?.() &&
+                botMember &&
+                log.permissionsFor(botMember)?.has(PermissionFlagsBits.SendMessages)) {
+                const yoneticiRolleri = yoneticiRolleriniBul(guild);
+                const etiketMetni = yoneticiRolleri.size > 0
+                    ? yoneticiRolleri.map(role => role.toString()).join(' ')
+                    : undefined;
+
+                await log.send({
+                    content: etiketMetni,
+                    embeds: [embed],
+                    allowedMentions: { roles: yoneticiRolleri.map(role => role.id) }
+                }).catch(error => {
+                    console.error('Guard log gönderilemedi:', error.message);
+                });
+            }
+        }
+
+        // 2) SUNUCU SAHİBİNE DM OLARAK RAPOR AT
+        // Log kanalı ayarlı olmasa bile sahip her zaman bilgilendirilsin.
+        const sahip = await guild.fetchOwner().catch(() => null);
+        if (sahip) {
+            await sahip.send({ embeds: [embed] }).catch(() => {
+                // DM'leri kapalıysa sessizce geç; log kanalı ve rol etiketi zaten uyardı.
+            });
+        }
     }
 
     async function lockdown(guild, executorId, eylem, count) {
