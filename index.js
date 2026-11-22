@@ -99,6 +99,12 @@ let Storage;
 try {
     Storage = require('./services/storage');
     client.storage = Storage;
+    if (process.env.RENDER === 'true' && !process.env.DATA_DIR) {
+        console.warn(
+            '⚠️ [STORAGE] DATA_DIR ayarlı değil. Render varsayılan dosya sistemi kalıcı değildir; ' +
+            'storage.json içindeki ayarlar ve Anti-Raid yedekleri deploy/restart/uyku sonrası kaybolabilir.'
+        );
+    }
     require('./services/datastore-events')(client);
 } catch (error) {
     console.error('❌ Kalıcı veri sistemi yüklenemedi:', error);
