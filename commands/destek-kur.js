@@ -16,6 +16,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('destek-kur')
         .setDescription('TMF Moderasyon Destek Sistemini kurar.')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(option => 
             option.setName('yetkili-roller')
                 .setDescription('Yetkili rolleri etiketle (Örn: @Rol1 @Rol2)')
