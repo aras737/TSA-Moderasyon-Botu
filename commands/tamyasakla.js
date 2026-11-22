@@ -4,7 +4,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('tamyasakla')
         .setDescription('🚫 Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .setDefaultMemberPermissions(null)
         .addStringOption(option =>
             option.setName('kisi')
                 .setDescription('Yasaklanacak kişinin Discord ID\'sini veya etiketini girin kanka.')
@@ -17,8 +17,6 @@ module.exports = {
                 .setMaxLength(500)
                 .setRequired(true)
         ),
-
-    requiredPerms: [PermissionFlagsBits.Administrator],
 
     async execute(interaction) {
         const kisiInput = interaction.options.getString('kisi');
@@ -59,7 +57,7 @@ module.exports = {
             });
         }
 
-        await interaction.deferReply();
+        await interaction.deferReply({ ephemeral: true });
 
         let targetUser = null;
         let dmDurumu = "<a:baarsz:1505146967817326675> **DM İletilemedi** *(Kullanıcı bulunamadı)*";
