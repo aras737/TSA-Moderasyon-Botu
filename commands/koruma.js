@@ -137,12 +137,17 @@ module.exports = {
         if (subcommand === 'guard') {
             const enabled = interaction.options.getBoolean('aktif', true);
             if (enabled) {
+                if (ayarGetir(guildId, 'guardYedekBloke', false) === true) {
+                    return interaction.reply({
+                        content: '⛔ Önce sunucunun mevcut durumunu kontrol et. Güvenli olduğundan emin olduktan sonra /koruma yedek-al ile bilinçli olarak yeni yedek oluştur.',
+                        ephemeral: true
+                    });
+                }
                 await interaction.deferReply({ ephemeral: true });
                 const backup = await yedekAl(interaction.guild);
                 if (!backup) {
                     return interaction.editReply('⛔ Yedek alınamadığı için Anti-Raid açılmadı. Önce bot izinlerini düzelt.');
                 }
-                ayarKaydet(guildId, 'guardYedekBloke', false);
                 ayarKaydet(guildId, 'guardAktif', true);
                 return interaction.editReply(
                     '✅ TMF Anti-Raid etkinleştirildi. Ön güvenlik yedeği alındı: ' +
