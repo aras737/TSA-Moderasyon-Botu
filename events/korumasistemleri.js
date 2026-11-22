@@ -5,7 +5,6 @@ const { yedekAl, yedektenGeriYukle } = require('../services/sunucuYedek');
 module.exports = client => {
     const userActions = new Map();
     const activeGuilds = new Set();
-    const backupBlockedGuilds = new Set();
     const suspectGuildUntil = new Map();
     const auditCache = new Map();
     const auditInflight = new Map();
@@ -30,14 +29,12 @@ module.exports = client => {
 
             if (
                 activeGuilds.has(guild.id) ||
-                backupBlockedGuilds.has(guild.id) ||
                 ayarGetir(guild.id, 'guardYedekBloke', false) === true ||
                 suspectUntil > now
             ) continue;
 
             const backup = await yedekAl(guild, {
                 shouldAbort: () => activeGuilds.has(guild.id) ||
-                    backupBlockedGuilds.has(guild.id) ||
                     ayarGetir(guild.id, 'guardYedekBloke', false) === true ||
                     (suspectGuildUntil.get(guild.id) || 0) > Date.now()
             });
@@ -221,7 +218,6 @@ module.exports = client => {
     async function lockdown(guild, executorId, eylem, count) {
         if (activeGuilds.has(guild.id)) return;
         activeGuilds.add(guild.id);
-        backupBlockedGuilds.add(guild.id);
         ayarKaydet(guild.id, 'guardYedekBloke', true);
 
         let removalStatus = 'Uzaklaştırma denenmedi.';
@@ -260,7 +256,6 @@ module.exports = client => {
                 } else {
                     const freshBackup = await yedekAl(guild);
                     if (freshBackup) {
-                        backupBlockedGuilds.delete(guild.id);
                         ayarKaydet(guild.id, 'guardYedekBloke', false);
                         restoreStatus += ' Yeni temiz yedek kaydedildi.';
                     } else {
