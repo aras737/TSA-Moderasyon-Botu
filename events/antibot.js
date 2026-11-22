@@ -127,7 +127,7 @@ module.exports = client => {
         if (!['approve', 'reject'].includes(decision) || !botId || !guildId) return;
 
         try {
-            const guild = await client.guilds.fetch(guildId).catch(() => null);
+            const guild = interaction.guild?.id === guildId ? interaction.guild : null;
             if (!guild) {
                 return interaction.reply({ content: '⚠️ İlgili sunucu bulunamadı.', ephemeral: true });
             }
