@@ -5,15 +5,15 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('unmute')
-        .setDescription('Belirtilen kullanıcının susturma cezasını kaldırır.')
+        .setDescription('Belirtilen kullanicinın susturma cezasını kaldırır.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
         .addUserOption(option =>
-            option.setName('kullanıcı').setDescription('Cezası kaldırılacak üyeyi seçin.').setRequired(true))
+            option.setName('kullanici').setDescription('Cezası kaldırılacak üyeyi seçin.').setRequired(true))
         .addStringOption(option =>
             option.setName('sebep').setDescription('Cezayı kaldırma sebebini yazın.').setMaxLength(500).setRequired(false)),
 
     async execute(interaction) {
-        const target = interaction.options.getUser('kullanıcı', true);
+        const target = interaction.options.getUser('kullanici', true);
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
 
         if (target.id === interaction.user.id || target.id === interaction.guild.ownerId) {
@@ -22,7 +22,7 @@ module.exports = {
 
         const member = await interaction.guild.members.fetch(target.id).catch(() => null);
         if (!member) {
-            return interaction.reply({ content: '⚠️ Bu kullanıcı sunucuda bulunamadı.', ephemeral: true });
+            return interaction.reply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.', ephemeral: true });
         }
 
         if (interaction.user.id !== interaction.guild.ownerId &&
@@ -31,12 +31,12 @@ module.exports = {
         }
 
         if (!member.isCommunicationDisabled()) {
-            return interaction.reply({ content: '⚠️ Bu kullanıcı zaten susturulmamış.', ephemeral: true });
+            return interaction.reply({ content: '⚠️ Bu kullanici zaten susturulmamış.', ephemeral: true });
         }
 
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
         if (!botMember || !member.moderatable || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.reply({ content: '⛔ Botun rol hiyerarşisi bu kullanıcının cezasını kaldırmaya izin vermiyor.', ephemeral: true });
+            return interaction.reply({ content: '⛔ Botun rol hiyerarşisi bu kullanicinın cezasını kaldırmaya izin vermiyor.', ephemeral: true });
         }
 
         try {
@@ -44,7 +44,7 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle('🔊 TMF | Susturma Kaldırıldı')
-                .setDescription(`**${target.tag}** kullanıcısının cezası kaldırıldı.`)
+                .setDescription(`**${target.tag}** kullanicisının cezası kaldırıldı.`)
                 .addFields(
                     { name: 'Üye', value: `${member}`, inline: true },
                     { name: 'Yetkili', value: `${interaction.user}`, inline: true },
