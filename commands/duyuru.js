@@ -56,7 +56,11 @@ module.exports = {
             }
         }
 
-        const roleName = interaction.member.roles.highest?.name || 'Yetkili';
+        const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (!moderator) {
+            return interaction.reply({ content: '❌ Yetkili bilgisi alınamadı.', ephemeral: true });
+        }
+        const roleName = moderator.roles.highest?.name || 'Yetkili';
         const byline = `[ ${roleName} ] ${interaction.user.username} tarafından.`;
         const allowedMentions = everyone ? { parse: ['everyone'] } : { parse: [] };
 
