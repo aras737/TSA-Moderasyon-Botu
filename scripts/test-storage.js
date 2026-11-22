@@ -52,7 +52,7 @@ try {
     });
 
     const flushed = Storage.flushQueuedLogs();
-    assert.equal(flushed, 3);
+    assert.equal(flushed, 4);
 
     let database = Storage.getDatabase();
     assert.equal(database.guilds['guild-1'].name, 'Test Guild');
