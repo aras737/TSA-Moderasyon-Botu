@@ -30,9 +30,10 @@ function registerSesPanelEvents(client) {
                     const targetKategoriId = inter.customId.split('tsa_ses_olustur_')[1];
 
                     // Aktif oda kontrolü (Dinamik arama)
+                    const ownerRecords = Storage.getAll();
                     const odaArat = guild.channels.cache.find(channel =>
                         channel.type === ChannelType.GuildVoice &&
-                        Storage.get(`tempVoiceOwner:${channel.id}`) === member.id
+                        ownerRecords[`tempVoiceOwner:${channel.id}`] === member.id
                     );
                     if (odaArat) {
                         return inter.reply({ 
