@@ -115,6 +115,7 @@ module.exports = {
             if (!backup) {
                 return interaction.editReply('❌ Yedek alınamadı. Botun kanal ve rol bilgilerini görüntüleme izinlerini kontrol et.');
             }
+            ayarKaydet(guildId, 'guardYedekBloke', false);
             return interaction.editReply(
                 '✅ Sunucu yedeği alındı. ' + backup.roller.length + ' rol ve ' +
                 backup.kanallar.length + ' kanal kaydedildi. Tarih: ' + backup.alinmaZamani
@@ -128,8 +129,8 @@ module.exports = {
             }
             return interaction.reply({
                 content: '🗂️ Son yedek: ' + new Date(backup.alinmaZamani).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) +
-                    '\\nRoller: ' + (backup.roller?.length || 0) +
-                    '\\nKanallar: ' + (backup.kanallar?.length || 0),
+                    ' | Roller: ' + (backup.roller?.length || 0) +
+                    ' | Kanallar: ' + (backup.kanallar?.length || 0),
                 ephemeral: true
             });
         }
