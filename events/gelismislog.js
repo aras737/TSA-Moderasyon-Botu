@@ -376,19 +376,12 @@ module.exports = (client) => {
             const hainYetkili = logEntry?.executor;
 
             if (hainYetkili && hainYetkili.id !== client.user.id) {
-                const member = await channel.guild.members.fetch(hainYetkili.id).catch(() => null);
-                // Botun hiyerarşik gücü yetiyorsa rolleri alsın (çökmeyi önler)
-                if (member && member.manageable) {
-                    await member.roles.set([], 'Ulti Log Kanalını Silmeye Çalıştı!').catch(() => null);
-                }
-
                 const guildOwner = await channel.guild.fetchOwner().catch(() => null);
                 if (guildOwner) {
-                    const acilEmbed = new EmbedBuilder()
-                        .setTitle('🚨 ACİL DURUM: LOG KANALI SABOTE EDİLDİ!')
-                        .setDescription(`⚠️ Sunucunuzdaki ana log kanalı (\`${channel.name}\`), **${hainYetkili.tag}** tarafından silindi! Bot anında darbecinin yetkilerini kesti!`)
-                        .setColor('#960018').setTimestamp();
-                    guildOwner.send({ embeds: [acilEmbed] }).catch(() => {});
+                    guildOwner.send({
+                        content: `🚨 TMF: Ana log kanalı (${channel.name}) ${hainYetkili.tag || hainYetkili.username} tarafından silindi. Otomatik rol silme yapılmadı; denetim kaydını inceleyin.`,
+                        allowedMentions: { parse: [] }
+                    }).catch(() => {});
                 }
                 return;
             }
@@ -423,9 +416,12 @@ module.exports = (client) => {
             const kurcalayan = logEntry?.executor;
 
             if (kurcalayan && kurcalayan.id !== client.user.id) {
-                const member = await newChannel.guild.members.fetch(kurcalayan.id).catch(() => null);
-                if (member && member.manageable && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    await member.roles.set([], 'Ulti Log Kanalı Ayarlarını Kurcaladı!').catch(() => null);
+                const guildOwner = await newChannel.guild.fetchOwner().catch(() => null);
+                if (guildOwner) {
+                    guildOwner.send({
+                        content: `⚠️ TMF: Ana log kanalı ayarları ${kurcalayan.tag || kurcalayan.username} tarafından değiştirildi. Otomatik rol silme yapılmadı; denetim kaydını inceleyin.`,
+                        allowedMentions: { parse: [] }
+                    }).catch(() => {});
                 }
             }
         }
