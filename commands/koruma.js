@@ -29,7 +29,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('koruma')
-        .setDescription('TMF güvenlik ve giriş-çıkış koruma ayarlarını yönetir.')
+        .setDescription('🛡️ TMF güvenlik ve giriş-çıkış koruma ayarlarını yönetir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand.setName('durum').setDescription('Bu sunucunun güvenlik ayarlarını gösterir.'))
@@ -98,13 +98,13 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle('🛡️ TMF | Güvenlik Ayarları')
                 .addFields(
-                    { name: 'Anti-Raid Guard', value: guard ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Küfür Filtresi', value: kufur ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Spam Koruması', value: spam ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Toplu Etiket', value: mention ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Caps Koruması', value: caps ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Giriş-Çıkış Logları', value: girisCikis ? '✅ Açık' : '⛔ Kapalı', inline: true },
-                    { name: 'Giriş-Çıkış Kanalı', value: channelId ? `<#${channelId}>` : 'Ayarlanmamış', inline: false }
+                    { name: '📌 Anti-Raid Guard', value: guard ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Küfür Filtresi', value: kufur ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Spam Koruması', value: spam ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Toplu Etiket', value: mention ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Caps Koruması', value: caps ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Giriş-Çıkış Logları', value: girisCikis ? '✅ Açık' : '⛔ Kapalı', inline: true },
+                    { name: '📌 Giriş-Çıkış Kanalı', value: channelId ? `<#${channelId}>` : 'Ayarlanmamış', inline: false }
                 )
                 .setColor('#2ecc71')
                 .setTimestamp();
