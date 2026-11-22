@@ -6,13 +6,36 @@ module.exports = {
         .setDescription('Sunucunun tüm detaylarını, boost durumunu ve emojilerini listeler.'),
 
     async execute(interaction) {
-        const { guild } = interaction;
-        
-        // Sabit özel emoji sistemin kanka
-        const korumaEmoji = '<:koruma1:1505143174190989352>';
+        const guild = interaction.guild;
+        if (!guild?.id) {
+            return interaction.reply({
+                content: '⛔ Bu komut yalnızca geçerli bir Discord sunucusunda kullanılabilir.',
+                ephemeral: true
+            });
+        }
 
-        // Sunucu kurulma tarihini şık bir formata çeviriyoruz
-        const kurulmaTarihi = `<t:${Math.floor(guild.createdTimestamp / 1000)}:R>`;
+        await interaction.deferReply({ ephemeral: true });
+
+        // Discord API/cache bazen createdTimestamp alanını null döndürebilir.
+        // Guild snowflake ID'si, oluşturulma zamanını güvenli şekilde hesaplamayı sağlar.
+        let createdAtMs = Number.isFinite(guild.createdTimestamp)
+            ? guild.createdTimestamp
+            : null;
+
+        if (createdAtMs === null) {
+            try {
+                createdAtMs = Number((BigInt(guild.id) >> 22n) + 1420070400000n);
+            } catch {
+                createdAtMs = Date.now();
+            }
+        }
+
+        const kurulmaTarihi = Number.isFinite(createdAtMs)
+            ? `<t:${Math.floor(createdAtMs / 1000)}:R>`
+            : 'Bilinmiyor';
+
+        // Sabit özel emoji sistemin
+        const korumaEmoji = '<:koruma1:1505143174190989352>';
 
         // Kanalları türlerine göre sayalım
         const kanallar = guild.channels.cache;
@@ -70,6 +93,6 @@ module.exports = {
             .setTimestamp();
 
         // Yanıtı gönderiyoruz
-        await interaction.reply({ embeds: [bilgiEmbed] });
+        await interaction.editReply({ embeds: [bilgiEmbed] });
     }
 };
