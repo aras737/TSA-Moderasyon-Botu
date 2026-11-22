@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tamyasakla')
-        .setDescription('Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
+        .setDescription('🚫 Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option =>
             option.setName('kisi')
@@ -30,7 +30,7 @@ module.exports = {
 
         if (!/^\d{17,20}$/.test(targetId)) {
             const hataEmbed = new EmbedBuilder()
-                .setTitle('❌ Geçersiz Kullanıcı')
+                .setTitle('🚫 ❌ Geçersiz Kullanıcı')
                 .setDescription('<a:baarsz:1505146967817326675> Lütfen geçerli bir Discord ID\'si veya kullanıcı etiketi gir kanka!')
                 .setColor('#7a0010');
             return interaction.reply({ embeds: [hataEmbed], ephemeral: true });
@@ -61,8 +61,8 @@ module.exports = {
                     .setTitle('<:yasaklandi:1505146022588842095> KÜRESEL YASAKLAMA BİLDİRİMİ')
                     .setDescription(`Merhaba **${targetUser.username}**,\nTMF Yönetim Sistemi kararıyla botun bağlı olduğu tüm sunuculardan kalıcı olarak uzaklaştırıldınız.`)
                     .addFields(
-                        { name: '┗ <:Paper:1505146388596391977> Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
-                        { name: '┗ <:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
+                        { name: '📌 ┗ <:Paper:1505146388596391977> Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
+                        { name: '📌 ┗ <:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
                     )
                     .setColor('#7a0010')
                     .setFooter({ text: 'TMF Küresel Sıkıyönetim Sistemi' })
@@ -96,7 +96,7 @@ module.exports = {
         // 🟥 HİÇBİR YERDEN BANLANAMADIYSA HATA DÖNDÜR
         if (banlananSunucular.length === 0) {
             const basarisizEmbed = new EmbedBuilder()
-                .setTitle('❌ İşlem Başarısız')
+                .setTitle('🚫 ❌ İşlem Başarısız')
                 .setDescription(`<a:baarsz:1505146967817326675> **${targetName}** kişisi hiçbir sunucudan banlanamadı. Yetkileri kontrol et kanka!`)
                 .setColor('#7a0010');
             return interaction.editReply({ embeds: [basarisizEmbed] });
