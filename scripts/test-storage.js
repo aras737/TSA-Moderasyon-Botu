@@ -36,13 +36,16 @@ try {
         memberCount: 12,
         iconURL: () => 'https://example.invalid/icon.png'
     });
-    Storage.queueUserUpsert({
+    const testUser = {
         id: 'user-1',
         username: 'Tester',
         tag: 'Tester#0001',
         bot: false,
         displayAvatarURL: () => 'https://example.invalid/avatar.png'
-    }, 'guild-1', { status: 'joined' });
+    };
+    Storage.queueUserUpsert(testUser, 'guild-1', { status: 'joined' });
+    Storage.queueUserUpsert(testUser, 'guild-1');
+    Storage.queueUserUpsert(testUser, 'guild-2', { rank: 'member' });
     Storage.queueLog('messageCreate', {
         guildId: 'guild-1',
         content: 'test message'
@@ -54,6 +57,7 @@ try {
     let database = Storage.getDatabase();
     assert.equal(database.guilds['guild-1'].name, 'Test Guild');
     assert.equal(database.users['user-1'].guilds['guild-1'].status, 'joined');
+    assert.equal(database.users['user-1'].guilds['guild-2'].rank, 'member');
     assert.equal(database.logs.at(-1).content, 'test message');
 
     database.settings['guild-1'].guardAktif = false;
