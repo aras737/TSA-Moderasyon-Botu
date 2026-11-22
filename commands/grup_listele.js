@@ -1,9 +1,16 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ComponentType
+} = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('grup_listele')
-        .setDescription('👥 Belirtilen Roblox kullanıcısının katıldığı grupları listeler kanka.')
+        .setDescription('👥 Belirtilen Roblox kullanıcısının katıldığı grupları listeler.')
         .addStringOption(option =>
             option.setName('kullanici_adi')
                 .setDescription('Sorgulamak istediğin Roblox kullanıcı adı')
@@ -13,84 +20,170 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        // İşlem API'den veri çekerken biraz sürebilir, Discord hata vermesin diye bekletiyoruz.
-        await interaction.deferReply(); 
-        
-        const username = interaction.options.getString('kullanici_adi');
+        await interaction.deferReply({ ephemeral: true });
+
+        const username = interaction.options.getString('kullanici_adi', true).trim();
 
         try {
-            // 1. AŞAMA: Roblox Kullanıcı Adından Kullanıcı ID'sini Çekme
             const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
                 signal: AbortSignal.timeout(10000)
             });
-            if (!userRes.ok) throw new Error(`Roblox kullanıcı API HTTP ${userRes.status}`);
-            const userData = await userRes.json();
 
-            // Eğer kullanıcı bulunamazsa uyar
-            if (!userData.data || userData.data.length === 0) {
-                return interaction.editReply('❌ Kanka bu isimde bir Roblox kullanıcısı bulamadım, adı doğru yazdığına emin misin?');
+            if (!userRes.ok) {
+                throw new Error(`Roblox kullanıcı API HTTP ${userRes.status}`);
             }
 
-            const robloxId = userData.data[0].id;
-            const realUsername = userData.data[0].name; // Roblox'taki orijinal büyük/küçük harf durumu
+            const userData = await userRes.json();
+            const robloxUser = userData.data?.[0];
 
-            // 2. AŞAMA: Kullanıcının Gruplarını Çekme
-            const groupRes = await fetch(`https://groups.roblox.com/v1/users/${robloxId}/groups/roles`, {
-                signal: AbortSignal.timeout(10000)
-            });
-            if (!groupRes.ok) throw new Error(`Roblox grup API HTTP ${groupRes.status}`);
+            if (!robloxUser?.id || !robloxUser?.name) {
+                return interaction.editReply({
+                    content: '❌ Bu kullanıcı adıyla eşleşen Roblox hesabı bulunamadı.'
+                });
+            }
+
+            const groupRes = await fetch(
+                `https://groups.roblox.com/v1/users/${robloxUser.id}/groups/roles`,
+                { signal: AbortSignal.timeout(10000) }
+            );
+
+            if (!groupRes.ok) {
+                throw new Error(`Roblox grup API HTTP ${groupRes.status}`);
+            }
+
             const groupData = await groupRes.json();
-
-            if (!groupData.data) {
-                return interaction.editReply('❌ Kanka bu kullanıcının gruplarını çekerken Roblox API kaynaklı bir hata oluştu!');
+            if (!Array.isArray(groupData.data)) {
+                throw new Error('Roblox grup API geçerli bir grup listesi döndürmedi.');
             }
 
             const groups = groupData.data;
-            const totalGroups = groups.length;
-
-            if (totalGroups === 0) {
-                return interaction.editReply(`Kanka **${realUsername}** hiçbir gruba üye değil.`);
+            if (groups.length === 0) {
+                return interaction.editReply({
+                    content: `👥 **${robloxUser.name}** herhangi bir Roblox grubuna üye değil.`
+                });
             }
 
-            // Sayfalama (Discord mesaj karakter sınırını aşmamak için ilk 10 grubu gösteriyoruz)
-            const itemsPerPage = 10;
-            const totalPages = Math.ceil(totalGroups / itemsPerPage);
-            const currentGroups = groups.slice(0, itemsPerPage);
+            const itemsPerPage = 8;
+            const totalPages = Math.ceil(groups.length / itemsPerPage);
+            let currentPage = 0;
 
-            // 3. AŞAMA: Embed (Mesaj) Tasarımını Görseldekiyle Birebir Hazırlama
-            let description = `Gruplarım: ${realUsername}\n`;
-            description += `**Roblox ID:** \`${robloxId}\`\n`;
-            description += `**Toplam Grup:** ${totalGroups}\n`;
-            description += `**Sayfa:** 1 / ${totalPages}\n\n`;
+            const buildEmbed = () => {
+                const start = currentPage * itemsPerPage;
+                const pageGroups = groups.slice(start, start + itemsPerPage);
+                const embed = new EmbedBuilder()
+                    .setColor('#2b2d31')
+                    .setTitle('👥 Roblox Grup Listesi')
+                    .setDescription(
+                        `**Kullanıcı:** ${robloxUser.name}\n` +
+                        `**Roblox ID:** \`${robloxUser.id}\`\n` +
+                        `**Toplam Grup:** ${groups.length}\n` +
+                        `**Sayfa:** ${currentPage + 1} / ${totalPages}`
+                    )
+                    .setFooter({ text: 'TMF | Roblox Grup Sorgulama' })
+                    .setTimestamp();
 
-            for (const item of currentGroups) {
-                const gName = item.group?.name || 'Bilinmeyen grup';
-                const gId = item.group?.id || '—';
-                // Sayıları 1.000 formatına çevirme (Örn: 98086 -> 98.086)
-                const memberCount = Number(item.group?.memberCount || 0).toLocaleString('tr-TR'); 
-                
-                const rName = item.role?.name || 'Bilinmeyen rütbe';
-                const rRank = Number(item.role?.rank || 0); // Resimdeki "ID: 225" kısmı Roblox'taki rütbe sırasıdır (Rank ID)
+                for (const item of pageGroups) {
+                    const groupName = String(item.group?.name || 'Bilinmeyen grup').slice(0, 200);
+                    const groupId = item.group?.id || '—';
+                    const memberCount = Number(item.group?.memberCount || 0);
+                    const roleName = String(item.role?.name || 'Bilinmeyen rütbe').slice(0, 200);
+                    const rank = Number(item.role?.rank || 0);
 
-                description += `• **${gName}**\n`;
-                description += `**Rütbe:** ${rName} [**ID:** \`${rRank}\` ]\n`;
-                description += `**Üye Sayısı:** ${memberCount}\n`;
-                description += `**Grup ID:** \`${gId}\`\n\n`;
-            }
+                    embed.addFields({
+                        name: `🏷️ ${groupName}`,
+                        value:
+                            `**Rütbe:** ${roleName} (Rank: \`${rank}\`)\n` +
+                            `**Üye:** ${Number.isFinite(memberCount) ? memberCount.toLocaleString('tr-TR') : 'Bilinmiyor'}\n` +
+                            `**Grup ID:** \`${groupId}\``,
+                        inline: false
+                    });
+                }
 
-            const embed = new EmbedBuilder()
-                .setColor('#2b2d31') // Discord'un orijinal koyu temasına uygun arka plan
-                .setDescription(description);
+                return embed;
+            };
 
-            // Sonucu gönder!
-            await interaction.editReply({ embeds: [embed] });
+            const buildComponents = () => {
+                if (totalPages <= 1) return [];
 
+                return [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('roblox_groups_previous')
+                            .setLabel('Önceki')
+                            .setEmoji('◀️')
+                            .setStyle(ButtonStyle.Secondary)
+                            .setDisabled(currentPage === 0),
+                        new ButtonBuilder()
+                            .setCustomId('roblox_groups_next')
+                            .setLabel('Sonraki')
+                            .setEmoji('▶️')
+                            .setStyle(ButtonStyle.Primary)
+                            .setDisabled(currentPage >= totalPages - 1)
+                    )
+                ];
+            };
+
+            const message = await interaction.editReply({
+                embeds: [buildEmbed()],
+                components: buildComponents()
+            });
+
+            if (totalPages <= 1) return;
+
+            const collector = message.createMessageComponentCollector({
+                componentType: ComponentType.Button,
+                time: 180000
+            });
+
+            collector.on('collect', async buttonInteraction => {
+                if (buttonInteraction.user.id !== interaction.user.id) {
+                    return buttonInteraction.reply({
+                        content: '⛔ Bu sayfalama menüsünü yalnızca komutu kullanan kişi yönetebilir.',
+                        ephemeral: true
+                    });
+                }
+
+                if (buttonInteraction.customId === 'roblox_groups_previous') {
+                    currentPage = Math.max(0, currentPage - 1);
+                } else if (buttonInteraction.customId === 'roblox_groups_next') {
+                    currentPage = Math.min(totalPages - 1, currentPage + 1);
+                } else {
+                    return buttonInteraction.deferUpdate();
+                }
+
+                try {
+                    await buttonInteraction.update({
+                        embeds: [buildEmbed()],
+                        components: buildComponents()
+                    });
+                } catch (error) {
+                    console.error('[ROBLOX GROUPS] Sayfa güncelleme hatası:', error);
+                }
+            });
+
+            collector.on('end', () => {
+                const disabledComponents = [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('roblox_groups_expired')
+                            .setLabel('Menü süresi doldu')
+                            .setEmoji('🔒')
+                            .setStyle(ButtonStyle.Secondary)
+                            .setDisabled(true)
+                    )
+                ];
+                message.edit({ components: disabledComponents }).catch(() => {});
+            });
         } catch (error) {
-            console.error("Grup Listeleme Hatası:", error);
-            await interaction.editReply('❌ Kanka API bağlantısında sistemsel bir hata oluştu, konsolu kontrol et!');
+            console.error('[ROBLOX GROUPS] Listeleme hatası:', error);
+            await interaction.editReply({
+                content: '❌ Roblox grupları alınamadı. API bağlantısını veya kullanıcı adını kontrol et.',
+                embeds: [],
+                components: []
+            }).catch(() => {});
         }
     }
 };
