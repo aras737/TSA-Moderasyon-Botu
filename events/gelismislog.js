@@ -238,9 +238,9 @@ module.exports = (client) => {
                                 .setTitle('🛡️ TMF | Tehlikeli Rol Ataması Geri Alındı')
                                 .setDescription('Sunucu sahibi dışındaki bir kullanıcı kritik yönetim yetkisi verdi. Yeni rol(ler) geri alındı.')
                                 .addFields(
-                                    { name: 'Verilen Tehlikeli Rol(ler)', value: tehlikeliRoller.map(role => String(role)).join(', ').slice(0, 1000) },
-                                    { name: 'Rol Verilen Üye', value: String(newMember.user), inline: true },
-                                    { name: 'İşlemi Yapan', value: String(işlemiYapan), inline: true }
+                                    { name: '📌 Verilen Tehlikeli Rol(ler)', value: tehlikeliRoller.map(role => String(role)).join(', ').slice(0, 1000) },
+                                    { name: '📌 Rol Verilen Üye', value: String(newMember.user), inline: true },
+                                    { name: '📌 İşlemi Yapan', value: String(işlemiYapan), inline: true }
                                 )
                                 .setColor('#c0392b')
                                 .setTimestamp();
@@ -287,12 +287,12 @@ module.exports = (client) => {
                 const embed = new EmbedBuilder()
                     .setTitle('🛡️ TMF | Üye Rol Güncellemesi')
                     .setDescription(`Üye: ${newMember.user} (${newMember.user.tag})`)
-                    .addFields({ name: 'İşlemi Yapan', value: yapan });
+                    .addFields({ name: '📌 İşlemi Yapan', value: yapan });
                 if (verilenRoller.size > 0) {
-                    embed.addFields({ name: 'Verilen Roller', value: verilenRoller.map(role => String(role)).join(', ').slice(0, 1000) });
+                    embed.addFields({ name: '📌 Verilen Roller', value: verilenRoller.map(role => String(role)).join(', ').slice(0, 1000) });
                 }
                 if (alinanRoller.size > 0) {
-                    embed.addFields({ name: 'Alınan Roller', value: alinanRoller.map(role => String(role)).join(', ').slice(0, 1000) });
+                    embed.addFields({ name: '📌 Alınan Roller', value: alinanRoller.map(role => String(role)).join(', ').slice(0, 1000) });
                 }
                 embed.setThumbnail(newMember.user.displayAvatarURL() || null)
                     .setColor('#34495e')
@@ -316,7 +316,7 @@ module.exports = (client) => {
                 .addFields(
                     { name: '<:uzaybot_kullanicilar:1505146190973505567> Susturulan', value: `${newMember.user}`, inline: true },
                     { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan, inline: true },
-                    { name: '⏳ Ceza Bitiş', value: `<t:${Math.round(newTimeout / 1000)}:R>`, inline: true },
+                    { name: '📌 ⏳ Ceza Bitiş', value: `<t:${Math.round(newTimeout / 1000)}:R>`, inline: true },
                     { name: '<:Paper:1505146388596391977> Sebep', value: `\`${sebep}\`` }
                 )
                 .setThumbnail(newMember.user.displayAvatarURL()).setColor('#f1c40f').setTimestamp();
@@ -681,7 +681,7 @@ module.exports = (client) => {
 
             if (aktifBanlar.length >= 3 && aktifBanlar.length === 3 && logChan) {
                 const panikEmbed = new EmbedBuilder()
-                    .setTitle('⚠️ TMF | Seri Ban Uyarısı')
+                    .setTitle('📋 ⚠️ TMF | Seri Ban Uyarısı')
                     .setDescription(`**${yapan}** son 10 saniyede 3 üye banladı. Bu işlem otomatik olarak geri alınmadı; sunucu yöneticisinin incelemesi gerekiyor.`)
                     .setColor('#f39c12')
                     .setTimestamp();
