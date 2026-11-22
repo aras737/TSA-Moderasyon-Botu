@@ -12,7 +12,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('datastore')
-        .setDescription('💾 Botun PC icindeki kalici kayit durumunu gosterir.'))
+        .setDescription('💾 Botun PC icindeki kalici kayit durumunu gosterir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
