@@ -21,7 +21,8 @@ async function getRoWifiUser(guildId, discordId) {
         const response = await axios.get(`https://api.rowifi.xyz/v2/guilds/${guildId}/users/${discordId}`, {
             headers: {
                 'Authorization': `Bearer ${ROWIFI_API_KEY}`
-            }
+            },
+            timeout: 12000
         });
         return {
             username: response.data?.username || response.data?.roblox_username || null,
@@ -52,19 +53,20 @@ async function getRobloxUser(username) {
     const response = await axios.post('https://users.roblox.com/v1/usernames/users', {
         usernames: [username],
         excludeBannedUsers: false
-    });
+    }, { timeout: 12000 });
     return response.data?.data?.[0] || null;
 }
 
 async function getGroupRoles() {
     const response = await axios.get(`${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/roles`, {
-        headers: robloxHeaders()
+        headers: robloxHeaders(),
+        timeout: 12000
     });
     return response.data?.groupRoles || response.data?.roles || [];
 }
 
 async function getPublicGroupRoles() {
-    const response = await axios.get(`https://groups.roblox.com/v1/groups/${ROBLOX_GRUP_ID}/roles`);
+    const response = await axios.get(`https://groups.roblox.com/v1/groups/${ROBLOX_GRUP_ID}/roles`, { timeout: 12000 });
     return response.data?.roles || [];
 }
 
@@ -74,10 +76,11 @@ async function getMembershipByUserId(userId) {
         maxPageSize: '10'
     });
     const response = await axios.get(`${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/memberships?${params.toString()}`, {
-        headers: robloxHeaders()
+        headers: robloxHeaders(),
+        timeout: 12000
     });
     const memberships = response.data?.groupMemberships || response.data?.memberships || [];
-    return memberships.find((membership) => membership.user === `users/${userId}`) || memberships[0] || null;
+    return memberships.find((membership) => membership.user === `users/${userId}`) || null;
 }
 
 function roleIdFromPath(rolePath) {
@@ -254,7 +257,7 @@ module.exports = {
             const yetkiliRank = Number(yetkiliPublicRol?.rank ?? -1);
             const hedefRank = Number(hedefPublicRol.rank ?? -1);
 
-            if (hedefRank > yetkiliRank) {
+            if (hedefRank < 0 || yetkiliRank < 0 || hedefRank >= yetkiliRank) {
                 const yetkiEmbed = new EmbedBuilder()
                     .setTitle('Rutbe Yetkisi Yetersiz')
                     .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
@@ -267,10 +270,14 @@ module.exports = {
                 return interaction.editReply({ embeds: [yetkiEmbed] });
             }
 
+            if (!membershipId || !/^\\d+$/.test(membershipId)) {
+                throw new Error('Roblox grup üyeliği kimliği API yanıtında bulunamadı.');
+            }
+
             await axios.patch(
                 `${CLOUD_BASE_URL}/groups/${ROBLOX_GRUP_ID}/memberships/${membershipId}`,
                 { role: `groups/${ROBLOX_GRUP_ID}/roles/${hedefRoleId}` },
-                { headers: robloxHeaders() }
+                { headers: robloxHeaders(), timeout: 12000 }
             );
 
             Storage.addLog('robloxRankChange', {
