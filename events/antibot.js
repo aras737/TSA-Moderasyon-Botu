@@ -18,13 +18,20 @@ module.exports = client => {
                 type: AuditLogEvent.BotAdd
             }).catch(() => null);
 
-            const entry = auditLogs?.entries.find(item =>
-                item.target?.id === botId &&
-                item.executorId &&
-                Date.now() - item.createdTimestamp <= AUDIT_MAX_AGE_MS
-            );
+            const entry = auditLogs?.entries.find(item => {
+                const createdAt = Number(item?.createdTimestamp);
+                const age = Date.now() - createdAt;
+                return item?.target?.id === botId &&
+                    item?.executorId &&
+                    Number.isFinite(createdAt) &&
+                    age >= 0 &&
+                    age <= AUDIT_MAX_AGE_MS;
+            });
 
-            if (entry?.executorId) return entry.executor;
+            if (entry?.executorId) {
+                return entry.executor ||
+                    await client.users.fetch(entry.executorId).catch(() => null);
+            }
             if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
         }
         return null;
