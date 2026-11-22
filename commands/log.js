@@ -6,7 +6,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('log')
-        .setDescription('TMF Log sistemini yönetir.')
+        .setDescription('📋 TMF Log sistemini yönetir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand.setName('kanali-ayarla')
@@ -44,7 +44,7 @@ module.exports = {
             ayarKaydet(guildId, 'logKanal', channel.id);
 
             const embed = new EmbedBuilder()
-                .setTitle('⚙️ TMF | Log Sistemi Aktif')
+                .setTitle('📋 ⚙️ TMF | Log Sistemi Aktif')
                 .setDescription(`Sunucu olayları artık ${channel} kanalına kaydedilecek. Bu ayar bot yeniden başlatıldığında korunur.`)
                 .setColor('#2ecc71')
                 .setTimestamp();
@@ -65,8 +65,8 @@ module.exports = {
                 .setTitle('📋 TMF | Log Kanalı Bilgisi')
                 .setDescription(channel ? `Log kanalı: ${channel}` : 'Kayıtlı kanal bulunamadı veya silinmiş.')
                 .addFields(
-                    { name: 'Kanal ID', value: `\`${channelId}\``, inline: true },
-                    { name: 'Durum', value: channel ? '✅ Aktif' : '⚠️ Kanal bulunamadı', inline: true }
+                    { name: '📌 Kanal ID', value: `\`${channelId}\``, inline: true },
+                    { name: '📌 Durum', value: channel ? '✅ Aktif' : '⚠️ Kanal bulunamadı', inline: true }
                 )
                 .setColor('#3498db')
                 .setTimestamp();
