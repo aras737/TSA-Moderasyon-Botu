@@ -19,8 +19,15 @@ module.exports = (client) => {
             if (!logs) continue;
             
             const entry = hedefId
-                ? logs.entries.find(e => e.target?.id === hedefId)
-                : logs.entries.first();
+                ? logs.entries.find(e =>
+                    e.target?.id === hedefId &&
+                    e.createdTimestamp &&
+                    Date.now() - e.createdTimestamp <= 15000
+                )
+                : logs.entries.find(e =>
+                    e.createdTimestamp &&
+                    Date.now() - e.createdTimestamp <= 15000
+                );
             if (entry) return entry;
         }
         return null;
@@ -597,30 +604,23 @@ module.exports = (client) => {
         const yapan = logEntry?.executor;
         const sebep = logEntry?.reason || ban.reason || 'Belirtilmemiş.';
 
-        // 🔥 ULTİ ÖZELLİK: Sağ Tık Mass Ban Saldırı Engeli
+        // Seri ban davranışını algıla ve bildir. Otomatik rol silme yapılmaz:
+        // meşru moderasyon işlemleri yanlış pozitif üretebilir.
         if (yapan && yapan.id !== client.user.id) {
             const simdi = Date.now();
-            const banGecmisi = banTakip.get(yapan.id) || [];
+            const banGecmisi = banTakip.get(`${ban.guild.id}:${yapan.id}`) || [];
             banGecmisi.push(simdi);
-            
-            const aktifBanlar = banGecmisi.filter(ts => simdi - ts < 10000); // 10 saniye limit
-            banTakip.set(yapan.id, aktifBanlar);
 
-            if (aktifBanlar.length >= 3) { // 10 saniyede 3 ban atarsa darbecidir kanka!
-                const member = await ban.guild.members.fetch(yapan.id).catch(() => null);
-                // Botun hiyerarşik gücü darbeciye yetiyorsa tüm yetkilerini budasın
-                if (member && member.manageable) {
-                    await member.roles.set([], 'Mass Ban Saldırısı Tespit Edildi!').catch(() => null);
-                }
+            const aktifBanlar = banGecmisi.filter(ts => simdi - ts < 10000);
+            banTakip.set(`${ban.guild.id}:${yapan.id}`, aktifBanlar);
 
-                if (logChan) {
-                    const panikEmbed = new EmbedBuilder()
-                        .setTitle('<:yasaklandi:1505146022588842095> MASS BAN SALDIRISI ENGELLENDİ!')
-                        .setDescription(`🚨 **${yapan}** isimli yetkili ardı ardına seri ban attığı için sunucuyu korumak amacıyla **bütün yetkileri ve rolleri alındı**!`)
-                        .setColor('#960018').setTimestamp();
-                    logChan.send({ embeds: [panikEmbed] }).catch(() => {});
-                }
-                return;
+            if (aktifBanlar.length >= 3 && aktifBanlar.length === 3 && logChan) {
+                const panikEmbed = new EmbedBuilder()
+                    .setTitle('⚠️ TMF | Seri Ban Uyarısı')
+                    .setDescription(`**${yapan}** son 10 saniyede 3 üye banladı. Bu işlem otomatik olarak geri alınmadı; sunucu yöneticisinin incelemesi gerekiyor.`)
+                    .setColor('#f39c12')
+                    .setTimestamp();
+                await logChan.send({ embeds: [panikEmbed] }).catch(() => {});
             }
         }
 
@@ -632,7 +632,7 @@ module.exports = (client) => {
                 { name: '<:sil:1505147967907037275> Yapan Yetkili', value: yapan ? `${yapan} \`(${yapan.id})\`` : '`Bilinmiyor`', inline: true },
                 { name: '<:Paper:1505146388596391977> Sebep', value: `\`${sebep}\`` }
             )
-            .setThumbnail(ban.user.displayAvatarURL({ dynamic: true }) || null).setColor('#960018').setTimestamp();
+            .setThumbnail(ban.user.displayAvatarURL({ dynamic: true })).setColor('#960018').setTimestamp();
         logChan.send({ embeds: [embed] }).catch(() => {});
     });
 };
