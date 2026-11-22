@@ -197,6 +197,16 @@ module.exports = function registerDatastoreEvents(client) {
       guildId: channel.guild.id,
       channel: serializeChannel(channel)
     });
+
+    // Keep ticket history accurate when a moderator deletes a ticket manually.
+    try {
+      Storage.updateTicket(
+        { guildId: channel.guild.id, channelId: channel.id, status: 'open' },
+        { status: 'deleted', deletedAt: new Date().toISOString() }
+      );
+    } catch (error) {
+      console.error('[DATASTORE] Ticket deletion status could not be saved:', error.message);
+    }
   });
 
   client.on('roleCreate', (role) => {
