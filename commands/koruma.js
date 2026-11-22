@@ -82,6 +82,9 @@ module.exports = {
     async execute(interaction) {
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
+        const persistenceWarning = process.env.RENDER === 'true' && !process.env.DATA_DIR
+            ? '\\n\\n⚠️ Render kalıcı depolama ayarlı değil. Bot yeniden başlar, yeniden dağıtılır veya uykuya geçerse bu yedek/ayarlar kaybolabilir.'
+            : '';
 
         if (subcommand === 'durum') {
             const guard = ayarGetir(guildId, 'guardAktif', false) === true;
@@ -118,7 +121,7 @@ module.exports = {
             ayarKaydet(guildId, 'guardYedekBloke', false);
             return interaction.editReply(
                 '✅ Sunucu yedeği alındı. ' + backup.roller.length + ' rol ve ' +
-                backup.kanallar.length + ' kanal kaydedildi. Tarih: ' + backup.alinmaZamani
+                backup.kanallar.length + ' kanal kaydedildi. Tarih: ' + backup.alinmaZamani + persistenceWarning
             );
         }
 
@@ -183,7 +186,7 @@ module.exports = {
                 ayarKaydet(guildId, 'guardAktif', true);
                 return interaction.editReply(
                     '✅ TMF Anti-Raid etkinleştirildi. Ön güvenlik yedeği alındı: ' +
-                    backup.roller.length + ' rol, ' + backup.kanallar.length + ' kanal.'
+                    backup.roller.length + ' rol, ' + backup.kanallar.length + ' kanal.' + persistenceWarning
                 );
             }
 
