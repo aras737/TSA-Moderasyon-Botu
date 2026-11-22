@@ -241,6 +241,42 @@ class Storage {
     });
   }
 
+  static pendingLogs = [];
+
+  // Batch high-volume gateway logs so every Discord message does not cause
+  // multiple synchronous full-file reads, copies and writes on the event loop.
+  static queueLog(type, payload = {}) {
+    const entry = {
+      id: makeId('log'),
+      type,
+      createdAt: now(),
+      ...payload
+    };
+
+    this.pendingLogs.push(entry);
+    if (this.pendingLogs.length > 2000) {
+      this.pendingLogs.splice(0, this.pendingLogs.length - 2000);
+    }
+
+    if (this.pendingLogs.length >= 250) {
+      this.flushQueuedLogs();
+    }
+
+    return entry;
+  }
+
+  static flushQueuedLogs() {
+    if (!this.pendingLogs?.length) return 0;
+
+    const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
+    this.update((data) => {
+      data.logs.push(...batch);
+      if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
+    });
+
+    return batch.length;
+  }
+
   static addLog(type, payload = {}) {
     return this.update((data) => {
       const entry = {
