@@ -83,7 +83,7 @@ module.exports = {
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
         const persistenceWarning = process.env.RENDER === 'true' && !process.env.DATA_DIR
-            ? '\\n\\n⚠️ Render kalıcı depolama ayarlı değil. Bot yeniden başlar, yeniden dağıtılır veya uykuya geçerse bu yedek/ayarlar kaybolabilir.'
+            ? '\n\n⚠️ Render kalıcı depolama ayarlı değil. Bot yeniden başlar, yeniden dağıtılır veya uykuya geçerse bu yedek/ayarlar kaybolabilir.'
             : '';
 
         if (subcommand === 'durum') {
