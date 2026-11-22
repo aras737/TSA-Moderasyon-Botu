@@ -5,7 +5,8 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('banlist')
-        .setDescription('TMF sunucusundaki yasaklıları genel, tam yasaklı ve normal diye bölümlere ayırarak listeler.'),
+        .setDescription('TMF sunucusundaki yasaklıları genel, tam yasaklı ve normal diye bölümlere ayırarak listeler.')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
 
     async execute(interaction) {
         await interaction.deferReply();
