@@ -3,23 +3,51 @@ const { ayarGetir } = require('../utils/db');
 
 module.exports = (client) => {
     const userActions = new Map();
-    const lockedGuilds = new Set();
-    const WINDOW_MS = 3000;
-    const THRESHOLD = 5;
-    const AUDIT_MAX_AGE_MS = 10000;
+    const activeGuilds = new Set();
+
+    // Discord audit-log entries can appear shortly after the gateway event.
+    // A low threshold is intentional: a raid must be stopped before many more
+    // destructive actions are completed.
+    const WINDOW_MS = 2500;
+    const THRESHOLD = 2;
+    const AUDIT_MAX_AGE_MS = 15000;
+    const AUDIT_RETRIES = 4;
+    const AUDIT_RETRY_DELAY_MS = 300;
+    const GUILD_COOLDOWN_MS = 10000;
+
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     async function getRecentExecutor(guild, type, targetId) {
-        const logs = await guild.fetchAuditLogs({ limit: 5, type }).catch(() => null);
-        if (!logs) return null;
+        const botMember = guild.members.me;
+        if (botMember && !botMember.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+            console.error(`[GUARD] ${guild.name}: Botta Denetim Kaydını Görüntüle izni yok.`);
+            return null;
+        }
 
-        const now = Date.now();
-        const entry = logs.entries.find(item =>
-            item.target?.id === targetId &&
-            item.executorId &&
-            now - item.createdTimestamp <= AUDIT_MAX_AGE_MS
-        );
+        for (let attempt = 0; attempt < AUDIT_RETRIES; attempt++) {
+            const logs = await guild.fetchAuditLogs({ limit: 25, type }).catch(error => {
+                console.error('[GUARD] Denetim kayıtları alınamadı:', error.message);
+                return null;
+            });
 
-        return entry?.executorId || null;
+            if (logs) {
+                const now = Date.now();
+                const entry = logs.entries.find(item => {
+                    const age = now - item.createdTimestamp;
+                    return item.target?.id === targetId &&
+                        item.executorId &&
+                        age >= 0 &&
+                        age <= AUDIT_MAX_AGE_MS;
+                });
+
+                if (entry?.executorId) return entry.executorId;
+            }
+
+            if (attempt < AUDIT_RETRIES - 1) await wait(AUDIT_RETRY_DELAY_MS);
+        }
+
+        console.warn(`[GUARD] ${guild.name}: ${type} işlemi için saldırgan denetim kaydında bulunamadı. Gerekli izin ve kayıtları kontrol edin.`);
+        return null;
     }
 
     async function sendGuardLog(guild, executorId, eylem, count, status) {
@@ -27,7 +55,10 @@ module.exports = (client) => {
         if (!logId) return;
 
         const log = await client.channels.fetch(logId).catch(() => null);
-        if (!log?.isTextBased?.() || !log.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.SendMessages)) return;
+        const botMember = guild.members.me;
+        if (!log?.isTextBased?.() ||
+            !botMember ||
+            !log.permissionsFor(botMember)?.has(PermissionFlagsBits.SendMessages)) return;
 
         const embed = new EmbedBuilder()
             .setTitle('🚨 TMF | GUARD MÜDAHALESİ')
@@ -43,60 +74,50 @@ module.exports = (client) => {
     }
 
     async function lockdown(guild, executorId, eylem, count) {
-        if (lockedGuilds.has(guild.id)) return;
-        lockedGuilds.add(guild.id);
+        if (activeGuilds.has(guild.id)) return;
+        activeGuilds.add(guild.id);
 
-        const everyoneRole = guild.roles.everyone;
-        const originalPermissions = everyoneRole.permissions.bitfield;
-
+        let status;
         try {
-            const banResult = await guild.members.ban(executorId, {
-                reason: `TMF Guard: ${count} kez ${eylem}`.slice(0, 500)
-            }).then(() => true).catch(error => {
-                console.error('Guard saldırgan banlanamadı:', error.message);
-                return false;
+            if (executorId === guild.ownerId || executorId === client.user.id) return;
+
+            const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+            if (!botMember?.permissions.has(PermissionFlagsBits.BanMembers)) {
+                status = 'Saldırgan tespit edildi ancak botta Üyeleri Yasakla izni yok. Bot rolü ve izinleri kontrol edilmeli.';
+                return;
+            }
+
+            const targetMember = await guild.members.fetch(executorId).catch(() => null);
+            if (!targetMember) {
+                status = 'Saldırgan sunucuda bulunamadı; tekrar işlem yapması beklenmiyor.';
+                return;
+            }
+
+            if (botMember.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
+                status = 'Saldırgan tespit edildi ancak botun rolü saldırganın rolünden yüksek değil. Bot rolünü yükseltin.';
+                return;
+            }
+
+            await guild.members.ban(executorId, {
+                reason: `TMF Anti-Raid: ${count} kez / ${WINDOW_MS} ms içinde ${eylem}`.slice(0, 500)
             });
 
-            // Mevcut @everyone izinlerini koru; yalnızca geçici olarak mesaj göndermeyi kapat.
-            await everyoneRole.setPermissions(
-                everyoneRole.permissions.remove(PermissionFlagsBits.SendMessages),
-                'TMF Guard geçici saldırı kilidi'
-            );
-
-            await sendGuardLog(
-                guild,
-                executorId,
-                eylem,
-                count,
-                banResult ? 'Saldırgan banlandı; yazma izni 5 dakika kilitlendi.' : 'Ban başarısız; yazma izni 5 dakika kilitlendi.'
-            );
-
-            const timer = setTimeout(async () => {
-                try {
-                    const currentRole = await guild.roles.fetch(guild.id).catch(() => null);
-                    if (currentRole) {
-                        await currentRole.setPermissions(originalPermissions, 'TMF Guard geçici kilidi kaldırıldı');
-                    }
-                } catch (error) {
-                    console.error('Guard izinleri geri yüklenemedi:', error);
-                } finally {
-                    lockedGuilds.delete(guild.id);
-                }
-            }, 5 * 60 * 1000);
-
-            timer.unref?.();
+            status = 'Saldırgan otomatik olarak banlandı.';
         } catch (error) {
-            lockedGuilds.delete(guild.id);
-            console.error('Guard müdahale hatası:', error);
-            await sendGuardLog(guild, executorId, eylem, count, `Müdahale tamamlanamadı: ${error.message}`);
+            status = `Otomatik ban başarısız: ${error.message}`;
+            console.error('[GUARD] Saldırgana müdahale edilemedi:', error);
+        } finally {
+            await sendGuardLog(guild, executorId, eylem, count, status || 'Müdahale tamamlanamadı.');
+            // Prevent a burst of concurrent event handlers from repeatedly
+            // trying to ban the same actor while Discord processes the ban.
+            setTimeout(() => activeGuilds.delete(guild.id), GUILD_COOLDOWN_MS).unref?.();
         }
     }
 
     async function guardKontrol(guild, executorId, eylem) {
-        // Koruma, yönetici panelinden açıkça etkinleştirilmedikçe devreye girmez.
         if (!executorId || executorId === client.user.id || executorId === guild.ownerId) return;
         if (ayarGetir(guild.id, 'guardAktif', false) !== true) return;
-        if (lockedGuilds.has(guild.id)) return;
+        if (activeGuilds.has(guild.id)) return;
 
         const key = `${guild.id}:${executorId}`;
         const now = Date.now();
@@ -115,10 +136,21 @@ module.exports = (client) => {
         if (executorId) await guardKontrol(role.guild, executorId, 'Rol silme');
     });
 
+    client.on('roleCreate', async role => {
+        const executorId = await getRecentExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
+        if (executorId) await guardKontrol(role.guild, executorId, 'Rol oluşturma');
+    });
+
     client.on('channelDelete', async channel => {
         if (!channel.guild) return;
         const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
         if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal silme');
+    });
+
+    client.on('channelCreate', async channel => {
+        if (!channel.guild) return;
+        const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
+        if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal oluşturma');
     });
 
     client.on('guildBanAdd', async ban => {
@@ -136,20 +168,20 @@ module.exports = (client) => {
         ];
 
         const entries = await Promise.all(eventTypes.map(async type => {
-            const logs = await channel.guild.fetchAuditLogs({ limit: 5, type }).catch(() => null);
-            const entry = logs?.entries.find(item =>
+            const logs = await channel.guild.fetchAuditLogs({ limit: 10, type }).catch(() => null);
+            return logs?.entries.find(item =>
                 item.target?.channelId === channel.id &&
                 item.executorId &&
+                Date.now() - item.createdTimestamp >= 0 &&
                 Date.now() - item.createdTimestamp <= AUDIT_MAX_AGE_MS
-            );
-            return entry;
+            ) || null;
         }));
 
         const latest = entries.filter(Boolean).sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
         if (latest?.executorId) await guardKontrol(channel.guild, latest.executorId, 'Webhook işlemi');
     });
 
-    // Bellek sınırsız büyümesin; eski sayaç anahtarlarını temizle.
+    // Remove expired counters so this map cannot grow indefinitely.
     const cleanup = setInterval(() => {
         const now = Date.now();
         for (const [key, timestamps] of userActions.entries()) {
