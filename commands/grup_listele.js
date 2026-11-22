@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('grup_listele')
-        .setDescription('Belirtilen Roblox kullanıcısının katıldığı grupları listeler kanka.')
+        .setDescription('👥 Belirtilen Roblox kullanıcısının katıldığı grupları listeler kanka.')
         .addStringOption(option =>
             option.setName('kullanici_adi')
                 .setDescription('Sorgulamak istediğin Roblox kullanıcı adı')
