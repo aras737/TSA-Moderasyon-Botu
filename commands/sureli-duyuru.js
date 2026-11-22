@@ -22,7 +22,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('sureli-duyuru')
-        .setDescription('Belirli kanala veya tüm uygun kanallara zaman ayarlı duyuru kurar.')
+        .setDescription('⏰ Belirli kanala veya tüm uygun kanallara zaman ayarlı duyuru kurar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addSubcommand(subcommand =>
             subcommand
@@ -136,10 +136,10 @@ module.exports = {
                 for (const channel of eligibleChannels.values()) startLoop(channel);
 
                 const embed = new EmbedBuilder()
-                    .setTitle('✅ TMF | Küresel Duyuru Aktif')
+                    .setTitle('⏰ ✅ TMF | Küresel Duyuru Aktif')
                     .setDescription(`${eligibleChannels.size} uygun metin kanalında periyodik duyuru başlatıldı.`)
                     .addFields(
-                        { name: '⏰ Aralık', value: `${dakika} dakika`, inline: true },
+                        { name: '📌 ⏰ Aralık', value: `${dakika} dakika`, inline: true },
                         { name: '💬 Mesaj Önizlemesi', value: preview, inline: false }
                     )
                     .setColor('#107a29');
@@ -156,10 +156,10 @@ module.exports = {
             startLoop(targetChannel);
 
             const embed = new EmbedBuilder()
-                .setTitle('✅ TMF | Süreli Duyuru Aktif')
+                .setTitle('⏰ ✅ TMF | Süreli Duyuru Aktif')
                 .setDescription(`${targetChannel} kanalında periyodik duyuru başlatıldı.`)
                 .addFields(
-                    { name: '⏰ Aralık', value: `${dakika} dakika`, inline: true },
+                    { name: '📌 ⏰ Aralık', value: `${dakika} dakika`, inline: true },
                     { name: '💬 Mesaj Önizlemesi', value: preview, inline: false }
                 )
                 .setColor('#107a29');
