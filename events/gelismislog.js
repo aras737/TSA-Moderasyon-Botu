@@ -12,23 +12,23 @@ module.exports = (client) => {
     };
 
     const auditLogCek = async (guild, type, hedefId = null) => {
-        // Discord API gecikmelerini önlemek için akıllı döngü
-        for (let i = 0; i < 3; i++) {
-            await new Promise(r => setTimeout(r, 600));
-            const logs = await guild.fetchAuditLogs({ limit: 5, type }).catch(() => null);
-            if (!logs) continue;
-            
-            const entry = hedefId
-                ? logs.entries.find(e =>
-                    e.target?.id === hedefId &&
-                    e.createdTimestamp &&
-                    Date.now() - e.createdTimestamp <= 15000
-                )
-                : logs.entries.find(e =>
-                    e.createdTimestamp &&
-                    Date.now() - e.createdTimestamp <= 15000
-                );
-            if (entry) return entry;
+        // Reuse the dedicated audit gateway monitor for immediate guard action.
+        // The log-only lookup is intentionally short to avoid competing with
+        // interaction responses and Discord REST rate limits.
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const logs = await guild.fetchAuditLogs({ limit: 10, type }).catch(() => null);
+            if (logs) {
+                const now = Date.now();
+                const entry = logs.entries.find(item => {
+                    const age = now - item.createdTimestamp;
+                    return item.executorId &&
+                        age >= 0 &&
+                        age <= 15000 &&
+                        (!hedefId || item.target?.id === hedefId);
+                });
+                if (entry) return entry;
+            }
+            if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 250));
         }
         return null;
     };
