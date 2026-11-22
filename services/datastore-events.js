@@ -111,12 +111,14 @@ module.exports = function registerDatastoreEvents(client) {
 
     // Do not rewrite the entire JSON database for every chat message.
     // User profiles are updated on meaningful events/commands instead.
+    // Normal sohbet metinlerini toplu arşive yazma. Bu, gereksiz veri
+    // birikimini azaltır; denetim için kanal, yazar ve mesaj metaverisi yeterlidir.
     Storage.queueLog('messageCreate', {
       guildId: message.guild.id,
       channel: serializeChannel(message.channel),
       messageId: message.id,
       author: serializeUser(message.author),
-      content: safeContent(message.content),
+      contentLength: String(message.content || '').length,
       attachments: message.attachments.map((attachment) => attachment.url)
     });
   });
