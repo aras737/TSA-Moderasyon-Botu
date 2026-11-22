@@ -151,7 +151,7 @@ module.exports = function registerDatastoreEvents(client) {
   client.on('interactionCreate', (interaction) => {
     if (!interaction.guild || !interaction.isChatInputCommand()) return;
 
-    Storage.upsertUser(interaction.user, interaction.guild.id);
+    Storage.queueUserUpsert(interaction.user, interaction.guild.id);
     Storage.queueLog('commandRun', {
       guildId: interaction.guild.id,
       channel: serializeChannel(interaction.channel),
