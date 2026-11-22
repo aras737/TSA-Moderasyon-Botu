@@ -154,9 +154,11 @@ module.exports = {
                     ...(guard && threatRolesAboveBot.size
                         ? [{
                             name: '📌 Bot Rolünün Üzerindeki Tehlikeli Roller',
-                            value: threatRolesAboveBot.map(role => role.name).slice(0, 10).join(', ').slice(0, 1000) +
+                            value: (
+                                threatRolesAboveBot.map(role => role.name).slice(0, 10).join(', ') +
                                 (threatRolesAboveBot.size > 10 ? ' …' : '') +
-                                '\nBotun en yüksek rolünü bu rollerin üzerine taşı.',
+                                '\nBotun en yüksek rolünü bu rollerin üzerine taşı.'
+                            ).slice(0, 1024),
                             inline: false
                         }]
                         : []),
