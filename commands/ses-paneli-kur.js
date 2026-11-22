@@ -37,10 +37,11 @@ function registerSesPanelEvents(client) {
                 // 🔥 1. BUTON: ANA PANELDEKİ "ODA OLUŞTUR" BUTONU
                 if (inter.customId.startsWith('tsa_ses_olustur_')) {
                     const targetKategoriId = inter.customId.split('tsa_ses_olustur_')[1];
-                    if (activeRoomCreations.has(member.id)) {
+                    const roomLockKey = `${guild.id}:${member.id}`;
+                    if (activeRoomCreations.has(roomLockKey)) {
                         return inter.editReply({ content: `${uyariEmoji} Odan zaten oluşturuluyor. Birkaç saniye bekle.` });
                     }
-                    activeRoomCreations.add(member.id);
+                    activeRoomCreations.add(roomLockKey);
 
                     try {
                     // Aktif oda kontrolü (Dinamik arama)
@@ -156,7 +157,7 @@ function registerSesPanelEvents(client) {
                         await inter.editReply({ content: `${basarisizEmoji} Oda oluşturulurken teknik bir hata meydana geldi!` });
                     }
                     } finally {
-                        activeRoomCreations.delete(member.id);
+                        activeRoomCreations.delete(roomLockKey);
                     }
                 }
 
