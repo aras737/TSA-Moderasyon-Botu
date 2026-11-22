@@ -111,7 +111,20 @@ app.get('/', (_req, res) => {
     res.status(200).send('TMF Moderasyon Sistemi Aktif! ✅');
 });
 
+// Render liveness probe: HTTP process is alive even while Discord is reconnecting.
 app.get('/health', (_req, res) => {
+    const ready = client.isReady();
+    res.status(200).json({
+        ok: true,
+        process: 'alive',
+        discord: ready ? 'ready' : 'connecting',
+        bot: ready ? client.user.tag : null,
+        commands: slashCommands.length
+    });
+});
+
+// Optional readiness probe for diagnostics; do not use this as Render's liveness check.
+app.get('/ready', (_req, res) => {
     const ready = client.isReady();
     res.status(ready ? 200 : 503).json({
         ok: ready,
@@ -217,6 +230,16 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+client.on('shardReconnecting', shardId => {
+    console.warn('🔄 Discord shard yeniden bağlanıyor:', shardId);
+});
+client.on('shardDisconnect', (event, shardId) => {
+    console.warn('⚠️ Discord shard bağlantısı kesildi:', shardId, event?.code || '');
+});
+client.on('shardError', (error, shardId) => {
+    console.error('❌ Discord shard hatası:', shardId, error);
+});
+client.on('warn', warning => console.warn('⚠️ Discord uyarısı:', warning));
 client.on('error', error => console.error('❌ Discord istemci hatası:', error));
 process.on('unhandledRejection', error => console.error('❌ Yakalanmamış Promise hatası:', error));
 process.on('uncaughtException', error => console.error('❌ Yakalanmamış işlem hatası:', error));
