@@ -78,7 +78,9 @@ module.exports = (client) => {
             client.sistemBellegi.set(message.guild.id, korumaAyar);
         }
 
-        const logChan = await logKanalGetir(message.guild.id);
+        if (!Object.values(korumaAyar).some(Boolean)) return;
+
+        const getLogChan = () => logKanalGetir(message.guild.id);
         const simdi = Date.now();
 
         // 1. KÜFÜR ENGEL SİSTEMİ
@@ -87,6 +89,7 @@ module.exports = (client) => {
             const uyariMsg = await message.channel.send({ content: `🤬 Temiz bir dil kullanalım lütfen ${message.author}! Bu sunucuda küfür etmek yasak kanka.` }).catch(() => null);
             if (uyariMsg) setTimeout(() => uyariMsg.delete().catch(() => null), 4000);
 
+            const logChan = await getLogChan();
             if (logChan) {
                 const embed = new EmbedBuilder()
                     .setTitle('<:koruma1:1505143174190989352> Küfür Filtresi Tetiklendi!')
@@ -119,7 +122,8 @@ module.exports = (client) => {
                 await message.member.timeout(5 * 60 * 1000, 'Spam Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} dur kanka! Çok hızlı mesaj attığın için 5 dakika susturuldun.` }).catch(() => null);
 
-                if (logChan) {
+                const logChan = await getLogChan();
+            if (logChan) {
                     const embed = new EmbedBuilder()
                         .setTitle('<:sil:1505147967907037275> Otomatik Spam Koruması!')
                         .setDescription(`🛑 **${message.author.tag}** serisinden spam yaptığı için otomatik olarak **5 dakika** susturuldu!`)
@@ -140,7 +144,8 @@ module.exports = (client) => {
                 await message.member.timeout(10 * 60 * 1000, 'Toplu Etiket Koruması Tetiklendi').catch(() => null);
                 message.channel.send({ content: `⚠️ ${message.author} Tek bir mesajda çok fazla kişiyi etiketlediğin için 10 dakika susturuldun kanka!` }).catch(() => null);
 
-                if (logChan) {
+                const logChan = await getLogChan();
+            if (logChan) {
                     const embed = new EmbedBuilder()
                         .setTitle('<:riva_kilit:1505203119427162192> Toplu Etiket Koruması!')
                         .setDescription(`🚨 **${message.author.tag}** tam \`${toplamEtiket}\` adet etiket atarak milleti darladı ve **10 dakika** susturuldu.`)
