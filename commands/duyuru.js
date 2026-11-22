@@ -7,8 +7,8 @@ module.exports = {
         .setName('duyuru')
         .setDescription('Sunucuda gelişmiş duyuru gönderir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-        .addStringOption(opt => opt.setName('başlık').setDescription('Duyurunun başlığı').setMaxLength(256).setRequired(true))
-        .addStringOption(opt => opt.setName('içerik').setDescription('Duyurunun içeriği').setMaxLength(3500).setRequired(true))
+        .addStringOption(opt => opt.setName('baslik').setDescription('Duyurunun başlığı').setMaxLength(256).setRequired(true))
+        .addStringOption(opt => opt.setName('icerik').setDescription('Duyurunun içeriği').setMaxLength(3500).setRequired(true))
         .addChannelOption(opt => opt.setName('hedef').setDescription('Duyurunun gönderileceği kanal').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .addStringOption(opt => opt.setName('tip').setDescription('Duyuru tipi').setRequired(false).addChoices(
             { name: 'Embed (Şık Kutu)', value: 'embed' },
@@ -19,8 +19,8 @@ module.exports = {
         .addBooleanOption(opt => opt.setName('everyone').setDescription('@everyone ile gönderilsin mi?').setRequired(false)),
 
     async execute(interaction) {
-        const baslik = interaction.options.getString('başlık', true);
-        const icerik = interaction.options.getString('içerik', true);
+        const baslik = interaction.options.getString('baslik', true);
+        const icerik = interaction.options.getString('icerik', true);
         const hedefKanal = interaction.options.getChannel('hedef') || interaction.channel;
         const tip = interaction.options.getString('tip') || 'embed';
         const resim = interaction.options.getString('resim');
@@ -80,7 +80,7 @@ module.exports = {
                 if (footer) text += `\n\n*${footer}*`;
                 if (everyone) text = `@everyone\n${text}`;
 
-                // Discord mesaj sınırına sığmayan içerikleri sessizce kırpmak yerine reddet.
+                // Discord mesaj sınırına sığmayan icerikleri sessizce kırpmak yerine reddet.
                 if (text.length > 2000) {
                     return interaction.reply({ content: '⚠️ Düz yazı duyurusu 2.000 karakter sınırını aşıyor.', ephemeral: true });
                 }
