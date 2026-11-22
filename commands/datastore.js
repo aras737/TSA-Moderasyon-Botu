@@ -17,11 +17,23 @@ module.exports = {
 
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
-        Storage.flushQueuedLogs?.();
-        const data = Storage.getDatabase();
-        const storageExists = fs.existsSync(storagePath);
-        const backupExists = fs.existsSync(backupPath);
-        const stats = storageExists ? fs.statSync(storagePath) : null;
+
+        let data;
+        let storageExists;
+        let backupExists;
+        let stats;
+        try {
+            Storage.flushQueuedLogs?.();
+            data = Storage.getDatabase();
+            storageExists = fs.existsSync(storagePath);
+            backupExists = fs.existsSync(backupPath);
+            stats = storageExists ? fs.statSync(storagePath) : null;
+        } catch (error) {
+            console.error('[DATASTORE] Durum okunamadı:', error);
+            return interaction.editReply({
+                content: '❌ Depolama durumu okunamadı. Dosya izinlerini ve DATA_DIR ayarını kontrol et.'
+            });
+        }
 
         const embed = new EmbedBuilder()
             .setTitle('✨ TMF | Datastore Durumu')
