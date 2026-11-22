@@ -36,6 +36,7 @@ module.exports = {
         ),
     
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         try {
             const rollerInput = interaction.options.getString('yetkili-roller', true);
             const logKanali = interaction.options.getChannel('log-kanali', true);
@@ -43,12 +44,12 @@ module.exports = {
             const rolIDleri = [...new Set(rollerInput.match(/\d{17,20}/g) || [])];
 
             if (rolIDleri.length === 0 || rolIDleri.length > 10) {
-                return interaction.reply({ content: '⚠️ 1-10 arasında geçerli yetkili rolü etiketlemelisin.', ephemeral: true });
+                return interaction.editReply({ content: '⚠️ 1-10 arasında geçerli yetkili rolü etiketlemelisin.' });
             }
 
             const roller = await Promise.all(rolIDleri.map(id => interaction.guild.roles.fetch(id).catch(() => null)));
             if (roller.some(role => !role || role.id === interaction.guild.id)) {
-                return interaction.reply({ content: '⚠️ Girilen rollerden biri bu sunucuda bulunamadı. Rol etiketlerini kontrol et.', ephemeral: true });
+                return interaction.editReply({ content: '⚠️ Girilen rollerden biri bu sunucuda bulunamadı. Rol etiketlerini kontrol et.' });
             }
 
             const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
@@ -64,18 +65,10 @@ module.exports = {
                 !requiredChannelPermissions.every(permission => panelPermissions?.has(permission)) ||
                 !logKanali.isTextBased?.() ||
                 !requiredChannelPermissions.every(permission => logPermissions?.has(permission))) {
-                return interaction.reply({
-                    content: '⛔ Botun hem panel hem log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '⛔ Botun hem panel hem log kanalında Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.'
                 });
             }
-
-            ayarKaydet(interaction.guild.id, 'destekRolleri', rolIDleri);
-            ayarKaydet(interaction.guild.id, 'logKanaliDestek', logKanali.id);
-            ayarKaydet(interaction.guild.id, 'destekConfig', {
-                roles: rolIDleri,
-                logChannelId: logKanali.id
-            });
 
             const anaEmbed = new EmbedBuilder()
                 .setTitle('<:tac:1505158450538352670> TMF MODERASYON | DESTEK SİSTEMİ')
@@ -100,13 +93,18 @@ module.exports = {
             );
 
             await biletKanali.send({ embeds: [anaEmbed], components: [row] });
-            return interaction.reply({
-                content: `✅ **TMF Destek Sistemi kuruldu.**\nLog Kanalı: ${logKanali}\nYetkili Rol Sayısı: ${rolIDleri.length}`,
-                ephemeral: true
+            ayarKaydet(interaction.guild.id, 'destekRolleri', rolIDleri);
+            ayarKaydet(interaction.guild.id, 'logKanaliDestek', logKanali.id);
+            ayarKaydet(interaction.guild.id, 'destekConfig', {
+                roles: rolIDleri,
+                logChannelId: logKanali.id
+            });
+            return interaction.editReply({
+                content: `✅ **TMF Destek Sistemi kuruldu.**\nLog Kanalı: ${logKanali}\nYetkili Rol Sayısı: ${rolIDleri.length}`
             });
         } catch (error) {
             console.error('Destek kurulum hatası:', error);
-            return interaction.reply({ content: '<a:baarsz:1505146967817326675> Sistem kurulumunda hata oluştu!', ephemeral: true });
+            return interaction.editReply({ content: '<a:baarsz:1505146967817326675> Sistem kurulumunda hata oluştu!' });
         }
     },
 
