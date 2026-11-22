@@ -171,9 +171,34 @@ module.exports = client => {
             }
         }
 
-        const owner = await guild.fetchOwner().catch(() => null);
-        if (owner) {
-            await owner.send({ embeds: [embed] }).catch(() => {});
+        // Sunucu sahibi DM'i yanında, BOT_OWNER_ID ayarlıysa geliştiriciye de rapor ilet.
+        const serverOwner = await guild.fetchOwner().catch(() => null);
+        if (serverOwner) {
+            await serverOwner.send({ embeds: [embed] }).catch(error => {
+                console.warn('[GUARD] Sunucu sahibine DM gönderilemedi:', error.message);
+            });
+        }
+
+        const botOwnerId = (process.env.BOT_OWNER_ID || '').trim();
+        if (/^\d{17,20}$/.test(botOwnerId) &&
+            botOwnerId !== serverOwner?.id &&
+            botOwnerId !== client.user.id) {
+            const botOwner = await client.users.fetch(botOwnerId).catch(error => {
+                console.error('[GUARD] BOT_OWNER_ID kullanıcısı bulunamadı:', error.message);
+                return null;
+            });
+            if (botOwner) {
+                await botOwner.send({
+                    content: '🚨 TMF botunun bulunduğu bir sunucuda Anti-Raid müdahalesi gerçekleşti.',
+                    embeds: [embed]
+                }).catch(error => {
+                    console.warn('[GUARD] Bot sahibine DM gönderilemedi:', error.message);
+                });
+            }
+        } else if (!botOwnerId) {
+            console.warn('[GUARD] BOT_OWNER_ID ayarlı değil; bot geliştiricisine DM raporu gönderilmedi.');
+        } else if (!/^\d{17,20}$/.test(botOwnerId)) {
+            console.error('[GUARD] BOT_OWNER_ID geçersiz; Discord kullanıcı ID olmalı.');
         }
     }
 
