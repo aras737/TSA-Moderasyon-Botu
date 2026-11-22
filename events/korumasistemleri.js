@@ -6,24 +6,24 @@ module.exports = client => {
     const userActions = new Map();
     const activeGuilds = new Set();
     const suspectGuildUntil = new Map();
-    const auditCache = new Map();
-    const auditInflight = new Map();
     const consumedAuditEntries = new Map();
 
     const YEDEK_ARALIGI_MS = 60 * 1000;
     const WINDOW_MS = 1000;
     const THRESHOLD = 5;
-    const AUDIT_MAX_AGE_MS = 10000;
-    const AUDIT_RETRIES = 3;
-    const AUDIT_RETRY_DELAY_MS = 250;
-    const AUDIT_CACHE_MS = 200;
     const GUILD_COOLDOWN_MS = 15000;
     const SUSPECT_BACKUP_PAUSE_MS = 30000;
 
-    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    let backupRunActive = false;
 
     async function tumSunuculariYedekle() {
+        if (backupRunActive) return;
+        backupRunActive = true;
+        try {
         for (const guild of client.guilds.cache.values()) {
+            // Guard kapalı sunucular için sürekli yedek almak hem gereksiz API
+            // çağrısı hem de komut yanıtlarını geciktiren disk yazımı oluşturur.
+            if (ayarGetir(guild.id, 'guardAktif', false) !== true) continue;
             const now = Date.now();
             const suspectUntil = suspectGuildUntil.get(guild.id) || 0;
 
@@ -44,6 +44,9 @@ module.exports = client => {
                     backup.roller.length + ' rol, ' + backup.kanallar.length + ' kanal).'
                 );
             }
+        }
+        } finally {
+            backupRunActive = false;
         }
     }
 
@@ -77,55 +80,6 @@ module.exports = client => {
         }
     }, 10000);
     cleanupInterval.unref?.();
-
-    async function fetchAuditLogsCached(guild, type) {
-        const key = guild.id + ':' + String(type);
-        const cached = auditCache.get(key);
-        if (cached && Date.now() - cached.loadedAt < AUDIT_CACHE_MS) return cached.logs;
-
-        const pending = auditInflight.get(key);
-        if (pending) return pending;
-
-        const request = guild.fetchAuditLogs({ limit: 50, type }).then(logs => {
-            auditCache.set(key, { loadedAt: Date.now(), logs });
-            return logs;
-        }).catch(error => {
-            console.error('[GUARD] Denetim kayıtları alınamadı:', error.message);
-            return null;
-        }).finally(() => auditInflight.delete(key));
-
-        auditInflight.set(key, request);
-        return request;
-    }
-
-    async function getRecentExecutor(guild, type, targetId) {
-        const botMember = guild.members.me;
-        if (botMember && !botMember.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
-            console.error('[GUARD] ' + guild.name + ': Botta Denetim Kaydını Görüntüle izni yok.');
-            return null;
-        }
-
-        for (let attempt = 0; attempt < AUDIT_RETRIES; attempt++) {
-            const logs = await fetchAuditLogsCached(guild, type);
-            if (logs) {
-                const now = Date.now();
-                const entry = logs.entries.find(item => {
-                    const age = now - item.createdTimestamp;
-                    return item.target?.id === targetId && item.executorId &&
-                        !consumedAuditEntries.has(item.id) &&
-                        age >= 0 && age <= AUDIT_MAX_AGE_MS;
-                });
-                if (entry?.executorId) {
-                    consumedAuditEntries.set(entry.id, Date.now());
-                    return entry.executorId;
-                }
-            }
-            if (attempt < AUDIT_RETRIES - 1) await wait(AUDIT_RETRY_DELAY_MS);
-        }
-
-        console.warn('[GUARD] ' + guild.name + ': ' + type + ' işlemini yapan kişi denetim kaydında bulunamadı.');
-        return null;
-    }
 
     function yoneticiRolleriniBul(guild) {
         return guild.roles.cache.filter(role =>
@@ -320,82 +274,44 @@ module.exports = client => {
         }
     }
 
-    function markPotentialRaid(guild) {
-        if (ayarGetir(guild.id, 'guardAktif', false) === true) {
+    const GUARD_ACTION_LABELS = new Map([
+        [AuditLogEvent.ChannelDelete, 'Kanal silme'],
+        [AuditLogEvent.ChannelCreate, 'Kanal oluşturma'],
+        [AuditLogEvent.ChannelUpdate, 'Kanal/izin düzenleme'],
+        [AuditLogEvent.RoleDelete, 'Rol silme'],
+        [AuditLogEvent.RoleCreate, 'Rol oluşturma'],
+        [AuditLogEvent.RoleUpdate, 'Rol/izin düzenleme'],
+        [AuditLogEvent.MemberBanAdd, 'Üye banlama'],
+        [AuditLogEvent.MemberKick, 'Üye atma'],
+        [AuditLogEvent.MemberRoleUpdate, 'Üye rol değiştirme'],
+        [AuditLogEvent.WebhookCreate, 'Webhook oluşturma'],
+        [AuditLogEvent.WebhookUpdate, 'Webhook düzenleme'],
+        [AuditLogEvent.WebhookDelete, 'Webhook silme']
+    ]);
+
+    // Discord'un Audit Log Entry gateway olayı, her işlem için API'yi tekrar
+    // sorgulamaktan daha hızlı ve güvenilir bir kaynak sağlar. GuildModeration
+    // intent'i ve ViewAuditLog izni gereklidir.
+    client.on('guildAuditLogEntryCreate', async (entry, guild) => {
+        try {
+            const eylem = GUARD_ACTION_LABELS.get(entry.action);
+            if (!eylem || !guild) return;
+
+            const executorId = entry.executorId || entry.executor?.id;
+            if (!executorId || !entry.id) {
+                console.warn('[GUARD] Denetim olayı geldi ancak yapan kullanıcı/olay ID bilgisi eksik.');
+                return;
+            }
+
+            if (consumedAuditEntries.has(entry.id)) return;
+            consumedAuditEntries.set(entry.id, Date.now());
+
+            if (ayarGetir(guild.id, 'guardAktif', false) !== true) return;
             suspectGuildUntil.set(guild.id, Date.now() + SUSPECT_BACKUP_PAUSE_MS);
-        }
-    }
 
-    client.on('roleDelete', async role => {
-        markPotentialRaid(role.guild);
-        const executorId = await getRecentExecutor(role.guild, AuditLogEvent.RoleDelete, role.id);
-        if (executorId) await guardKontrol(role.guild, executorId, 'Rol silme');
-    });
-
-    client.on('roleCreate', async role => {
-        markPotentialRaid(role.guild);
-        const executorId = await getRecentExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
-        if (executorId) await guardKontrol(role.guild, executorId, 'Rol oluşturma');
-    });
-
-    client.on('roleUpdate', async (_oldRole, newRole) => {
-        markPotentialRaid(newRole.guild);
-        const executorId = await getRecentExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
-        if (executorId) await guardKontrol(newRole.guild, executorId, 'Rol düzenleme/izin değiştirme');
-    });
-
-    client.on('channelDelete', async channel => {
-        if (!channel.guild) return;
-        markPotentialRaid(channel.guild);
-        const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-        if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal silme');
-    });
-
-    client.on('channelCreate', async channel => {
-        if (!channel.guild) return;
-        markPotentialRaid(channel.guild);
-        const executorId = await getRecentExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
-        if (executorId) await guardKontrol(channel.guild, executorId, 'Kanal oluşturma');
-    });
-
-    client.on('channelUpdate', async (_oldChannel, newChannel) => {
-        if (!newChannel.guild) return;
-        markPotentialRaid(newChannel.guild);
-        const executorId = await getRecentExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
-        if (executorId) await guardKontrol(newChannel.guild, executorId, 'Kanal/izin düzenleme');
-    });
-
-    client.on('guildBanAdd', async ban => {
-        markPotentialRaid(ban.guild);
-        const executorId = await getRecentExecutor(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
-        if (executorId) await guardKontrol(ban.guild, executorId, 'Üye banlama');
-    });
-
-    client.on('webhookUpdate', async channel => {
-        if (!channel.guild) return;
-        markPotentialRaid(channel.guild);
-
-        const eventTypes = [
-            AuditLogEvent.WebhookDelete,
-            AuditLogEvent.WebhookUpdate,
-            AuditLogEvent.WebhookCreate
-        ];
-
-        const entries = await Promise.all(eventTypes.map(async type => {
-            const logs = await channel.guild.fetchAuditLogs({ limit: 10, type }).catch(() => null);
-            return logs?.entries.find(item =>
-                item.target?.channelId === channel.id &&
-                item.executorId &&
-                !consumedAuditEntries.has(item.id) &&
-                Date.now() - item.createdTimestamp >= 0 &&
-                Date.now() - item.createdTimestamp <= AUDIT_MAX_AGE_MS
-            ) || null;
-        }));
-
-        const latest = entries.filter(Boolean).sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
-        if (latest?.executorId) {
-            consumedAuditEntries.set(latest.id, Date.now());
-            await guardKontrol(channel.guild, latest.executorId, 'Webhook işlemi');
+            await guardKontrol(guild, executorId, eylem);
+        } catch (error) {
+            console.error('[GUARD] Audit gateway olayı işlenemedi:', error);
         }
     });
 };
