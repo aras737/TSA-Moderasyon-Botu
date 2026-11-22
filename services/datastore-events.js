@@ -48,7 +48,7 @@ module.exports = function registerDatastoreEvents(client) {
   logFlushTimer.unref?.();
 
   client.on('guildCreate', (guild) => {
-    Storage.upsertGuild(guild);
+    Storage.queueGuildUpsert(guild);
     Storage.queueLog('guildCreate', { guild: serializeGuild(guild) });
   });
 
@@ -57,8 +57,8 @@ module.exports = function registerDatastoreEvents(client) {
   });
 
   client.on('guildMemberAdd', (member) => {
-    Storage.upsertGuild(member.guild);
-    Storage.upsertUser(member.user, member.guild.id, {
+    Storage.queueGuildUpsert(member.guild);
+    Storage.queueUserUpsert(member.user, member.guild.id, {
       joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
       status: 'joined'
     });
@@ -71,8 +71,8 @@ module.exports = function registerDatastoreEvents(client) {
   });
 
   client.on('guildMemberRemove', (member) => {
-    Storage.upsertGuild(member.guild);
-    Storage.upsertUser(member.user, member.guild.id, {
+    Storage.queueGuildUpsert(member.guild);
+    Storage.queueUserUpsert(member.user, member.guild.id, {
       leftAt: new Date().toISOString(),
       status: 'left'
     });
@@ -84,7 +84,7 @@ module.exports = function registerDatastoreEvents(client) {
   });
 
   client.on('guildMemberUpdate', (oldMember, newMember) => {
-    Storage.upsertUser(newMember.user, newMember.guild.id, {
+    Storage.queueUserUpsert(newMember.user, newMember.guild.id, {
       nickname: newMember.nickname,
       roles: newMember.roles.cache.map((role) => role.id)
     });
@@ -161,7 +161,7 @@ module.exports = function registerDatastoreEvents(client) {
   });
 
   client.on('guildBanAdd', (ban) => {
-    Storage.upsertUser(ban.user, ban.guild.id, { status: 'banned' });
+    Storage.queueUserUpsert(ban.user, ban.guild.id, { status: 'banned' });
     Storage.addPunishment({
       type: 'ban',
       guildId: ban.guild.id,
@@ -172,7 +172,7 @@ module.exports = function registerDatastoreEvents(client) {
   });
 
   client.on('guildBanRemove', (ban) => {
-    Storage.upsertUser(ban.user, ban.guild.id, { status: 'unbanned' });
+    Storage.queueUserUpsert(ban.user, ban.guild.id, { status: 'unbanned' });
     Storage.closePunishment(
       { type: 'ban', guildId: ban.guild.id, userId: ban.user.id, active: true },
       { removedUserId: ban.user.id }
