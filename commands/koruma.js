@@ -142,6 +142,7 @@ module.exports = {
                 if (!backup) {
                     return interaction.editReply('⛔ Yedek alınamadığı için Anti-Raid açılmadı. Önce bot izinlerini düzelt.');
                 }
+                ayarKaydet(guildId, 'guardYedekBloke', false);
                 ayarKaydet(guildId, 'guardAktif', true);
                 return interaction.editReply(
                     '✅ TMF Anti-Raid etkinleştirildi. Ön güvenlik yedeği alındı: ' +
