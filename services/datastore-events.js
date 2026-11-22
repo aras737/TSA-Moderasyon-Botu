@@ -40,11 +40,11 @@ function safeContent(content) {
 module.exports = function registerDatastoreEvents(client) {
   client.on('guildCreate', (guild) => {
     Storage.upsertGuild(guild);
-    Storage.addLog('guildCreate', { guild: serializeGuild(guild) });
+    Storage.queueLog('guildCreate', { guild: serializeGuild(guild) });
   });
 
   client.on('guildDelete', (guild) => {
-    Storage.addLog('guildDelete', { guild: serializeGuild(guild) });
+    Storage.queueLog('guildDelete', { guild: serializeGuild(guild) });
   });
 
   client.on('guildMemberAdd', (member) => {
@@ -54,7 +54,7 @@ module.exports = function registerDatastoreEvents(client) {
       status: 'joined'
     });
 
-    Storage.addLog('memberJoin', {
+    Storage.queueLog('memberJoin', {
       guildId: member.guild.id,
       user: serializeUser(member.user),
       joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null
@@ -68,7 +68,7 @@ module.exports = function registerDatastoreEvents(client) {
       status: 'left'
     });
 
-    Storage.addLog('memberLeave', {
+    Storage.queueLog('memberLeave', {
       guildId: member.guild.id,
       user: serializeUser(member.user)
     });
@@ -86,7 +86,7 @@ module.exports = function registerDatastoreEvents(client) {
     const removedRoles = oldRoles.filter((role) => !newRoles.has(role.id)).map((role) => ({ id: role.id, name: role.name }));
 
     if (addedRoles.length || removedRoles.length || oldMember.nickname !== newMember.nickname) {
-      Storage.addLog('memberUpdate', {
+      Storage.queueLog('memberUpdate', {
         guildId: newMember.guild.id,
         user: serializeUser(newMember.user),
         oldNickname: oldMember.nickname,
@@ -100,8 +100,9 @@ module.exports = function registerDatastoreEvents(client) {
   client.on('messageCreate', (message) => {
     if (!message.guild || message.author.bot) return;
 
-    Storage.upsertUser(message.author, message.guild.id);
-    Storage.addLog('messageCreate', {
+    // Do not rewrite the entire JSON database for every chat message.
+    // User profiles are updated on meaningful events/commands instead.
+    Storage.queueLog('messageCreate', {
       guildId: message.guild.id,
       channel: serializeChannel(message.channel),
       messageId: message.id,
@@ -114,7 +115,7 @@ module.exports = function registerDatastoreEvents(client) {
   client.on('messageDelete', (message) => {
     if (!message.guild || message.author?.bot) return;
 
-    Storage.addLog('messageDelete', {
+    Storage.queueLog('messageDelete', {
       guildId: message.guild.id,
       channel: serializeChannel(message.channel),
       messageId: message.id,
@@ -128,7 +129,7 @@ module.exports = function registerDatastoreEvents(client) {
     if (!newMessage.guild || newMessage.author?.bot) return;
     if (oldMessage.content === newMessage.content) return;
 
-    Storage.addLog('messageUpdate', {
+    Storage.queueLog('messageUpdate', {
       guildId: newMessage.guild.id,
       channel: serializeChannel(newMessage.channel),
       messageId: newMessage.id,
@@ -142,7 +143,7 @@ module.exports = function registerDatastoreEvents(client) {
     if (!interaction.guild || !interaction.isChatInputCommand()) return;
 
     Storage.upsertUser(interaction.user, interaction.guild.id);
-    Storage.addLog('commandRun', {
+    Storage.queueLog('commandRun', {
       guildId: interaction.guild.id,
       channel: serializeChannel(interaction.channel),
       commandName: interaction.commandName,
@@ -167,7 +168,7 @@ module.exports = function registerDatastoreEvents(client) {
       { type: 'ban', guildId: ban.guild.id, userId: ban.user.id, active: true },
       { removedUserId: ban.user.id }
     );
-    Storage.addLog('guildBanRemove', {
+    Storage.queueLog('guildBanRemove', {
       guildId: ban.guild.id,
       user: serializeUser(ban.user)
     });
@@ -175,7 +176,7 @@ module.exports = function registerDatastoreEvents(client) {
 
   client.on('channelCreate', (channel) => {
     if (!channel.guild) return;
-    Storage.addLog('channelCreate', {
+    Storage.queueLog('channelCreate', {
       guildId: channel.guild.id,
       channel: serializeChannel(channel)
     });
@@ -183,21 +184,21 @@ module.exports = function registerDatastoreEvents(client) {
 
   client.on('channelDelete', (channel) => {
     if (!channel.guild) return;
-    Storage.addLog('channelDelete', {
+    Storage.queueLog('channelDelete', {
       guildId: channel.guild.id,
       channel: serializeChannel(channel)
     });
   });
 
   client.on('roleCreate', (role) => {
-    Storage.addLog('roleCreate', {
+    Storage.queueLog('roleCreate', {
       guildId: role.guild.id,
       role: { id: role.id, name: role.name }
     });
   });
 
   client.on('roleDelete', (role) => {
-    Storage.addLog('roleDelete', {
+    Storage.queueLog('roleDelete', {
       guildId: role.guild.id,
       role: { id: role.id, name: role.name }
     });
