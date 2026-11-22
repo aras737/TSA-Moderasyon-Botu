@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('ban')
-        .setDescription('Kullanıcıyı sunucudan yasaklar.')
+        .setDescription('🔨 Kullanıcıyı sunucudan yasaklar.'))
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
         .addUserOption(option =>
             option.setName('kullanici')
@@ -58,12 +58,12 @@ module.exports = {
             });
 
             const embed = new EmbedBuilder()
-                .setTitle('TMF | Ban İşlemi Başarılı')
+                .setTitle('✨ TMF | Ban İşlemi Başarılı')
                 .setDescription('**' + user.tag + '** sunucudan yasaklandı.')
                 .addFields(
-                    { name: 'Kullanıcı', value: user.tag + ' (' + user.id + ')', inline: true },
-                    { name: 'Yetkili', value: interaction.user.tag, inline: true },
-                    { name: 'Sebep', value: reason.slice(0, 1000), inline: false }
+                    { name: '👤 Kullanıcı', value: user.tag + ' (' + user.id + ')', inline: true },
+                    { name: '🛡️ Yetkili', value: interaction.user.tag, inline: true },
+                    { name: '📝 Sebep', value: reason.slice(0, 1000), inline: false }
                 )
                 .setThumbnail(user.displayAvatarURL())
                 .setColor('#ff3333')
@@ -74,10 +74,10 @@ module.exports = {
             // DM gönderimi ban yanıtını geciktirmesin.
             user.send({
                 embeds: [new EmbedBuilder()
-                    .setTitle('TMF | Sunucudan Yasaklandınız')
+                    .setTitle('✨ TMF | Sunucudan Yasaklandınız')
                     .setDescription('**' + guild.name + '** sunucusundan yasaklandınız.')
                     .addFields(
-                        { name: 'Sebep', value: reason.slice(0, 1000) },
+                        { name: '📝 Sebep', value: reason.slice(0, 1000) },
                         { name: 'Banlayan yetkili', value: interaction.user.tag }
                     )
                     .setColor('#ff4d4d')
