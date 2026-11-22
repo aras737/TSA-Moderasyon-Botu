@@ -261,6 +261,7 @@ class Storage {
   static pendingLogs = [];
   static pendingUsers = new Map();
   static pendingGuilds = new Map();
+  static pendingTicketUpdates = new Map();
 
   // Batch high-volume gateway logs so every Discord message does not cause
   // multiple synchronous full-file reads, copies and writes on the event loop.
@@ -300,6 +301,20 @@ class Storage {
     }
   }
 
+  static queueTicketUpdate(filter = {}, payload = {}) {
+    const channelId = filter.channelId;
+    if (!channelId) return;
+    const previous = this.pendingTicketUpdates.get(channelId);
+    this.pendingTicketUpdates.set(channelId, {
+      filter: { ...(previous?.filter || {}), ...filter },
+      payload: { ...(previous?.payload || {}), ...payload }
+    });
+    if (this.pendingTicketUpdates.size > 1000) {
+      const oldestId = this.pendingTicketUpdates.keys().next().value;
+      if (oldestId) this.pendingTicketUpdates.delete(oldestId);
+    }
+  }
+
   static queueLog(type, payload = {}) {
     const entry = {
       id: makeId('log'),
@@ -317,13 +332,15 @@ class Storage {
   }
 
   static flushQueuedLogs() {
-    if (!this.pendingLogs?.length && !this.pendingUsers?.size && !this.pendingGuilds?.size) return 0;
+    if (!this.pendingLogs?.length && !this.pendingUsers?.size && !this.pendingGuilds?.size && !this.pendingTicketUpdates?.size) return 0;
 
     const batch = this.pendingLogs.splice(0, this.pendingLogs.length);
     const users = [...this.pendingUsers.values()];
     const guilds = [...this.pendingGuilds.values()];
+    const ticketUpdates = [...this.pendingTicketUpdates.values()];
     this.pendingUsers.clear();
     this.pendingGuilds.clear();
+    this.pendingTicketUpdates.clear();
     try {
       this.update((data) => {
       for (const guild of guilds) {
@@ -351,10 +368,16 @@ class Storage {
           };
         }
       }
+      for (const update of ticketUpdates) {
+        const ticket = [...data.tickets].reverse().find(item =>
+          Object.entries(update.filter).every(([key, value]) => item[key] === value)
+        );
+        if (ticket) Object.assign(ticket, update.payload, { updatedAt: now() });
+      }
       data.logs.push(...batch);
         if (data.logs.length > 5000) data.logs = data.logs.slice(-5000);
       });
-      return batch.length + users.length + guilds.length;
+      return batch.length + users.length + guilds.length + ticketUpdates.length;
     } catch (error) {
       this.pendingLogs.unshift(...batch);
       for (const user of users) {
@@ -363,6 +386,10 @@ class Storage {
       }
       for (const guild of guilds) {
         if (!this.pendingGuilds.has(guild.id)) this.pendingGuilds.set(guild.id, guild);
+      }
+      for (const update of ticketUpdates) {
+        const channelId = update.filter.channelId;
+        if (channelId && !this.pendingTicketUpdates.has(channelId)) this.pendingTicketUpdates.set(channelId, update);
       }
       throw error;
     }
