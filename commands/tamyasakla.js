@@ -4,7 +4,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('tamyasakla')
         .setDescription('Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers) // Sadece ban yetkisi olanlar görebilir
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option =>
             option.setName('kisi')
                 .setDescription('Yasaklanacak kişinin Discord ID\'sini veya etiketini girin kanka.')
@@ -18,7 +18,7 @@ module.exports = {
                 .setRequired(true)
         ),
 
-    requiredPerms: [PermissionFlagsBits.BanMembers],
+    requiredPerms: [PermissionFlagsBits.Administrator],
 
     async execute(interaction) {
         const kisiInput = interaction.options.getString('kisi');
@@ -96,7 +96,11 @@ module.exports = {
         }
 
         // 🟩 3. ADIM: YETKİLİYE SANA ÖZEL EMOJİLERLE RAPORLAMA
-        let sunucuListesiMetni = banlananSunucular.map(s => `<a:tik:1505164671081123840> ${s}`).join('\n');
+        const gosterilenSunucular = banlananSunucular.slice(0, 15);
+        let sunucuListesiMetni = gosterilenSunucular.map(s => `<a:tik:1505164671081123840> ${s}`).join('\n');
+        if (banlananSunucular.length > gosterilenSunucular.length) {
+            sunucuListesiMetni += `\n… ve ${banlananSunucular.length - gosterilenSunucular.length} sunucu daha.`;
+        }
 
         const basariEmbed = new EmbedBuilder()
             .setTitle('<:yasaklandi:1505146022588842095> TMF | Küresel Sıkıyönetim Operasyonu')
