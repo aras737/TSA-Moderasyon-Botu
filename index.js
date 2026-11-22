@@ -164,6 +164,13 @@ client.on('interactionCreate', async interaction => {
                 });
             }
 
+            if (!interaction.inGuild()) {
+                return interaction.reply({
+                    content: '⛔ Bu komut yalnızca bir Discord sunucusunda kullanılabilir.',
+                    ephemeral: true
+                });
+            }
+
             if (Array.isArray(command.requiredPerms) && command.requiredPerms.length > 0) {
                 const permissions = interaction.memberPermissions;
                 const isAdmin = permissions?.has(PermissionFlagsBits.Administrator) === true;
