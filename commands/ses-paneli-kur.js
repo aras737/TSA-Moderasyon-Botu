@@ -235,7 +235,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('ses-paneli-kur')
-        .setDescription('TMF Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
+        .setDescription('🔊 TMF Gelişmiş İçten Butonlu Özel Ses Kanalı panelini kurar.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addChannelOption(option =>
             option.setName('kategori')
