@@ -7,6 +7,8 @@ module.exports = {
         .addStringOption(option =>
             option.setName('kullanici_adi')
                 .setDescription('Sorgulamak istediğin Roblox kullanıcı adı')
+                .setMinLength(3)
+                .setMaxLength(20)
                 .setRequired(true)
         ),
 
@@ -21,8 +23,10 @@ module.exports = {
             const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
+                body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
+                signal: AbortSignal.timeout(10000)
             });
+            if (!userRes.ok) throw new Error(`Roblox kullanıcı API HTTP ${userRes.status}`);
             const userData = await userRes.json();
 
             // Eğer kullanıcı bulunamazsa uyar
@@ -34,7 +38,10 @@ module.exports = {
             const realUsername = userData.data[0].name; // Roblox'taki orijinal büyük/küçük harf durumu
 
             // 2. AŞAMA: Kullanıcının Gruplarını Çekme
-            const groupRes = await fetch(`https://groups.roblox.com/v1/users/${robloxId}/groups/roles`);
+            const groupRes = await fetch(`https://groups.roblox.com/v1/users/${robloxId}/groups/roles`, {
+                signal: AbortSignal.timeout(10000)
+            });
+            if (!groupRes.ok) throw new Error(`Roblox grup API HTTP ${groupRes.status}`);
             const groupData = await groupRes.json();
 
             if (!groupData.data) {
@@ -60,13 +67,13 @@ module.exports = {
             description += `**Sayfa:** 1 / ${totalPages}\n\n`;
 
             for (const item of currentGroups) {
-                const gName = item.group.name;
-                const gId = item.group.id;
+                const gName = item.group?.name || 'Bilinmeyen grup';
+                const gId = item.group?.id || '—';
                 // Sayıları 1.000 formatına çevirme (Örn: 98086 -> 98.086)
-                const memberCount = item.group.memberCount.toLocaleString('tr-TR'); 
+                const memberCount = Number(item.group?.memberCount || 0).toLocaleString('tr-TR'); 
                 
-                const rName = item.role.name;
-                const rRank = item.role.rank; // Resimdeki "ID: 225" kısmı Roblox'taki rütbe sırasıdır (Rank ID)
+                const rName = item.role?.name || 'Bilinmeyen rütbe';
+                const rRank = Number(item.role?.rank || 0); // Resimdeki "ID: 225" kısmı Roblox'taki rütbe sırasıdır (Rank ID)
 
                 description += `• **${gName}**\n`;
                 description += `**Rütbe:** ${rName} [**ID:** \`${rRank}\` ]\n`;
