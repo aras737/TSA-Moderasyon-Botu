@@ -133,7 +133,7 @@ module.exports = {
             const threatRolesAboveBot = getThreatRolesAboveBot(interaction.guild, botMember);
             const guardStatus = !guard
                 ? '⛔ Kapalı'
-                : guardMissingPermissions.length || threatRolesAboveBot.length
+                : guardMissingPermissions.length || threatRolesAboveBot.size
                     ? '⚠️ Açık görünüyor; izin veya rol sıralaması sorunu var'
                     : '✅ Açık';
 
@@ -151,7 +151,7 @@ module.exports = {
                     ...(guard && guardMissingPermissions.length
                         ? [{ name: '📌 Eksik Bot İzinleri', value: guardMissingPermissions.join(', '), inline: false }]
                         : []),
-                    ...(guard && threatRolesAboveBot.length
+                    ...(guard && threatRolesAboveBot.size
                         ? [{
                             name: '📌 Bot Rolünün Üzerindeki Tehlikeli Roller',
                             value: threatRolesAboveBot.map(role => role.name).slice(0, 10).join(', ').slice(0, 1000) +
@@ -234,7 +234,7 @@ module.exports = {
                 }
 
                 const threatRolesAboveBot = getThreatRolesAboveBot(interaction.guild, botMember);
-                if (threatRolesAboveBot.length) {
+                if (threatRolesAboveBot.size) {
                     missing.push(
                         'Botun en yüksek rolünü şu tehlikeli rollerin üzerine taşı: ' +
                         threatRolesAboveBot.map(role => role.name).slice(0, 8).join(', ')
