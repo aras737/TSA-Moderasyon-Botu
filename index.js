@@ -261,6 +261,12 @@ process.on('uncaughtException', error => console.error('❌ Yakalanmamış işle
 
 function shutdown(signal) {
     console.log(`🛑 ${signal} alındı. TMF kapatılıyor...`);
+    try {
+        const flushed = Storage?.flushQueuedLogs?.() || 0;
+        if (flushed) console.log(`💾 ${flushed} bekleyen log kaydı diske yazıldı.`);
+    } catch (error) {
+        console.error('❌ Bekleyen loglar kaydedilemedi:', error);
+    }
     server.close(() => {
         client.destroy();
         process.exit(0);
