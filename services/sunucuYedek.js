@@ -99,7 +99,7 @@ function normalizeBackup(backup) {
         topic: channel.topic ?? channel.konu ?? null,
         nsfw: Boolean(channel.nsfw),
         rateLimitPerUser: channel.rateLimitPerUser ?? channel.yavasMod ?? 0,
-        bitrate: channel.bitrate ?? channel.bitrate ?? null,
+        bitrate: channel.bitrate ?? null,
         userLimit: channel.userLimit ?? channel.kullaniciLimiti ?? null,
         overwrites: (channel.overwrites || []).map(overwrite => {
             const type = overwrite.type ?? (overwrite.tip === 'role' ? 0 : 1);
@@ -367,7 +367,10 @@ async function yedektenGeriYukle(guild, sebep = 'TMF Anti-Raid: son güvenli yed
 
         const parentId = snapshot.parentId
             ? (channelMap.get(snapshot.parentId) || snapshot.parentId)
-            : null;
+            : snapshot.parentName
+                ? (channelMap.get('name:' + snapshot.parentName) ||
+                    guild.channels.cache.find(item => item.type === ChannelType.GuildCategory && item.name === snapshot.parentName)?.id || null)
+                : null;
 
         let channel = snapshot.id ? guild.channels.cache.get(snapshot.id) : null;
 
