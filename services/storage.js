@@ -146,7 +146,8 @@ class Storage {
 
   static get(key) {
     const data = this.loadData();
-    return Object.prototype.hasOwnProperty.call(data.kv, key) ? data.kv[key] : null;
+    const value = Object.prototype.hasOwnProperty.call(data.kv, key) ? data.kv[key] : null;
+    return value && typeof value === 'object' ? clone(value) : value;
   }
 
   static delete(key) {
@@ -156,11 +157,11 @@ class Storage {
   }
 
   static getAll() {
-    return this.loadData().kv;
+    return clone(this.loadData().kv);
   }
 
   static getDatabase() {
-    return this.loadData();
+    return clone(this.loadData());
   }
 
   static clear() {
@@ -178,11 +179,13 @@ class Storage {
   static getGuildSetting(guildId, key, fallback = null) {
     const data = this.loadData();
     if (data.settings[guildId] && Object.prototype.hasOwnProperty.call(data.settings[guildId], key)) {
-      return data.settings[guildId][key];
+      const value = data.settings[guildId][key];
+      return value && typeof value === 'object' ? clone(value) : value;
     }
 
     const legacyKey = `guild_${guildId}_${key}`;
-    return Object.prototype.hasOwnProperty.call(data.kv, legacyKey) ? data.kv[legacyKey] : fallback;
+    const value = Object.prototype.hasOwnProperty.call(data.kv, legacyKey) ? data.kv[legacyKey] : fallback;
+    return value && typeof value === 'object' ? clone(value) : value;
   }
 
   static getGuildSettings(guildId) {
@@ -273,6 +276,10 @@ class Storage {
       guildId,
       extra: { ...extra }
     });
+    if (this.pendingUsers.size > 2000) {
+      const oldestId = this.pendingUsers.keys().next().value;
+      if (oldestId) this.pendingUsers.delete(oldestId);
+    }
   }
 
   static queueLog(type, payload = {}) {
