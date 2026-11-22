@@ -49,8 +49,8 @@ module.exports = (client) => {
 
             if (!kanalId || !durum) return;
 
-            const kanal = member.guild.channels.cache.get(kanalId);
-            if (!kanal) return;
+            const kanal = await member.guild.channels.fetch(kanalId).catch(() => null);
+            if (!kanal?.isTextBased?.() || !kanal.send) return;
 
             // Ayrılış embed'i
             const avatar = member.user.displayAvatarURL({ extension: 'png', size: 256 });
