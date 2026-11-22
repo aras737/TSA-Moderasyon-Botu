@@ -2,6 +2,43 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const commandsDir = path.join(__dirname, '..', 'commands');
+const { AuditLogEvent } = require('discord.js');
+
+const requiredAuditEvents = [
+    'ChannelCreate',
+    'ChannelUpdate',
+    'ChannelDelete',
+    'ChannelOverwriteCreate',
+    'ChannelOverwriteUpdate',
+    'ChannelOverwriteDelete',
+    'ChannelPositionUpdate',
+    'RoleCreate',
+    'RoleUpdate',
+    'RoleDelete',
+    'RolePositionUpdate',
+    'MemberKick',
+    'MemberPrune',
+    'MemberBanAdd',
+    'MemberRoleUpdate',
+    'WebhookCreate',
+    'WebhookUpdate',
+    'WebhookDelete',
+    'GuildUpdate',
+    'EmojiDelete',
+    'StickerDelete',
+    'MessageBulkDelete',
+    'AutoModerationRuleCreate',
+    'AutoModerationRuleUpdate',
+    'AutoModerationRuleDelete'
+];
+
+for (const eventName of requiredAuditEvents) {
+    if (!Number.isInteger(AuditLogEvent[eventName])) {
+        console.error('Anti-Raid: Discord.js denetim olayı bulunamadı: ' + eventName);
+        errors.push('Anti-Raid AuditLogEvent.' + eventName + ' tanımlı değil');
+    }
+}
+
 const names = new Set();
 const errors = [];
 
