@@ -1,5 +1,5 @@
 const { EmbedBuilder, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
-const { ayarGetir } = require('../utils/db');
+const { ayarGetir, ayarKaydet } = require('../utils/db');
 const { yedekAl, yedektenGeriYukle } = require('../services/sunucuYedek');
 
 module.exports = client => {
@@ -27,6 +27,7 @@ module.exports = client => {
             if (
                 activeGuilds.has(guild.id) ||
                 backupBlockedGuilds.has(guild.id) ||
+                ayarGetir(guild.id, 'guardYedekBloke', false) === true ||
                 suspectUntil > now
             ) continue;
 
@@ -196,6 +197,7 @@ module.exports = client => {
         if (activeGuilds.has(guild.id)) return;
         activeGuilds.add(guild.id);
         backupBlockedGuilds.add(guild.id);
+        ayarKaydet(guild.id, 'guardYedekBloke', true);
 
         let removalStatus = 'Uzaklaştırma denenmedi.';
         let restoreResult = null;
@@ -234,6 +236,7 @@ module.exports = client => {
                     const freshBackup = await yedekAl(guild);
                     if (freshBackup) {
                         backupBlockedGuilds.delete(guild.id);
+                        ayarKaydet(guild.id, 'guardYedekBloke', false);
                         restoreStatus += ' Yeni temiz yedek kaydedildi.';
                     } else {
                         restoreStatus += ' Yeni yedek kaydedilemedi; önceki yedek korundu.';
