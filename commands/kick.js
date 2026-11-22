@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('kick')
-        .setDescription('👢 TMF sunucusundan bir üyeyi atar.'))
+        .setDescription('👢 TMF sunucusundan bir üyeyi atar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
         .addUserOption(option =>
             option.setName('kullanici')
