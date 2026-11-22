@@ -3,6 +3,8 @@ const path = require('node:path');
 
 const commandsDir = path.join(__dirname, '..', 'commands');
 const { AuditLogEvent } = require('discord.js');
+const names = new Set();
+const errors = [];
 
 const requiredAuditEvents = [
     'ChannelCreate',
@@ -38,9 +40,6 @@ for (const eventName of requiredAuditEvents) {
         errors.push('Anti-Raid AuditLogEvent.' + eventName + ' tanımlı değil');
     }
 }
-
-const names = new Set();
-const errors = [];
 
 function validateOption(option, file) {
     if (!/^[a-z0-9_-]{1,32}$/.test(option.name || '')) {
