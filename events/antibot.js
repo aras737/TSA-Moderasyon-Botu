@@ -127,20 +127,27 @@ module.exports = client => {
         if (!['approve', 'reject'].includes(decision) || !botId || !guildId) return;
 
         try {
-            const guild = interaction.guild?.id === guildId ? interaction.guild : null;
-            if (!guild) {
-                return interaction.reply({ content: '⚠️ İlgili sunucu bulunamadı.', ephemeral: true });
-            }
+            // This decision panel is intentionally sent to the owner by DM.
+            // DM component interactions have no interaction.guild, so ACK first
+            // and resolve the guild from the ID stored in the signed customId.
+            await interaction.deferUpdate();
 
-            // Bu kritik kararları yalnızca sunucu sahibi verebilir.
-            if (interaction.user.id !== guild.ownerId) {
-                return interaction.reply({
-                    content: '⛔ Anti-Bot kararını yalnızca sunucu sahibi verebilir.',
+            const guild = await client.guilds.fetch(guildId).catch(() => null);
+            if (!guild) {
+                return interaction.followUp({
+                    content: '⚠️ İlgili sunucu bulunamadı veya bot artık sunucuda değil.',
                     ephemeral: true
                 });
             }
 
-            await interaction.deferUpdate();
+            // Bu kritik kararları yalnızca gerçek sunucu sahibi verebilir.
+            const owner = await guild.fetchOwner().catch(() => null);
+            if (!owner || interaction.user.id !== owner.id || interaction.user.id !== guild.ownerId) {
+                return interaction.followUp({
+                    content: '⛔ Anti-Bot kararını yalnızca ilgili sunucunun sahibi verebilir.',
+                    ephemeral: true
+                });
+            }
 
             if (decision === 'approve') {
                 const safeBots = ayarGetir(guild.id, 'guvenliBotlar', []);
