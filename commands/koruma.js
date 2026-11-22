@@ -7,6 +7,29 @@ const {
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 const { yedekAl } = require('../services/sunucuYedek');
 
+function getThreatRolesAboveBot(guild, botMember) {
+    if (!botMember) return [];
+    const dangerousPermissions = [
+        PermissionFlagsBits.Administrator,
+        PermissionFlagsBits.ManageGuild,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.ManageWebhooks,
+        PermissionFlagsBits.BanMembers,
+        PermissionFlagsBits.KickMembers,
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.ManageEmojisAndStickers,
+        PermissionFlagsBits.ModerateMembers
+    ];
+
+    return guild.roles.cache.filter(role =>
+        role.id !== guild.id &&
+        !role.managed &&
+        botMember.roles.highest.comparePositionTo(role) <= 0 &&
+        dangerousPermissions.some(permission => role.permissions.has(permission))
+    );
+}
+
 function getSecurityCache(client, guildId) {
     if (!client.sistemBellegi) client.sistemBellegi = new Map();
     let settings = client.sistemBellegi.get(guildId);
@@ -107,10 +130,11 @@ module.exports = {
                 !botMember?.permissions.has(PermissionFlagsBits.KickMembers)
             ) guardMissingPermissions.push('Üyeleri Yasakla veya Üyeleri At');
 
+            const threatRolesAboveBot = getThreatRolesAboveBot(interaction.guild, botMember);
             const guardStatus = !guard
                 ? '⛔ Kapalı'
-                : guardMissingPermissions.length
-                    ? '⚠️ Açık görünüyor; eksik izinler var'
+                : guardMissingPermissions.length || threatRolesAboveBot.length
+                    ? '⚠️ Açık görünüyor; izin veya rol sıralaması sorunu var'
                     : '✅ Açık';
 
             const embed = new EmbedBuilder()
@@ -126,6 +150,15 @@ module.exports = {
                     },
                     ...(guard && guardMissingPermissions.length
                         ? [{ name: '📌 Eksik Bot İzinleri', value: guardMissingPermissions.join(', '), inline: false }]
+                        : []),
+                    ...(guard && threatRolesAboveBot.length
+                        ? [{
+                            name: '📌 Bot Rolünün Üzerindeki Tehlikeli Roller',
+                            value: threatRolesAboveBot.map(role => role.name).slice(0, 10).join(', ').slice(0, 1000) +
+                                (threatRolesAboveBot.size > 10 ? ' …' : '') +
+                                '\\nBotun en yüksek rolünü bu rollerin üzerine taşı.',
+                            inline: false
+                        }]
                         : []),
                     { name: '📌 Küfür Filtresi', value: kufur ? '✅ Açık' : '⛔ Kapalı', inline: true },
                     { name: '📌 Spam Koruması', value: spam ? '✅ Açık' : '⛔ Kapalı', inline: true },
@@ -198,6 +231,14 @@ module.exports = {
                     !botMember.permissions.has(PermissionFlagsBits.KickMembers)
                 ) {
                     missing.push('Üyeleri Yasakla veya Üyeleri At');
+                }
+
+                const threatRolesAboveBot = getThreatRolesAboveBot(interaction.guild, botMember);
+                if (threatRolesAboveBot.length) {
+                    missing.push(
+                        'Botun en yüksek rolünü şu tehlikeli rollerin üzerine taşı: ' +
+                        threatRolesAboveBot.map(role => role.name).slice(0, 8).join(', ')
+                    );
                 }
 
                 if (missing.length) {
