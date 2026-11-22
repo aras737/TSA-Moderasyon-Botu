@@ -3,8 +3,9 @@ const path = require('path');
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Storage = require('../services/storage');
 
-const storagePath = path.join(__dirname, '../data/storage.json');
-const backupPath = path.join(__dirname, '../data/storage.backup.json');
+const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '../data');
+const storagePath = path.join(dataDir, 'storage.json');
+const backupPath = path.join(dataDir, 'storage.backup.json');
 
 module.exports = {
     requiredPerms: [PermissionFlagsBits.Administrator],
@@ -16,6 +17,7 @@ module.exports = {
 
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
+        Storage.flushQueuedLogs?.();
         const data = Storage.getDatabase();
         const storageExists = fs.existsSync(storagePath);
         const backupExists = fs.existsSync(backupPath);
@@ -34,7 +36,9 @@ module.exports = {
                 { name: 'Ceza Kaydi', value: `\`${(data.punishments || []).length}\``, inline: true },
                 { name: 'Ticket Kaydi', value: `\`${(data.tickets || []).length}\``, inline: true },
                 { name: 'Son Kayit', value: data.updatedAt ? `<t:${Math.floor(new Date(data.updatedAt).getTime() / 1000)}:R>` : '`Yok`', inline: true },
-                { name: 'Dosya Boyutu', value: stats ? `\`${Math.ceil(stats.size / 1024)} KB\`` : '`Yok`', inline: true }
+                { name: 'Dosya Boyutu', value: stats ? `\`${Math.ceil(stats.size / 1024)} KB\`` : '`Yok`', inline: true },
+                { name: 'Veri Dizini', value: dataDir, inline: false },
+                { name: 'Depolama Durumu', value: process.env.RENDER === 'true' && !process.env.DATA_DIR ? '⚠️ Render Free yerel depolaması kalıcı değildir.' : '✅ Özel DATA_DIR veya yerel depolama.', inline: false }
             )
             .setColor('#2ecc71')
             .setTimestamp();
