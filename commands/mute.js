@@ -27,24 +27,24 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('mute')
-        .setDescription('Belirtilen kullanıcıyı sunucuda susturur (Timeout).')
+        .setDescription('Belirtilen kullaniciyı sunucuda susturur (Timeout).')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
         .addUserOption(option =>
-            option.setName('kullanıcı').setDescription('Susturulacak üyeyi seçin.').setRequired(true))
+            option.setName('kullanici').setDescription('Susturulacak üyeyi seçin.').setRequired(true))
         .addStringOption(option =>
-            option.setName('süre').setDescription('Süre girin (Örn: 10m, 1h, 1d)').setRequired(true))
+            option.setName('sure').setDescription('Süre girin (Örn: 10m, 1h, 1d)').setRequired(true))
         .addStringOption(option =>
             option.setName('sebep').setDescription('Susturma sebebini yazın.').setMaxLength(500).setRequired(false)),
 
     async execute(interaction) {
-        const target = interaction.options.getUser('kullanıcı', true);
-        const durationString = interaction.options.getString('süre', true);
+        const target = interaction.options.getUser('kullanici', true);
+        const durationString = interaction.options.getString('sure', true);
         const reason = interaction.options.getString('sebep') || 'Sebep belirtilmedi.';
         const durationMs = parseDuration(durationString);
 
         if (!durationMs || durationMs < 5000 || durationMs > MAX_TIMEOUT_MS) {
             return interaction.reply({
-                content: '⛔ Geçersiz süre. Örnekler: `10m`, `1h`, `1d`, `1h30m`. En az 5 saniye, en fazla 28 gün.',
+                content: '⛔ Geçersiz sure. Örnekler: `10m`, `1h`, `1d`, `1h30m`. En az 5 saniye, en fazla 28 gün.',
                 ephemeral: true
             });
         }
@@ -55,7 +55,7 @@ module.exports = {
 
         const member = await interaction.guild.members.fetch(target.id).catch(() => null);
         if (!member) {
-            return interaction.reply({ content: '⚠️ Bu kullanıcı sunucuda bulunamadı.', ephemeral: true });
+            return interaction.reply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.', ephemeral: true });
         }
 
         const moderator = interaction.member;
