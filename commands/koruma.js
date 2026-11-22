@@ -145,6 +145,37 @@ module.exports = {
                     });
                 }
                 await interaction.deferReply({ ephemeral: true });
+
+                const botMember = interaction.guild.members.me ||
+                    await interaction.guild.members.fetchMe().catch(() => null);
+                if (!botMember) {
+                    return interaction.editReply('⛔ Botun sunucu üyeliği doğrulanamadı. Anti-Raid açılmadı.');
+                }
+
+                const missing = [];
+                if (!botMember.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+                    missing.push('Denetim Kaydını Görüntüle');
+                }
+                if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+                    missing.push('Kanalları Yönet');
+                }
+                if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+                    missing.push('Rolleri Yönet');
+                }
+                if (
+                    !botMember.permissions.has(PermissionFlagsBits.BanMembers) &&
+                    !botMember.permissions.has(PermissionFlagsBits.KickMembers)
+                ) {
+                    missing.push('Üyeleri Yasakla veya Üyeleri At');
+                }
+
+                if (missing.length) {
+                    return interaction.editReply(
+                        '⛔ Anti-Raid açılmadı. Botta şu izinler eksik: **' + missing.join(', ') +
+                        '**. İzinleri verdikten sonra komutu tekrar kullan.'
+                    );
+                }
+
                 const backup = await yedekAl(interaction.guild);
                 if (!backup) {
                     return interaction.editReply('⛔ Yedek alınamadığı için Anti-Raid açılmadı. Önce bot izinlerini düzelt.');
