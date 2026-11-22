@@ -98,6 +98,8 @@ module.exports = {
     },
 
     async interactionHandler(interaction) {
+        if (!interaction.inGuild()) return;
+
         try {
             // --- 1. KATEGORİ SEÇİMİ ---
             if (interaction.isButton() && (interaction.customId === 'tmf_ticket_open' || interaction.customId.startsWith('tsa_setup_'))) {
@@ -314,11 +316,16 @@ module.exports = {
                         .setEmoji('<:riva_kilit:1505203119427162192>')
                 );
 
-                await kanal.send({ 
-                    content: `${roller.map(r => `<@&${r}>`).join(' ')} | ${interaction.user}`,
-                    embeds: [hosgeldin], 
-                    components: [biletButonlar] 
-                });
+                try {
+                    await kanal.send({
+                        content: `${roller.map(r => `<@&${r}>`).join(' ')} | ${interaction.user}`,
+                        embeds: [hosgeldin],
+                        components: [biletButonlar]
+                    });
+                } catch (sendError) {
+                    await kanal.delete('TMF ticket setup failed while sending the welcome panel').catch(() => {});
+                    throw sendError;
+                }
 
                 const logKanal = await interaction.guild.channels.fetch(logID).catch(() => null);
                 if (logKanal?.isTextBased?.()) {
