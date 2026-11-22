@@ -227,19 +227,19 @@ module.exports = {
         ),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const kategori = interaction.options.getChannel('kategori');
         const client = interaction.client;
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
         if (!botMember) {
-            return interaction.reply({ content: '❌ Botun sunucu üye bilgisi alınamadı.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Botun sunucu üye bilgisi alınamadı.' });
         }
         const botPermissions = kategori.permissionsFor(botMember);
         if (!botPermissions?.has(PermissionsBitField.Flags.ManageChannels) ||
             !botPermissions.has(PermissionsBitField.Flags.ManageRoles) ||
             !botPermissions.has(PermissionsBitField.Flags.ViewChannel)) {
-            return interaction.reply({
-                content: '⛔ Botun seçilen kategoride Kanal Yönet, Rolleri Yönet ve Kanalı Görüntüle izinleri olmalı.',
-                ephemeral: true
+            return interaction.editReply({
+                content: '⛔ Botun seçilen kategoride Kanal Yönet, Rolleri Yönet ve Kanalı Görüntüle izinleri olmalı.'
             });
         }
         registerSesPanelEvents(client);
@@ -287,7 +287,7 @@ module.exports = {
                 .setStyle(ButtonStyle.Success)
         );
 
-        await interaction.reply({ content: `${tikEmoji} **Başarılı:** Sahiplik korumalı ve oda içi butonlu sistem aktif edilip panel gönderildi!`, ephemeral: true });
+        await interaction.editReply({ content: `${tikEmoji} **Başarılı:** Sahiplik korumalı ve oda içi butonlu sistem aktif edilip panel gönderildi!` });
         await interaction.channel.send({ embeds: [panelEmbed], components: [row] });
     }
 };
