@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js')
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('sunucu-bilgi')
-        .setDescription('Sunucunun tüm detaylarını, boost durumunu ve emojilerini listeler.'),
+        .setDescription('🏠 Sunucunun tüm detaylarını, boost durumunu ve emojilerini listeler.'),
 
     async execute(interaction) {
         const guild = interaction.guild;
