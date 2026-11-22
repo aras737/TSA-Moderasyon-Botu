@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType } = require('discord.js');
+const Storage = require('../services/storage');
 
 // Çift event kaydını önleyen koruma kilidi
 let sesSistemiKilitlendi = false;
@@ -28,7 +29,7 @@ function registerSesPanelEvents(client) {
                     // Aktif oda kontrolü (Dinamik arama)
                     const odaArat = guild.channels.cache.find(channel =>
                         channel.type === ChannelType.GuildVoice &&
-                        channel.topic === `TMF_TEMP_VOICE_OWNER:${member.id}`
+                        Storage.get(`tempVoiceOwner:${channel.id}`) === member.id
                     );
                     if (odaArat) {
                         return inter.reply({ 
@@ -51,11 +52,10 @@ function registerSesPanelEvents(client) {
                             name: `🔊 ${member.user.username} Odası`,
                             type: ChannelType.GuildVoice,
                             parent: targetKategoriId,
-                            topic: `TMF_TEMP_VOICE_OWNER:${member.id}`,
-                            permissionOverwrites: [
+                                permissionOverwrites: [
                                 {
                                     id: guild.id, // @everyone görebilir ve girebilir
-                                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
+                                    deny: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
                                 },
                                 {
                                     id: member.id, // Oda Sahibi (Full Yetki)
@@ -71,7 +71,9 @@ function registerSesPanelEvents(client) {
                             ]
                         });
 
-                        // 🔔 ODA İÇİ KONTROL PANELİ (Oda metin alanına gönderilecek)
+                        Storage.set(`tempVoiceOwner:${yeniSesKanali.id}`, member.id);
+
+                        // 🔔 ODA İÇİ KONTROL PANELİ (Ses kanalının yerleşik sohbet alanına gönderilecek)
                         const icPanelEmbed = new EmbedBuilder()
                             .setTitle(`${korumaEmoji} TMF | Oda Yönetim Paneli`)
                             .setDescription(
@@ -113,6 +115,7 @@ function registerSesPanelEvents(client) {
                         console.error(error);
                         if (yeniSesKanali) {
                             await yeniSesKanali.delete('TMF ses odası kurulumu tamamlanamadı').catch(() => {});
+                            Storage.delete(`tempVoiceOwner:${yeniSesKanali.id}`);
                         }
                         await inter.editReply({ content: `${basarisizEmoji} Oda oluşturulurken teknik bir hata meydana geldi!` });
                     }
@@ -123,7 +126,8 @@ function registerSesPanelEvents(client) {
                     const odaSahibiId = inter.customId.split('tsa_oda_sil_')[1];
 
                     // Eski veya taklit edilmiş bir buton, farklı bir kanalı silemesin.
-                    if (inter.channel?.topic !== `TMF_TEMP_VOICE_OWNER:${odaSahibiId}`) {
+                    const registeredOwnerId = inter.channelId ? Storage.get(`tempVoiceOwner:${inter.channelId}`) : null;
+                    if (!inter.channel?.isVoiceBased?.() || registeredOwnerId !== odaSahibiId) {
                         return inter.reply({ content: `${uyariEmoji} Bu buton geçerli bir TMF geçici odasına ait değil.`, ephemeral: true });
                     }
 
@@ -141,6 +145,7 @@ function registerSesPanelEvents(client) {
                     setTimeout(async () => {
                         try {
                             await inter.channel.delete();
+                            Storage.delete(`tempVoiceOwner:${inter.channelId}`);
                             console.log(`${silEmoji} [TMF Ses Log] Oda sahibi tarafından kanal silindi: ${inter.channel.name}`);
                         } catch (err) {
                             // Kanal zaten silindiyse hata basmasın
@@ -152,18 +157,27 @@ function registerSesPanelEvents(client) {
             // 🧹 3. EVENT: ODADAN HERKES ÇIKINCA OTOMATİK SİLME (Yedek Güvenlik Motoru)
             client.on('voiceStateUpdate', async (oldState, newState) => {
                 const eskiKanal = oldState.channel;
-                
-                if (eskiKanal?.topic?.startsWith('TMF_TEMP_VOICE_OWNER:')) {
-                    const kalanInsanSayisi = eskiKanal.members.filter(m => !m.user.bot).size;
-                    
-                    if (kalanInsanSayisi === 0) {
-                        setTimeout(async () => {
-                            const teyitKanali = oldState.guild.channels.cache.get(eskiKanal.id);
-                            if (teyitKanali?.topic === eskiKanal.topic && teyitKanali.members.filter(m => !m.user.bot).size === 0) {
-                                await teyitKanali.delete().catch(() => {});
+                if (!eskiKanal?.isVoiceBased?.()) return;
+
+                const ownerId = Storage.get(`tempVoiceOwner:${eskiKanal.id}`);
+                if (!ownerId) return;
+
+                const kalanInsanSayisi = eskiKanal.members.filter(m => !m.user.bot).size;
+                if (kalanInsanSayisi === 0) {
+                    setTimeout(async () => {
+                        try {
+                            const teyitKanali = await oldState.guild.channels.fetch(eskiKanal.id).catch(() => null);
+                            const kayitliSahip = Storage.get(`tempVoiceOwner:${eskiKanal.id}`);
+                            if (teyitKanali?.isVoiceBased?.() &&
+                                kayitliSahip === ownerId &&
+                                teyitKanali.members.filter(m => !m.user.bot).size === 0) {
+                                await teyitKanali.delete('TMF temporary voice channel is empty');
+                                Storage.delete(`tempVoiceOwner:${eskiKanal.id}`);
                             }
-                        }, 1500);
-                    }
+                        } catch (error) {
+                            console.error('TMF geçici ses odası temizleme hatası:', error.message);
+                        }
+                    }, 1500);
                 }
             });
 
