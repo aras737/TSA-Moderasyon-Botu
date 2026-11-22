@@ -281,16 +281,18 @@ class Storage {
 
   static queueUserUpsert(user, guildId = null, extra = {}) {
     if (!user?.id) return;
-    this.pendingUsers.set(user.id, {
+    const queueKey = `${guildId || 'global'}:${user.id}`;
+    const previous = this.pendingUsers.get(queueKey);
+    this.pendingUsers.set(queueKey, {
       id: user.id,
-      username: user.username || null,
-      tag: user.tag || null,
+      username: user.username || previous?.username || null,
+      tag: user.tag || previous?.tag || null,
       bot: Boolean(user.bot),
       avatarURL: typeof user.displayAvatarURL === 'function'
         ? user.displayAvatarURL({ dynamic: true })
-        : null,
-      guildId,
-      extra: { ...extra }
+        : previous?.avatarURL || null,
+      guildId: guildId || previous?.guildId || null,
+      extra: { ...(previous?.extra || {}), ...extra }
     });
     if (this.pendingUsers.size > 2000) {
       const oldestId = this.pendingUsers.keys().next().value;
@@ -356,7 +358,8 @@ class Storage {
     } catch (error) {
       this.pendingLogs.unshift(...batch);
       for (const user of users) {
-        if (!this.pendingUsers.has(user.id)) this.pendingUsers.set(user.id, user);
+        const queueKey = `${user.guildId || 'global'}:${user.id}`;
+        if (!this.pendingUsers.has(queueKey)) this.pendingUsers.set(queueKey, user);
       }
       for (const guild of guilds) {
         if (!this.pendingGuilds.has(guild.id)) this.pendingGuilds.set(guild.id, guild);
