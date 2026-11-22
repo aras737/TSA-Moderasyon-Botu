@@ -5,7 +5,7 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName('duyuru')
-        .setDescription('📢 Sunucuda gelişmiş duyuru gönderir.'))
+        .setDescription('📢 Sunucuda gelişmiş duyuru gönderir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addStringOption(opt => opt.setName('baslik').setDescription('Duyurunun başlığı').setMaxLength(256).setRequired(true))
         .addStringOption(opt => opt.setName('icerik').setDescription('Duyurunun içeriği').setMaxLength(3500).setRequired(true))
