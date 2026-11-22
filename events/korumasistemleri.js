@@ -50,7 +50,7 @@ module.exports = client => {
         }
     }
 
-    client.once('ready', () => {
+    client.once('clientReady', () => {
         tumSunuculariYedekle().catch(error =>
             console.error('[GUARD] İlk yedekleme başlatılamadı:', error)
         );
