@@ -50,7 +50,24 @@ module.exports = (client) => {
         }) || null;
     };
 
-    const kufurRegex = /(amcık|yarrak|sik|piç|orospu|sikiş|göt|meme|orospu çocuğu|amk|aq|pç|skm|amına)/i;
+    // Kelime kökü bazlı filtre: "sik" gibi kısa parçaların "sıkıntı" vb. masum
+    // kelimelerde yanlış eşleşmesini önler; noktalama ile bölünmüş yazımları da yakalar.
+    const kufurKokleri = [
+        'amcik', 'yarrak', 'pic', 'orospu', 'sikis', 'got', 'amk', 'aq',
+        'amina', 'siktir', 'siker', 'sikey', 'sikim', 'sikik', 'sikiyor',
+        'sikicem', 'sikice', 'sikmis', 'sikme', 'ananin', 'anneni', 'annesini'
+    ];
+    const kufurKontrol = (icerik) => {
+        const normalize = String(icerik || '')
+            .toLocaleLowerCase('tr-TR')
+            .normalize('NFKD')
+            .replace(/[\\u0300-\\u036f]/g, '')
+            .replace(/ı/g, 'i');
+        const kelimeler = normalize.match(/[a-z0-9]+/g) || [];
+        return kelimeler.some(kelime =>
+            kufurKokleri.some(kok => kelime === kok || (kok.length >= 5 && kelime.startsWith(kok)))
+        );
+    };
     
     // Hafıza (RAM) Takip Bellekleri kanka
     const mesajTakip = new Map();
@@ -101,7 +118,7 @@ module.exports = (client) => {
         const simdi = Date.now();
 
         // 1. KÜFÜR ENGEL SİSTEMİ
-        if (korumaAyar.kufur && kufurRegex.test(message.content)) {
+        if (korumaAyar.kufur && kufurKontrol(message.content)) {
             await message.delete().catch(() => null);
             const uyariMsg = await message.channel.send({ content: `🤬 Temiz bir dil kullanalım lütfen ${message.author}! Bu sunucuda küfür etmek yasak kanka.` }).catch(() => null);
             if (uyariMsg) setTimeout(() => uyariMsg.delete().catch(() => null), 4000);
@@ -175,14 +192,36 @@ module.exports = (client) => {
         }
 
         // 4. BÜYÜK HARF (CAPS LOCK) ENGELLEYİCİ
-        if (korumaAyar.caps && message.content.length > 10) {
-            const buyukHarfler = message.content.replace(/[^A-ZĞÜŞİÖÇ]/g, "").length;
-            const toplamHarf = message.content.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "").length;
-            
-            if (toplamHarf > 0 && (buyukHarfler / toplamHarf) > 0.7) { 
+        if (korumaAyar.caps) {
+            // Yalnızca harfleri say: emoji, URL, sayı ve noktalama oranı bozmasın.
+            // Kısa kısaltmalar/tek kelimelik vurgular yanlışlıkla silinmesin.
+            const harfler = Array.from(message.content).filter(char => /\\p{L}/u.test(char));
+            const buyukHarfSayisi = harfler.filter(char => char === char.toLocaleUpperCase('tr-TR') &&
+                char !== char.toLocaleLowerCase('tr-TR')).length;
+            const toplamHarf = harfler.length;
+            const minimumHarf = 12;
+            const capsOrani = toplamHarf ? buyukHarfSayisi / toplamHarf : 0;
+
+            if (toplamHarf >= minimumHarf && capsOrani >= 0.80) {
                 await message.delete().catch(() => null);
-                const capsUyarisi = await message.channel.send({ content: `⚠️ Kanka büyük harfleri biraz kısabilir miyiz? Bağırmana gerek yok ${message.author}.` }).catch(() => null);
+                const capsUyarisi = await message.channel.send({
+                    content: `⚠️ Mesajın büyük harf oranı çok yüksek. Lütfen normal yazım kullan ${message.author}.`
+                }).catch(() => null);
                 if (capsUyarisi) setTimeout(() => capsUyarisi.delete().catch(() => null), 4000);
+
+                const logChan = await getLogChan();
+                if (logChan) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('🔠 TMF | CAPS Koruması')
+                        .setDescription(`**${message.author.tag}** adlı üyenin mesajı yüksek büyük harf oranı nedeniyle silindi.`)
+                        .addFields(
+                            { name: 'Kanal', value: `${message.channel}`, inline: true },
+                            { name: 'Büyük harf oranı', value: `%${Math.round(capsOrani * 100)}`, inline: true }
+                        )
+                        .setColor('#e67e22')
+                        .setTimestamp();
+                    logChan.send({ embeds: [embed] }).catch(() => {});
+                }
                 return;
             }
         }
