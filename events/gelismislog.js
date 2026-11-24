@@ -196,7 +196,7 @@ module.exports = (client) => {
         if (korumaAyar.caps) {
             // Yalnızca harfleri say: emoji, URL, sayı ve noktalama oranı bozmasın.
             // Kısa kısaltmalar/tek kelimelik vurgular yanlışlıkla silinmesin.
-            const harfler = Array.from(message.content).filter(char => /\\p{L}/u.test(char));
+            const harfler = Array.from(message.content).filter(char => /\p{L}/u.test(char));
             const buyukHarfSayisi = harfler.filter(char => char === char.toLocaleUpperCase('tr-TR') &&
                 char !== char.toLocaleLowerCase('tr-TR')).length;
             const toplamHarf = harfler.length;
