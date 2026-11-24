@@ -61,7 +61,8 @@ module.exports = (client) => {
         const normalize = String(icerik || '')
             .toLocaleLowerCase('tr-TR')
             .normalize('NFKD')
-            .replace(/[\\u0300-\\u036f]/g, '')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/([a-z])[^a-z0-9\s]+(?=[a-z])/g, '$1')
             .replace(/ı/g, 'i');
         const kelimeler = normalize.match(/[a-z0-9]+/g) || [];
         return kelimeler.some(kelime =>
