@@ -53,7 +53,7 @@ module.exports = (client) => {
     // Kelime kökü bazlı filtre: "sik" gibi kısa parçaların "sıkıntı" vb. masum
     // kelimelerde yanlış eşleşmesini önler; noktalama ile bölünmüş yazımları da yakalar.
     const kufurKokleri = [
-        'amcik', 'yarrak', 'pic', 'orospu', 'sikis', 'got', 'amk', 'aq',
+        'amcik', 'yarrak', 'pic', 'orospu', 'sikis', 'got', 'sik', 'amk', 'aq',
         'amina', 'siktir', 'siker', 'sikey', 'sikim', 'sikik', 'sikiyor',
         'sikicem', 'sikice', 'sikmis', 'sikme', 'ananin', 'anneni', 'annesini'
     ];
