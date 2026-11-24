@@ -1,149 +1,201 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    PermissionFlagsBits,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require('discord.js');
+
+const ONAY_YETKILISI_ID = '1488957424009216010';
+const BEKLEYEN_ISLEMLER = new Map();
+const ONAY_SURESI_MS = 10 * 60 * 1000;
+
+function kullaniciIdAyikla(input) {
+    return String(input || '').replace(/[<@!>]/g, '').trim();
+}
+
+async function tumSunuculardanYasakla(client, targetId, sebep, yetkiliTag) {
+    const basarili = [];
+    const basarisiz = [];
+
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            await guild.members.ban(targetId, {
+                reason: `TMF Küresel Yasaklama | Talep eden: ${yetkiliTag} | Sebep: ${sebep}`.slice(0, 500)
+            });
+            basarili.push(guild.name);
+        } catch (error) {
+            basarisiz.push({ guild: guild.name, reason: error?.message || 'Bilinmeyen hata' });
+            console.warn(`[TAMYASAKLA] ${guild.name} sunucusunda ban başarısız:`, error?.message);
+        }
+    }
+
+    return { basarili, basarisiz };
+}
 
 module.exports = {
+    requiredPerms: [PermissionFlagsBits.Administrator],
+
     data: new SlashCommandBuilder()
         .setName('tamyasakla')
-        .setDescription('🚫 Bir Discord kullanıcısını bilgilendirerek botun olduğu TÜM sunuculardan kalıcı olarak yasaklar.')
-        .setDefaultMemberPermissions(null)
+        .setDescription('Yasaklama talebini onay yetkilisine gönderir; onayla tüm sunucularda yasaklar.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option =>
             option.setName('kisi')
-                .setDescription('Yasaklanacak kişinin Discord ID\'sini veya etiketini girin kanka.')
+                .setDescription('Yasaklanacak kişinin Discord ID veya etiketi.')
                 .setMaxLength(25)
                 .setRequired(true)
         )
         .addStringOption(option =>
             option.setName('sebep')
-                .setDescription('Yasaklama sebebini belirtin.')
-                .setMaxLength(500)
+                .setDescription('Yasaklama sebebi.')
+                .setMaxLength(400)
                 .setRequired(true)
         ),
 
     async execute(interaction) {
-        const kisiInput = interaction.options.getString('kisi');
-        const sebep = interaction.options.getString('sebep');
-        const yetkili = interaction.user;
-        const botOwnerId = (process.env.BOT_OWNER_ID || '').trim();
-
-        // Bu komut botun bulunduğu bütün sunucuları etkilediği için yalnızca
-        // bot sahibi kullanabilir. Sunucu yöneticisi olmak tek başına yeterli değil.
-        if (!botOwnerId) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '⚠️ BOT_OWNER_ID ortam değişkeni ayarlanmamış. Küresel yasaklama güvenlik nedeniyle devre dışı.',
-                ephemeral: true
-            });
-        }
-        if (yetkili.id !== botOwnerId) {
-            return interaction.reply({
-                content: '⛔ Bu komut yalnızca TMF bot sahibine açıktır.',
+                content: '⛔ Bu komutu kullanmak için Yönetici yetkisi gerekiyor.',
                 ephemeral: true
             });
         }
 
-        // 🧹 Etiket parantezlerini temizleyip saf ID'yi alıyoruz kanka
-        const targetId = kisiInput.replace(/[<@!>]/g, '');
-
+        const targetId = kullaniciIdAyikla(interaction.options.getString('kisi'));
+        const sebep = interaction.options.getString('sebep', true).trim();
         if (!/^\d{17,20}$/.test(targetId)) {
-            const hataEmbed = new EmbedBuilder()
-                .setTitle('🚫 ❌ Geçersiz Kullanıcı')
-                .setDescription('<a:baarsz:1505146967817326675> Lütfen geçerli bir Discord ID\'si veya kullanıcı etiketi gir kanka!')
-                .setColor('#7a0010');
-            return interaction.reply({ embeds: [hataEmbed], ephemeral: true });
+            return interaction.reply({ content: '❌ Geçerli bir Discord kullanıcı ID veya etiketi gir.', ephemeral: true });
         }
-
         if (targetId === interaction.user.id || targetId === interaction.client.user.id) {
-            return interaction.reply({
-                content: '⛔ Kendini veya botun kendi hesabını küresel olarak yasaklayamazsın.',
-                ephemeral: true
-            });
+            return interaction.reply({ content: '⛔ Kendini veya botu yasaklama talebi oluşturamazsın.', ephemeral: true });
+        }
+        if (!sebep) {
+            return interaction.reply({ content: '❌ Yasaklama sebebi boş olamaz.', ephemeral: true });
         }
 
         await interaction.deferReply({ ephemeral: true });
 
-        let targetUser = null;
-        let dmDurumu = "<a:baarsz:1505146967817326675> **DM İletilemedi** *(Kullanıcı bulunamadı)*";
-
+        let targetUser;
         try {
-            targetUser = await interaction.client.users.fetch(targetId).catch(() => null);
-        } catch (err) {
-            console.log("Kullanıcı verisi çekilemedi.");
+            targetUser = await interaction.client.users.fetch(targetId);
+        } catch {
+            return interaction.editReply('❌ Bu Discord kullanıcısı bulunamadı. ID bilgisini kontrol et.');
         }
 
-        // ✉️ 1. ADIM: BANLANMADAN ÖNCE KULLANICIYA DM ATMA SİSTEMİ
-        if (targetUser) {
-            try {
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle('<:yasaklandi:1505146022588842095> KÜRESEL YASAKLAMA BİLDİRİMİ')
-                    .setDescription(`Merhaba **${targetUser.username}**,\nTMF Yönetim Sistemi kararıyla botun bağlı olduğu tüm sunuculardan kalıcı olarak uzaklaştırıldınız.`)
-                    .addFields(
-                        { name: '📌 ┗ <:Paper:1505146388596391977> Yasaklama Sebebi:', value: `\`${sebep}\``, inline: false },
-                        { name: '📌 ┗ <:uzaybot_kullanicilar:1505146190973505567> İşlemi Yapan Yetkili:', value: `\`${yetkili.username}\``, inline: false }
-                    )
-                    .setColor('#7a0010')
-                    .setFooter({ text: 'TMF Küresel Sıkıyönetim Sistemi' })
-                    .setTimestamp();
-
-                await targetUser.send({ embeds: [dmEmbed] });
-                dmDurumu = "<a:tik:1505164671081123840> **DM Başarıyla İletildi**";
-            } catch (dmError) {
-                dmDurumu = "<a:uyari:1505166167189487757> **DM İletilemedi** *(Kullanıcının DM'leri kapalı veya botu engellemiş)*";
-            }
+        let approver;
+        try {
+            approver = await interaction.client.users.fetch(ONAY_YETKILISI_ID);
+        } catch {
+            return interaction.editReply('❌ Onay yetkilisi hesabına ulaşılamadı. İşlem başlatılmadı.');
         }
 
-        const targetName = targetUser ? `${targetUser.tag}` : `Bilinmeyen Kullanıcı (${targetId})`;
-        const banlananSunucular = [];
+        const requestId = require('node:crypto').randomUUID();
+        const expiresAt = Date.now() + ONAY_SURESI_MS;
+        const request = {
+            requestId,
+            targetId,
+            targetTag: targetUser.tag || targetUser.username,
+            sebep,
+            requesterId: interaction.user.id,
+            requesterTag: interaction.user.tag || interaction.user.username,
+            guildId: interaction.guild.id,
+            expiresAt
+        };
 
-        // ⚡ 2. ADIM: BOTUN OLDUĞU TÜM SUNUCULARDAN TEMİZLEME DÖNGÜSÜ
-        const tumSunucular = interaction.client.guilds.cache;
-
-        for (const [guildId, sunucu] of tumSunucular) {
-            try {
-                // Ban listesindeki arama algoritmasının tanıması için sebebi "Küresel Sıkıyönetim" olarak işaretliyoruz
-                await sunucu.members.ban(targetId, { 
-                    reason: `Küresel Sıkıyönetim | Yetkili: ${yetkili.username} | Sebep: ${sebep}` 
-                });
-                banlananSunucular.push(sunucu.name);
-            } catch (error) {
-                console.error(`${sunucu.name} sunucusunda ban hatası:`, error.message);
-            }
-        }
-
-        // 🟥 HİÇBİR YERDEN BANLANAMADIYSA HATA DÖNDÜR
-        if (banlananSunucular.length === 0) {
-            const basarisizEmbed = new EmbedBuilder()
-                .setTitle('🚫 ❌ İşlem Başarısız')
-                .setDescription(`<a:baarsz:1505146967817326675> **${targetName}** kişisi hiçbir sunucudan banlanamadı. Yetkileri kontrol et kanka!`)
-                .setColor('#7a0010');
-            return interaction.editReply({ embeds: [basarisizEmbed] });
-        }
-
-        // 🟩 3. ADIM: YETKİLİYE SANA ÖZEL EMOJİLERLE RAPORLAMA
-        const gosterilenSunucular = banlananSunucular.slice(0, 15);
-        let sunucuListesiMetni = gosterilenSunucular.map(s => `<a:tik:1505164671081123840> ${s}`).join('\n');
-        if (banlananSunucular.length > gosterilenSunucular.length) {
-            sunucuListesiMetni += `\n… ve ${banlananSunucular.length - gosterilenSunucular.length} sunucu daha.`;
-        }
-
-        const basariEmbed = new EmbedBuilder()
-            .setTitle('<:yasaklandi:1505146022588842095> TMF | Küresel Sıkıyönetim Operasyonu')
-            .setDescription(
-                `### <:uzaybot_kullanicilar:1505146190973505567> Kullanıcı Bilgileri\n` +
-                `• **Kullanıcı:** ${targetName}\n` +
-                `• **ID:** \`${targetId}\`\n\n` +
-                `### 👑 Yetkili Bilgileri\n` +
-                `• **İşlemi Yapan:** ${yetkili}\n` +
-                `• **Kullanıcı Adı:** \`${yetkili.username}\`\n\n` +
-                `### <:Paper:1505146388596391977> İşlem Detayları\n` +
-                `• **Sebep:** *${sebep}*\n` +
-                `• **DM Durumu:** ${dmDurumu}\n\n` +
-                `### 🌐 Yasaklandığı Discord Sunucuları (${banlananSunucular.length})\n` +
-                `${sunucuListesiMetni}`
+        const embed = new EmbedBuilder()
+            .setTitle('⚠️ TMF | Küresel Yasaklama Onayı')
+            .setDescription('Bir sunucu yöneticisi küresel yasaklama talebi oluşturdu. **Yalnızca bu DM hesabının sahibi** işlemi onaylayabilir veya reddedebilir.')
+            .addFields(
+                { name: 'Yasaklanacak kullanıcı', value: `<@${targetId}> (${targetUser.tag || targetUser.username})\nID: ${targetId}` },
+                { name: 'Talep eden yönetici', value: `<@${interaction.user.id}>\n${interaction.user.tag || interaction.user.username}` },
+                { name: 'Talep edilen sunucu', value: interaction.guild.name.slice(0, 100) },
+                { name: 'Sebep', value: sebep.slice(0, 1000) },
+                { name: 'Son geçerlilik', value: `<t:${Math.floor(expiresAt / 1000)}:R>` }
             )
-            .setColor('#7a0010')
-            .setFooter({ text: `TMF Güvenlik Departmanı • Raporlayan: ${yetkili.username}`, iconURL: interaction.guild.iconURL({ dynamic: true }) || undefined })
+            .setColor('#d35400')
             .setTimestamp();
 
-        if (targetUser) basariEmbed.setThumbnail(targetUser.displayAvatarURL({ dynamic: true }));
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tamyasakla:approve:${requestId}`)
+                .setLabel('Onayla ve tüm sunucularda yasakla')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`tamyasakla:deny:${requestId}`)
+                .setLabel('Reddet')
+                .setStyle(ButtonStyle.Secondary)
+        );
 
-        return interaction.editReply({ embeds: [basariEmbed] });
+        try {
+            await approver.send({ embeds: [embed], components: [row] });
+            BEKLEYEN_ISLEMLER.set(requestId, request);
+            return interaction.editReply(`✅ Küresel yasaklama talebi <@${ONAY_YETKILISI_ID}> kullanıcısına DM ile gönderildi. Onay gelmeden hiçbir sunucuda yasaklama yapılmayacak. Talep 10 dakika geçerli.`);
+        } catch (error) {
+            console.error('[TAMYASAKLA] Onay DM gönderilemedi:', error?.message);
+            return interaction.editReply('❌ Onay yetkilisine DM gönderilemedi. DM kapalı olabilir. Hiçbir sunucuda yasaklama yapılmadı.');
+        }
     },
+
+    async interactionHandler(interaction) {
+        if (!interaction.isButton()) return;
+        const [prefix, action, requestId] = interaction.customId.split(':');
+        if (prefix !== 'tamyasakla' || !['approve', 'deny'].includes(action) || !requestId) return;
+
+        if (interaction.user.id !== ONAY_YETKILISI_ID) {
+            return interaction.reply({ content: '⛔ Bu onay butonlarını yalnızca belirlenmiş onay yetkilisi kullanabilir.', ephemeral: true });
+        }
+
+        const request = BEKLEYEN_ISLEMLER.get(requestId);
+        if (!request) {
+            return interaction.update({ content: '⌛ Bu talep bulunamadı, daha önce işlendi veya bot yeniden başlatıldı. Yeni talep oluşturulmalı.', embeds: [], components: [] });
+        }
+        if (Date.now() > request.expiresAt) {
+            BEKLEYEN_ISLEMLER.delete(requestId);
+            return interaction.update({ content: '⌛ Talebin 10 dakikalık süresi doldu. Yeni talep oluşturulmalı.', embeds: [], components: [] });
+        }
+
+        BEKLEYEN_ISLEMLER.delete(requestId);
+        if (action === 'deny') {
+            return interaction.update({
+                content: `❎ Küresel yasaklama talebi reddedildi. Kullanıcı: ${request.targetTag} (${request.targetId}). Hiçbir sunucuda işlem yapılmadı.`,
+                embeds: [],
+                components: []
+            });
+        }
+
+        await interaction.update({
+            content: `⏳ Onay verildi. ${request.targetTag} için botun bulunduğu sunucularda yasaklama işlemi başlatılıyor...`,
+            embeds: [],
+            components: []
+        });
+
+        const { basarili, basarisiz } = await tumSunuculardanYasakla(
+            interaction.client,
+            request.targetId,
+            request.sebep,
+            request.requesterTag
+        );
+
+        const rapor = [
+            '🛡️ **TMF | Küresel Yasaklama Sonucu**',
+            `Kullanıcı: **${request.targetTag}** (${request.targetId})`,
+            `Talep eden: <@${request.requesterId}>`,
+            `Onaylayan: <@${ONAY_YETKILISI_ID}>`,
+            `Sebep: ${request.sebep}`,
+            `Başarılı: **${basarili.length}** sunucu`,
+            `Başarısız: **${basarisiz.length}** sunucu`,
+            basarili.length ? `\n**Yasaklandığı sunucular:**\n${basarili.slice(0, 15).map(name => `• ${name}`).join('\n')}` : '',
+            basarisiz.length ? `\n**İşlem yapılamayan sunucular:**\n${basarisiz.slice(0, 10).map(item => `• ${item.guild}`).join('\n')}` : ''
+        ].filter(Boolean).join('\n');
+
+        await interaction.followUp({ content: rapor.slice(0, 1900), allowedMentions: { users: [request.requesterId, ONAY_YETKILISI_ID] } }).catch(() => null);
+
+        try {
+            const requester = await interaction.client.users.fetch(request.requesterId);
+            await requester.send(rapor.slice(0, 1900));
+        } catch {
+            // Talep sahibinin DM'leri kapalıysa onay DM'indeki rapor yine görünür.
+        }
+    }
 };
