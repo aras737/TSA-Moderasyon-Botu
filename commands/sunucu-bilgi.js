@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,12 +10,11 @@ module.exports = {
         if (!guild?.id) {
             return interaction.reply({
                 content: '⛔ Bu komut yalnızca geçerli bir Discord sunucusunda kullanılabilir.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
-        await interaction.deferReply({ ephemeral: true });
-
+        // Tüm veriler cache üzerinden senkron okunur; tek aşamalı yanıt kullan.
         // Discord API/cache bazen createdTimestamp alanını null döndürebilir.
         // Guild snowflake ID'si, oluşturulma zamanını güvenli şekilde hesaplamayı sağlar.
         let createdAtMs = Number.isFinite(guild.createdTimestamp)
@@ -93,6 +92,6 @@ module.exports = {
             .setTimestamp();
 
         // Yanıtı gönderiyoruz
-        await interaction.editReply({ embeds: [bilgiEmbed] });
+        await interaction.reply({ embeds: [bilgiEmbed], flags: MessageFlags.Ephemeral });
     }
 };
