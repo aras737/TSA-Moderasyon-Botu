@@ -28,8 +28,8 @@ module.exports = {
             const banArray = Array.from(bans.values());
             
             // 🔥 VERİLERİ BÖLÜMLERE (KATEGORİLERE) AYIRIYORUZ
-            const kureselBanlar = banArray.filter(ban => ban.reason && ban.reason.includes('Küresel Sıkıyönetim'));
-            const standartBanlar = banArray.filter(ban => !ban.reason || !ban.reason.includes('Küresel Sıkıyönetim'));
+            const kureselBanlar = banArray.filter(ban => ban.reason && ban.reason.includes('TMF Küresel Yasaklama'));
+            const standartBanlar = banArray.filter(ban => !ban.reason || !ban.reason.includes('TMF Küresel Yasaklama'));
 
             let mevcutFiltre = 'hepsi'; // 'hepsi', 'tam', 'standart'
             let mevcutSayfa = 0;
@@ -64,7 +64,7 @@ module.exports = {
                 } else {
                     listeMetni = sayfaVerisi.map((ban, index) => {
                         const sebep = (ban.reason || 'Sebep belirtilmemiş.').slice(0, 200);
-                        const isGlobal = ban.reason && ban.reason.includes('Küresel Sıkıyönetim');
+                        const isGlobal = ban.reason && ban.reason.includes('TMF Küresel Yasaklama');
                         const rozet = isGlobal ? '🔴 `[KÜRESEL TAM YASAK]`' : '🟡 `[SUNUCU YASAĞI]`';
 
                         return `**${baslangic + index + 1}.** <:uzaybot_kullanicilar:1505146190973505567> **${ban.user.tag}** \`(${ban.user.id})\` — ${rozet}\n┗ <:Paper:1505146388596391977> **Sebep:** ${sebep}`;
