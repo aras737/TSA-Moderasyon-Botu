@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { emoji } = require('../utils/emojis');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,15 +14,15 @@ module.exports = {
             : null;
 
         const embed = new EmbedBuilder()
-            .setTitle('<:Ping_Pong:1505191883603710077> Pong! TMF Gecikme Değerleri')
+            .setTitle(`${emoji('Ping_Pong')} Pong! TMF Gecikme Değerleri`)
             .addFields(
                 {
-                    name: '<a:last_yildirim:1505192115565760564> Bot Gecikmesi',
+                    name: `${emoji('last_yildirim')} Bot Gecikmesi`,
                     value: `${Math.max(0, startedAt - interaction.createdTimestamp)}ms`,
                     inline: true
                 },
                 {
-                    name: '<:antena:1505192362270527518> API Gecikmesi',
+                    name: `${emoji('antena')} API Gecikmesi`,
                     value: apiPing === null ? 'Ölçülemiyor' : `${apiPing}ms`,
                     inline: true
                 }

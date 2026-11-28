@@ -8,10 +8,19 @@ const {
     MessageFlags
 } = require('discord.js');
 
-const ONAY_YETKILISI_ID = '1488957424009216010';
+const ONAY_YETKILISI_ID = () => process.env.BOT_OWNER_ID || '';
 const Storage = require('../services/storage');
 const pendingKey = requestId => `tamyasakla:pending:${requestId}`;
 const ONAY_SURESI_MS = 10 * 60 * 1000;
+
+function temizleSuresiDolmusTalepler() {
+    const now = Date.now();
+    for (const [key, request] of Object.entries(Storage.getAll())) {
+        if (key.startsWith('tamyasakla:pending:') && (!request?.expiresAt || request.expiresAt <= now)) {
+            Storage.delete(key);
+        }
+    }
+}
 
 function kullaniciIdAyikla(input) {
     return String(input || '').replace(/[<@!>]/g, '').trim();
@@ -37,6 +46,7 @@ async function tumSunuculardanYasakla(client, targetId, sebep, yetkiliTag) {
 }
 
 module.exports = {
+    cleanupExpiredRequests: temizleSuresiDolmusTalepler,
     requiredPerms: [PermissionFlagsBits.Administrator],
 
     data: new SlashCommandBuilder()
@@ -64,6 +74,13 @@ module.exports = {
             });
         }
 
+        temizleSuresiDolmusTalepler();
+        const ownerId = ONAY_YETKILISI_ID();
+        if (!/^\d{17,20}$/.test(ownerId)) {
+            console.warn('[TAMYASAKLA] BOT_OWNER_ID boş veya geçersiz; onay talebi oluşturulmadı.');
+            return interaction.reply({ content: '❌ Bot sahibi onay hesabı yapılandırılmamış. Yöneticiye bildirin.', flags: MessageFlags.Ephemeral });
+        }
+
         const targetId = kullaniciIdAyikla(interaction.options.getString('kisi'));
         const sebep = interaction.options.getString('sebep', true).trim();
         if (!/^\d{17,20}$/.test(targetId)) {
@@ -88,7 +105,7 @@ module.exports = {
 
         let approver;
         try {
-            approver = await interaction.client.users.fetch(ONAY_YETKILISI_ID);
+            approver = await interaction.client.users.fetch(ownerId);
         } catch (error) {
             console.error('[TAMYASAKLA] Onay yetkilisi alınamadı:', error?.message || error);
             return interaction.editReply('❌ Onay yetkilisi hesabına ulaşılamadı. İşlem başlatılmadı.');
@@ -134,7 +151,7 @@ module.exports = {
         try {
             Storage.set(pendingKey(requestId), request);
             await approver.send({ embeds: [embed], components: [row] });
-            return interaction.editReply(`✅ Küresel yasaklama talebi <@${ONAY_YETKILISI_ID}> kullanıcısına DM ile gönderildi. Onay gelmeden hiçbir sunucuda yasaklama yapılmayacak. Talep 10 dakika geçerli.`);
+            return interaction.editReply(`✅ Küresel yasaklama talebi <@${ownerId}> kullanıcısına DM ile gönderildi. Onay gelmeden hiçbir sunucuda yasaklama yapılmayacak. Talep 10 dakika geçerli.`);
         } catch (error) {
             Storage.delete(pendingKey(requestId));
             console.error('[TAMYASAKLA] Onay DM gönderilemedi:', error?.message);
@@ -147,7 +164,7 @@ module.exports = {
         const [prefix, action, requestId] = interaction.customId.split(':');
         if (prefix !== 'tamyasakla' || !['approve', 'deny'].includes(action) || !requestId) return;
 
-        if (interaction.user.id !== ONAY_YETKILISI_ID) {
+        if (interaction.user.id !== ONAY_YETKILISI_ID()) {
             return interaction.reply({ content: '⛔ Bu onay butonlarını yalnızca belirlenmiş onay yetkilisi kullanabilir.', flags: MessageFlags.Ephemeral });
         }
 
@@ -186,7 +203,7 @@ module.exports = {
             '🛡️ **TMF | Küresel Yasaklama Sonucu**',
             `Kullanıcı: **${request.targetTag}** (${request.targetId})`,
             `Talep eden: <@${request.requesterId}>`,
-            `Onaylayan: <@${ONAY_YETKILISI_ID}>`,
+            `Onaylayan: <@${ONAY_YETKILISI_ID()}>`,
             `Sebep: ${request.sebep}`,
             `Başarılı: **${basarili.length}** sunucu`,
             `Başarısız: **${basarisiz.length}** sunucu`,
@@ -194,7 +211,7 @@ module.exports = {
             basarisiz.length ? `\n**İşlem yapılamayan sunucular:**\n${basarisiz.slice(0, 10).map(item => `• ${item.guild}`).join('\n')}` : ''
         ].filter(Boolean).join('\n');
 
-        await interaction.followUp({ content: rapor.slice(0, 1900), allowedMentions: { users: [request.requesterId, ONAY_YETKILISI_ID] } })
+        await interaction.followUp({ content: rapor.slice(0, 1900), allowedMentions: { users: [request.requesterId, ONAY_YETKILISI_ID()] } })
             .catch(error => console.error('[TAMYASAKLA] Onay raporu gönderilemedi:', error?.message || error));
 
         try {

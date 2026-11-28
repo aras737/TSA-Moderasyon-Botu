@@ -10,6 +10,8 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const { sendOwnerStartupNotice } = require('./utils/owner-notice');
+const { loadApplicationEmojis } = require('./utils/emojis');
 
 require('dotenv').config();
 
@@ -194,6 +196,25 @@ async function registerSlashCommands() {
 
 client.once('clientReady', async () => {
     console.log(`✅ Bot Discord'a giriş yaptı: ${client.user.tag}`);
+
+    // Sahip bildirimi komut kaydını bekletmez; başarısızlık botu durdurmaz.
+    void sendOwnerStartupNotice(client, Storage, slashCommands.length)
+        .catch(error => console.error('[OWNER-DM] Beklenmeyen bildirim hatası:', error));
+
+    try {
+        await loadApplicationEmojis(client);
+    } catch (error) {
+        console.warn('[EMOJIS] Application Emoji yüklenemedi; Unicode yedekleri kullanılacak:', error?.message || error);
+    }
+
+    // Süresi dolmuş küresel yasaklama onaylarını açılışta temizle.
+    try {
+        const { cleanupExpiredRequests } = require('./commands/tamyasakla');
+        cleanupExpiredRequests();
+    } catch (error) {
+        console.warn('[TAMYASAKLA] Eski talepler temizlenemedi:', error?.message || error);
+    }
+
     try {
         await registerSlashCommands();
     } catch (error) {
