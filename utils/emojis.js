@@ -1,11 +1,17 @@
 'use strict';
 
 const FALLBACKS = Object.freeze({
-  tik: '✅', baarsz: '❌', basarisiz: '❌', uyari: '⚠️',
+  tik: '✅', baarsz: '❌', basarisiz: '❌', uyari: '⚠️', loading: '⏳',
   koruma1: '🛡️', sil: '🗑️', yasaklandi: '🔨', bilet: '🎫',
   Ses: '🔊', online: '🟢', Ofline: '⚫', megafon: '📢',
   tac: '👑', change: '🔄', Discord_Link: '🔗', global: '🌐',
-  Ping_Pong: '🏓', last_yildirim: '⚡', antena: '📡',\n  Paper: '📄', takviye: '💎', appEmoji_kategori: '📂', duration: '⏱️',\n  riva_kilit: '🔒', uzaybot_kullanicilar: '👥', uzaybot_kanal: '📢',\n  Yetkili: '🛡️', Logo_Boosts: '🚀', elner_tarih: '📅', n_id: '🆔',\n  uzaybot_mesaj: '💬', RolsimgesiMasterNetworkz172: '🎭', mor_yildiz: '🌟',\n  clip_board: '📋', rol: '🎖️', yeni: '🆕', join_join: '📥', Leave_Leave: '📤',\n  music: '🎵', acs_ayarlar: '⚙️'
+  Ping_Pong: '🏓', last_yildirim: '⚡', antena: '📡',
+  Paper: '📄', takviye: '💎', appEmoji_kategori: '📂', duration: '⏱️',
+  riva_kilit: '🔒', uzaybot_kullanicilar: '👥', uzaybot_kanal: '📢',
+  Yetkili: '🛡️', Logo_Boosts: '🚀', elner_tarih: '📅', n_id: '🆔',
+  uzaybot_mesaj: '💬', RolsimgesiMasterNetworkz172: '🎭', mor_yildiz: '🌟',
+  clip_board: '📋', rol: '🎖️', yeni: '🆕', join_join: '📥', Leave_Leave: '📤',
+  music: '🎵', acs_ayarlar: '⚙️'
 });
 
 const ALIASES = Object.freeze({
