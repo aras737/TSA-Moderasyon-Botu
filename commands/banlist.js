@@ -3,6 +3,7 @@ const {
     MessageFlags
 } = require('discord.js');
 
+const { registerPanel, releasePanel } = require('../utils/interaction-registry');
 module.exports = {
     requiredPerms: [PermissionsBitField.Flags.BanMembers],
 
@@ -179,7 +180,9 @@ module.exports = {
                 }
             });
 
+            registerPanel(mesaj.id, 120000);
             collector.on('end', () => {
+                releasePanel(mesaj.id);
                 const kapaliSatir = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('b1').setLabel('🔒 Menü Zaman Aşımına Uğradı').setStyle(ButtonStyle.Secondary).setDisabled(true)
                 );

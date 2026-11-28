@@ -1,12 +1,13 @@
 const { EmbedBuilder } = require('discord.js');
 const { ayarGetir } = require('../utils/db');
+const { createdTimestampOf, discordTimestamp } = require('../utils/discord-time');
 
 module.exports = (client) => {
     // =========================================================================
     // 📥 ÜYELER GİRİŞ YAPINCA
     // =========================================================================
     client.on('guildMemberAdd', async (member) => {
-        if (member.user.bot) return;
+        if (!member?.user || !member.guild || member.user.bot) return;
 
         try {
             const kanalId = ayarGetir(member.guild.id, 'girisCikisKanal', null);
@@ -24,7 +25,7 @@ module.exports = (client) => {
 
             const girisBilgisi = new EmbedBuilder()
                 .setTitle('📥 Yeni Bir Kullanıcı Sunucuya Katıldı!')
-                .setDescription(`**${member.user}** aramıza hoş geldi!\n\n🎉 Sunucu Üye Sayısı: **${memberCount}**\n⏰ Hesap Açılış Tarihi: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
+                .setDescription(`**${member.user}** aramıza hoş geldi!\n\n🎉 Sunucu Üye Sayısı: **${memberCount}**\n⏰ Hesap Açılış Tarihi: ${discordTimestamp(createdTimestampOf(member.user), 'R')}`)
                 .setThumbnail(avatar)
                 .setImage(resimUrl)
                 .setColor('#2ecc71')
@@ -41,7 +42,7 @@ module.exports = (client) => {
     // 📤 ÜYELER ÇIKTIKÇA
     // =========================================================================
     client.on('guildMemberRemove', async (member) => {
-        if (member.user.bot) return;
+        if (!member?.user || !member.guild || member.user.bot) return;
 
         try {
             const kanalId = ayarGetir(member.guild.id, 'girisCikisKanal', null);

@@ -76,7 +76,7 @@ module.exports = (client) => {
 
     // 🔥 PERİYODİK BELLEK TEMİZLEYİCİ (Memory Leak Önleyici)
     // Her 5 dakikada bir RAM'deki eski log kalıntılarını temizler
-    setInterval(() => {
+    const bellekTemizlemeAraligi = setInterval(() => {
         const simdi = Date.now();
         for (const [key, value] of mesajTakip.entries()) {
             const aktif = value.filter(ts => simdi - ts < 3000);
@@ -89,6 +89,8 @@ module.exports = (client) => {
             else banTakip.set(key, aktif);
         }
     }, 5 * 60 * 1000);
+    // Zamanlayıcı kapanışı (SIGTERM) geciktirmesin.
+    bellekTemizlemeAraligi.unref?.();
 
     // =========================================================================
     // 🛡️ ANA MESAJ KORUMALARI (Küfür, Spam, Caps, Bahsetme)

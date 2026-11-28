@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { sendOwnerStartupNotice } = require('./utils/owner-notice');
+const { isHandledElsewhere } = require('./utils/interaction-registry');
 const { loadApplicationEmojis, replaceLegacyEmojis, emojiData, FALLBACKS, emoji } = require('./utils/emojis');
 
 require('dotenv').config();
@@ -341,6 +342,10 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+            // Kendi dinleyicisi/collector'ı olan paneller (antibot, ses paneli, banlist,
+            // grup_listele) etkileşimi kendisi ACK eder; burada ikinci kez yanıtlanmaz.
+            if (isHandledElsewhere(interaction)) return;
+
             // Her komutun handler'ı yalıtılmış çalışır. Bir modüldeki hata,
             // diğer modüllerin etkileşim yöneticisini veya botun tamamını düşürmez.
             for (const [commandName, command] of client.commands) {

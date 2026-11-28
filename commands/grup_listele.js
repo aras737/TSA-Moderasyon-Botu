@@ -9,6 +9,7 @@ const {
     MessageFlags
 } = require('discord.js');
 
+const { registerPanel, releasePanel } = require('../utils/interaction-registry');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('grup_listele')
@@ -166,7 +167,9 @@ module.exports = {
                 }
             });
 
+            registerPanel(message.id, 180000);
             collector.on('end', () => {
+                releasePanel(message.id);
                 const disabledComponents = [
                     new ActionRowBuilder().addComponents(
                         new ButtonBuilder()

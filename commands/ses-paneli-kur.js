@@ -2,6 +2,11 @@ const {
      SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType,
     MessageFlags
 } = require('discord.js');
+const { registerPrefix } = require('../utils/interaction-registry');
+
+// Bu paneldeki butonları aşağıdaki özel dinleyici ACK eder (genel yönetici dokunmaz).
+registerPrefix('tsa_ses_olustur_');
+registerPrefix('tsa_oda_sil_');
 const Storage = require('../services/storage');
 
 // Çift event kaydını önleyen koruma kilidi

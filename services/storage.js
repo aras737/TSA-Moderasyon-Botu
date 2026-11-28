@@ -40,6 +40,9 @@ function makeId(prefix) {
 
 class Storage {
   static cache = null;
+  // Diske en son başarıyla yazılan/okunan geçerli JSON. Yedek dosyası bundan üretilir; böylece
+  // diskte bozulmuş bir ana dosya yedeğin üzerine kopyalanamaz.
+  static lastGoodSerialized = null;
   static normalize(data) {
     const normalized = {
       ...clone(DEFAULT_DATA),
@@ -72,6 +75,13 @@ class Storage {
 
     try {
       if (!fs.existsSync(STORAGE_FILE)) {
+        // Ana dosya yok ama yedek varsa boş veri üretip yedeğin üzerine yazma; yedekten geri yükle.
+        if (fs.existsSync(BACKUP_FILE)) {
+          console.error('Ana veri dosyası bulunamadı, yedekten geri yükleniyor.');
+          const restored = this.restoreFromBackup();
+          if (restored) return restored;
+        }
+
         const fresh = this.normalize({});
         this.saveData(fresh);
         return this.cache || fresh;
@@ -79,29 +89,39 @@ class Storage {
 
       const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
       this.cache = this.normalize(raw.trim() ? JSON.parse(raw) : {});
+      if (raw.trim()) this.lastGoodSerialized = raw;
       return this.cache;
     } catch (error) {
       console.error('Veri yükleme hatası, yedek deneniyor:', error.message);
 
-      try {
-        if (fs.existsSync(BACKUP_FILE)) {
-          const backupRaw = fs.readFileSync(BACKUP_FILE, 'utf-8');
-          const restored = this.normalize(JSON.parse(backupRaw));
-
-          // Restore the primary file before returning. Otherwise the next save
-          // would copy the corrupt primary over the last known-good backup.
-          const restoreFile = `${STORAGE_FILE}.restore.tmp`;
-          fs.writeFileSync(restoreFile, JSON.stringify(restored, null, 2));
-          fs.renameSync(restoreFile, STORAGE_FILE);
-          this.cache = restored;
-          return this.cache;
-        }
-      } catch (backupError) {
-        console.error('Yedek veri de okunamadı:', backupError.message);
-      }
+      const restored = this.restoreFromBackup();
+      if (restored) return restored;
 
       this.cache = this.normalize({});
       return this.cache;
+    }
+  }
+
+  // Yedeği doğrulayıp ana dosyaya geri yazar. Başarısızsa null döner.
+  static restoreFromBackup() {
+    try {
+      if (!fs.existsSync(BACKUP_FILE)) return null;
+
+      const backupRaw = fs.readFileSync(BACKUP_FILE, 'utf-8');
+      const restored = this.normalize(JSON.parse(backupRaw));
+
+      // Ana dosyayı geri yüklemeden dönmek, bir sonraki kayıtta bozuk dosyanın
+      // son sağlam yedeğin yerine geçmesine yol açabilirdi.
+      const restoreFile = `${STORAGE_FILE}.restore.tmp`;
+      const serialized = JSON.stringify(restored, null, 2);
+      fs.writeFileSync(restoreFile, serialized);
+      fs.renameSync(restoreFile, STORAGE_FILE);
+      this.cache = restored;
+      this.lastGoodSerialized = serialized;
+      return this.cache;
+    } catch (backupError) {
+      console.error('Yedek veri de okunamadı:', backupError.message);
+      return null;
     }
   }
 
@@ -112,13 +132,18 @@ class Storage {
     normalized.updatedAt = now();
 
     try {
-      if (fs.existsSync(STORAGE_FILE)) {
-        fs.copyFileSync(STORAGE_FILE, BACKUP_FILE);
+      // Yedek, diskteki dosyanın kopyası yerine son bilinen SAĞLAM içerikten, atomik (tmp+rename) yazılır.
+      if (this.lastGoodSerialized) {
+        const backupTemp = `${BACKUP_FILE}.tmp`;
+        fs.writeFileSync(backupTemp, this.lastGoodSerialized);
+        fs.renameSync(backupTemp, BACKUP_FILE);
       }
 
+      const serialized = JSON.stringify(normalized, null, 2);
       const tempFile = `${STORAGE_FILE}.tmp`;
-      fs.writeFileSync(tempFile, JSON.stringify(normalized, null, 2));
+      fs.writeFileSync(tempFile, serialized);
       fs.renameSync(tempFile, STORAGE_FILE);
+      this.lastGoodSerialized = serialized;
       this.cache = normalized;
       return true;
     } catch (error) {
