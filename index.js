@@ -41,6 +41,7 @@ client.commands = new Collection();
 const slashCommands = [];
 let isShuttingDown = false;
 let commandRegistrationPromise = null;
+let commandsRegistered = false;
 
 function loadCommands() {
     const commandsPath = path.join(__dirname, 'commands');
@@ -148,6 +149,10 @@ app.get('/health', (_req, res) => {
         discord: ready ? 'ready' : 'connecting',
         bot: ready ? client.user.tag : null,
         commands: slashCommands.length,
+        commandsRegistered,
+        guilds: client.guilds.cache.size,
+        shards: client.ws.shards.size,
+        memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
         uptimeSeconds: Math.floor(process.uptime())
     });
 });
@@ -159,7 +164,9 @@ app.get('/ready', (_req, res) => {
         ok: ready,
         status: ready ? 'ready' : 'connecting',
         bot: ready ? client.user.tag : null,
-        commands: slashCommands.length
+        commands: slashCommands.length,
+        commandsRegistered,
+        guilds: client.guilds.cache.size
     });
 });
 
@@ -186,6 +193,7 @@ async function registerSlashCommands() {
             { body: slashCommands }
         );
 
+        commandsRegistered = true;
         console.log(`✅ ${registered.length} slash komut Discord'a kaydedildi.`);
         return registered;
     })();
@@ -193,6 +201,7 @@ async function registerSlashCommands() {
     try {
         return await commandRegistrationPromise;
     } catch (error) {
+        commandsRegistered = false;
         commandRegistrationPromise = null;
         throw error;
     }
@@ -367,6 +376,15 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+client.on('shardResume', (shardId, replayedEvents) => {
+    console.log(`✅ Discord shard yeniden bağlandı: ${shardId} | tekrar oynatılan olay: ${replayedEvents}`);
+});
+client.on('rateLimit', rateLimitData => {
+    console.warn(
+        `⚠️ Discord API rate limit: ${rateLimitData.route || 'bilinmeyen rota'} | ` +
+        `süre: ${rateLimitData.timeToReset || 0}ms | global: ${Boolean(rateLimitData.global)}`
+    );
+});
 client.on('shardReconnecting', shardId => {
     console.warn('🔄 Discord shard yeniden bağlanıyor:', shardId);
 });
