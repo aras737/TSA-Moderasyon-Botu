@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField , MessageFlags} = require('discord.js');
 
 const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 
@@ -45,33 +45,33 @@ module.exports = {
         if (!durationMs || durationMs < 5000 || durationMs > MAX_TIMEOUT_MS) {
             return interaction.reply({
                 content: '⛔ Geçersiz sure. Örnekler: `10m`, `1h`, `1d`, `1h30m`. En az 5 saniye, en fazla 28 gün.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
         if (target.id === interaction.user.id || target.id === interaction.guild.ownerId) {
-            return interaction.reply({ content: '⛔ Kendini veya sunucu sahibini susturamazsın.', ephemeral: true });
+            return interaction.reply({ content: '⛔ Kendini veya sunucu sahibini susturamazsın.', flags: MessageFlags.Ephemeral });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const member = await interaction.guild.members.fetch(target.id).catch(() => null);
         if (!member) {
-            return interaction.editReply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.', ephemeral: true });
+            return interaction.editReply({ content: '⚠️ Bu kullanici sunucuda bulunamadı.' });
         }
 
         const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
         if (!moderator) {
-            return interaction.editReply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Yetkili bilgisi alınamadı. İşlem iptal edildi.' });
         }
         if (moderator.id !== interaction.guild.ownerId &&
             moderator.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.editReply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi susturamazsın.', ephemeral: true });
+            return interaction.editReply({ content: '⛔ Eşit veya daha yüksek rütbeli bir üyeyi susturamazsın.' });
         }
 
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
         if (!botMember || !member.moderatable || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-            return interaction.editReply({ content: '⛔ Botun rol hiyerarşisi bu üyeyi susturmaya izin vermiyor.', ephemeral: true });
+            return interaction.editReply({ content: '⛔ Botun rol hiyerarşisi bu üyeyi susturmaya izin vermiyor.' });
         }
 
         try {
@@ -93,7 +93,7 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Mute komutu hatası:', error);
-            return interaction.editReply({ content: '❌ Susturma işlemi sırasında hata oluştu. Botun Moderate Members yetkisini kontrol et.', ephemeral: true });
+            return interaction.editReply({ content: '❌ Susturma işlemi sırasında hata oluştu. Botun Moderate Members yetkisini kontrol et.' });
         }
     }
 };

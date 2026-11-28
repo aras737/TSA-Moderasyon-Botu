@@ -1,10 +1,12 @@
 const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ComponentType
+    
+        SlashCommandBuilder,
+        EmbedBuilder,
+        ActionRowBuilder,
+        ButtonBuilder,
+        ButtonStyle,
+        ComponentType,
+    MessageFlags
 } = require('discord.js');
 
 module.exports = {
@@ -20,7 +22,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const username = interaction.options.getString('kullanici_adi', true).trim();
 
@@ -142,7 +144,7 @@ module.exports = {
                 if (buttonInteraction.user.id !== interaction.user.id) {
                     return buttonInteraction.reply({
                         content: '⛔ Bu sayfalama menüsünü yalnızca komutu kullanan kişi yönetebilir.',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
 

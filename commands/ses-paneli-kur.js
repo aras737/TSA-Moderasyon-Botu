@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType } = require('discord.js');
+const {
+     SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType,
+    MessageFlags
+} = require('discord.js');
 const Storage = require('../services/storage');
 
 // Çift event kaydını önleyen koruma kilidi
@@ -27,7 +30,7 @@ function registerSesPanelEvents(client) {
                 ) return;
 
                 // Member fetch / storage lookup can exceed Discord's 3s ACK window.
-                await inter.deferReply({ ephemeral: true });
+                await inter.deferReply({ flags: MessageFlags.Ephemeral });
 
                 const member = await guild.members.fetch(inter.user.id).catch(() => null);
                 if (!member) {
@@ -245,7 +248,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const kategori = interaction.options.getChannel('kategori');
         const client = interaction.client;
         const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);

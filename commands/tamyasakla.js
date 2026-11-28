@@ -1,10 +1,12 @@
 const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    PermissionFlagsBits,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
+    
+        SlashCommandBuilder,
+        EmbedBuilder,
+        PermissionFlagsBits,
+        ActionRowBuilder,
+        ButtonBuilder,
+        ButtonStyle,
+    MessageFlags
 } = require('discord.js');
 
 const ONAY_YETKILISI_ID = '1488957424009216010';
@@ -58,23 +60,23 @@ module.exports = {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '⛔ Bu komutu kullanmak için Yönetici yetkisi gerekiyor.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
         const targetId = kullaniciIdAyikla(interaction.options.getString('kisi'));
         const sebep = interaction.options.getString('sebep', true).trim();
         if (!/^\d{17,20}$/.test(targetId)) {
-            return interaction.reply({ content: '❌ Geçerli bir Discord kullanıcı ID veya etiketi gir.', ephemeral: true });
+            return interaction.reply({ content: '❌ Geçerli bir Discord kullanıcı ID veya etiketi gir.', flags: MessageFlags.Ephemeral });
         }
         if (targetId === interaction.user.id || targetId === interaction.client.user.id) {
-            return interaction.reply({ content: '⛔ Kendini veya botu yasaklama talebi oluşturamazsın.', ephemeral: true });
+            return interaction.reply({ content: '⛔ Kendini veya botu yasaklama talebi oluşturamazsın.', flags: MessageFlags.Ephemeral });
         }
         if (!sebep) {
-            return interaction.reply({ content: '❌ Yasaklama sebebi boş olamaz.', ephemeral: true });
+            return interaction.reply({ content: '❌ Yasaklama sebebi boş olamaz.', flags: MessageFlags.Ephemeral });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let targetUser;
         try {
@@ -143,7 +145,7 @@ module.exports = {
         if (prefix !== 'tamyasakla' || !['approve', 'deny'].includes(action) || !requestId) return;
 
         if (interaction.user.id !== ONAY_YETKILISI_ID) {
-            return interaction.reply({ content: '⛔ Bu onay butonlarını yalnızca belirlenmiş onay yetkilisi kullanabilir.', ephemeral: true });
+            return interaction.reply({ content: '⛔ Bu onay butonlarını yalnızca belirlenmiş onay yetkilisi kullanabilir.', flags: MessageFlags.Ephemeral });
         }
 
         const request = BEKLEYEN_ISLEMLER.get(requestId);

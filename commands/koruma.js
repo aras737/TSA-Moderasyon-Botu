@@ -1,8 +1,10 @@
 const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    PermissionFlagsBits,
-    ChannelType
+    
+        SlashCommandBuilder,
+        EmbedBuilder,
+        PermissionFlagsBits,
+        ChannelType,
+    MessageFlags
 } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 const { yedekAl } = require('../services/sunucuYedek');
@@ -172,11 +174,11 @@ module.exports = {
                 .setColor('#2ecc71')
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         }
 
         if (subcommand === 'yedek-al') {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const backup = await yedekAl(interaction.guild);
             if (!backup) {
                 return interaction.editReply('❌ Yedek alınamadı. Botun kanal ve rol bilgilerini görüntüleme izinlerini kontrol et.');
@@ -191,13 +193,13 @@ module.exports = {
         if (subcommand === 'yedek-durum') {
             const backup = ayarGetir(guildId, 'sunucuYedek', null);
             if (!backup?.alinmaZamani) {
-                return interaction.reply({ content: '⚠️ Henüz sunucu yedeği yok. Önce /koruma yedek-al komutunu kullan.', ephemeral: true });
+                return interaction.reply({ content: '⚠️ Henüz sunucu yedeği yok. Önce /koruma yedek-al komutunu kullan.', flags: MessageFlags.Ephemeral });
             }
             return interaction.reply({
                 content: '🗂️ Son yedek: ' + new Date(backup.alinmaZamani).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) +
                     ' | Roller: ' + (backup.roller?.length || 0) +
                     ' | Kanallar: ' + (backup.kanallar?.length || 0),
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -207,10 +209,10 @@ module.exports = {
                 if (ayarGetir(guildId, 'guardYedekBloke', false) === true) {
                     return interaction.reply({
                         content: '⛔ Önce sunucunun mevcut durumunu kontrol et. Güvenli olduğundan emin olduktan sonra /koruma yedek-al ile bilinçli olarak yeni yedek oluştur.',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
                 const botMember = interaction.guild.members.me ||
                     await interaction.guild.members.fetchMe().catch(() => null);
@@ -264,7 +266,7 @@ module.exports = {
             ayarKaydet(guildId, 'guardAktif', false);
             return interaction.reply({
                 content: '⛔ TMF Anti-Raid Guard bu sunucuda devre dışı bırakıldı.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -288,7 +290,7 @@ module.exports = {
                 content: enabled
                     ? `✅ ${filter.label} etkinleştirildi.`
                     : `⛔ ${filter.label} devre dışı bırakıldı.`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -302,7 +304,7 @@ module.exports = {
                 !permissions.has(PermissionFlagsBits.EmbedLinks)) {
                 return interaction.reply({
                     content: '⛔ Botun seçilen kanalda Görüntüle, Mesaj Gönder ve Embed Bağlantıları izinleri olmalı.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
@@ -311,7 +313,7 @@ module.exports = {
 
             return interaction.reply({
                 content: `✅ Giriş-çıkış logları ${channel} kanalında etkinleştirildi.`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -319,7 +321,7 @@ module.exports = {
             ayarKaydet(guildId, 'girisCikisDurum', false);
             return interaction.reply({
                 content: '⛔ Üye giriş-çıkış logları kapatıldı.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     }

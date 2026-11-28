@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const {
+     SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType,
+    MessageFlags
+} = require('discord.js');
 
 module.exports = {
     requiredPerms: [PermissionsBitField.Flags.BanMembers],
@@ -145,7 +148,7 @@ module.exports = {
 
             collector.on('collect', async buttonInteraction => {
                 if (buttonInteraction.user.id !== interaction.user.id) {
-                    return buttonInteraction.reply({ content: '<a:uyari:1505166167189487757> Bu listeyi sen sorgulamadın, butonları kullanamazsın kanka.', ephemeral: true });
+                    return buttonInteraction.reply({ content: '<a:uyari:1505166167189487757> Bu listeyi sen sorgulamadın, butonları kullanamazsın kanka.', flags: MessageFlags.Ephemeral });
                 }
 
                 if (buttonInteraction.customId === 'onceki_sayfa') {
@@ -171,7 +174,7 @@ module.exports = {
                 } catch (error) {
                     console.error('Ban listesi sayfa güncelleme hatası:', error);
                     if (!buttonInteraction.replied && !buttonInteraction.deferred) {
-                        await buttonInteraction.reply({ content: '⚠️ Liste güncellenemedi. Komutu yeniden çalıştır.', ephemeral: true }).catch(() => {});
+                        await buttonInteraction.reply({ content: '⚠️ Liste güncellenemedi. Komutu yeniden çalıştır.', flags: MessageFlags.Ephemeral }).catch(() => {});
                     }
                 }
             });

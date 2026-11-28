@@ -1,12 +1,14 @@
-const { 
-    SlashCommandBuilder, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    PermissionsBitField, 
-    ChannelType,
-    StringSelectMenuBuilder
+const {
+     
+        SlashCommandBuilder, 
+        EmbedBuilder, 
+        ActionRowBuilder, 
+        ButtonBuilder, 
+        ButtonStyle, 
+        PermissionsBitField, 
+        ChannelType,
+        StringSelectMenuBuilder,
+    MessageFlags
 } = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 const Storage = require('../services/storage');
@@ -38,7 +40,7 @@ module.exports = {
         ),
     
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             const rollerInput = interaction.options.getString('yetkili-roller', true);
             const logKanali = interaction.options.getChannel('log-kanali', true);
@@ -123,7 +125,7 @@ module.exports = {
                 if (modernPanel) {
                     const config = ayarGetir(interaction.guild.id, 'destekConfig', null);
                     if (!config || !Array.isArray(config.roles) || !config.logChannelId) {
-                        return interaction.reply({ content: '⚠️ Destek sistemi ayarı bulunamadı. Yöneticiden /destek-kur komutunu yeniden çalıştırmasını iste.', ephemeral: true });
+                        return interaction.reply({ content: '⚠️ Destek sistemi ayarı bulunamadı. Yöneticiden /destek-kur komutunu yeniden çalıştırmasını iste.', flags: MessageFlags.Ephemeral });
                     }
                     roller = config.roles.join('-');
                     logID = config.logChannelId;
@@ -131,7 +133,7 @@ module.exports = {
                     const withoutPrefix = interaction.customId.replace('tsa_setup_', '');
                     const lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
                     if (lastUnderscoreIndex <= 0) {
-                        return interaction.reply({ content: '⚠️ Eski destek panelinin ayarları geçersiz. Paneli yeniden kurun.', ephemeral: true });
+                        return interaction.reply({ content: '⚠️ Eski destek panelinin ayarları geçersiz. Paneli yeniden kurun.', flags: MessageFlags.Ephemeral });
                     }
                     roller = withoutPrefix.substring(0, lastUnderscoreIndex);
                     logID = withoutPrefix.substring(lastUnderscoreIndex + 1);
@@ -178,13 +180,13 @@ module.exports = {
                 await interaction.reply({ 
                     embeds: [confirmEmbed],
                     components: [menuRow], 
-                    ephemeral: true 
+                    flags: MessageFlags.Ephemeral 
                 });
             }
 
             // --- 2. BİLET KANALI OLUŞTURMA ---
             if (interaction.isStringSelectMenu() && (interaction.customId === 'tmf_ticket_category' || interaction.customId.startsWith('tsa_create_'))) {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
                 const modernPanel = interaction.customId === 'tmf_ticket_category';
                 let roller = [];
@@ -401,13 +403,13 @@ module.exports = {
                 if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
 
                 const originalEmbed = interaction.message.embeds[0];
                 if (!originalEmbed) {
-                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya embed silinmiş.', ephemeral: true });
+                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya embed silinmiş.', flags: MessageFlags.Ephemeral });
                 }
                 // Embed alanları değiştirildiğinde mevcut alanları koru.
                 // Mevcut field sayısına göre ekliyoruz.
@@ -437,8 +439,7 @@ module.exports = {
                 await interaction.update({ embeds: [claimEmbed], components: [disabledRow] });
                 
                 await interaction.followUp({ 
-                    content: `<:Yetkili:1505192912680390827> **${interaction.user.tag}** bu biletle ilgilenmeye başladı!\n\n<:duration:1505171054497370275> Lütfen 24 saat içerisinde çözüm sağlayınız.`,
-                    ephemeral: false 
+                    content: `<:Yetkili:1505192912680390827> **${interaction.user.tag}** bu biletle ilgilenmeye başladı!\n\n<:duration:1505171054497370275> Lütfen 24 saat içerisinde çözüm sağlayınız.` 
                 });
 
                 // BUG DÜZELTMESİ: topic null olabilir, null check eklendi.
@@ -466,7 +467,7 @@ module.exports = {
                 // BUG DÜZELTMESİ: Bilet sahibi kontrolü topic'ten alınan ID ile yapılıyor.
                 const topicData = interaction.channel.topic;
                 if (!topicData) {
-                    return interaction.reply({ content: '<a:baarsz:1505146967817326675> Kanal bilgisi okunamadı!', ephemeral: true });
+                    return interaction.reply({ content: '<a:baarsz:1505146967817326675> Kanal bilgisi okunamadı!', flags: MessageFlags.Ephemeral });
                 }
 
                 const acanID = topicData.split('Açan: ')[1]?.split(' |')[0]?.trim();
@@ -476,7 +477,7 @@ module.exports = {
                 if (!isStaff && !isOwner) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Yalnızca bilet sahibi veya yetkili bu işlemi yapabilir!', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
 
@@ -532,13 +533,13 @@ module.exports = {
                 if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
 
                 const originalEmbed = interaction.message.embeds[0];
                 if (!originalEmbed?.title) {
-                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya başlık eksik.', ephemeral: true });
+                    return interaction.reply({ content: '⚠️ Bilet mesajı bulunamadı veya başlık eksik.', flags: MessageFlags.Ephemeral });
                 }
                 // BUG DÜZELTMESİ: spliceFields ile field silmek yerine
                 // son field'ı (üstlenen yetkili) güvenli şekilde kaldırıyoruz.
@@ -571,8 +572,7 @@ module.exports = {
 
                 await interaction.update({ embeds: [reopenEmbed], components: [enabledRow] });
                 await interaction.followUp({ 
-                    content: `<:change:1505202806666170501> Bilet **${interaction.user.tag}** tarafından yeniden açıldı!`,
-                    ephemeral: false 
+                    content: `<:change:1505202806666170501> Bilet **${interaction.user.tag}** tarafından yeniden açıldı!` 
                 });
             }
 
@@ -582,13 +582,13 @@ module.exports = {
                 if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                     return interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bu işlem için yeterli yetkiniz yok!', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
 
                 await interaction.reply({
                     content: '<:change:1505202806666170501> Bileti aktarmak istediğiniz yetkiliyi etiketleyin (30 saniye süreniz var):',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
 
                 const filter = m => {
@@ -606,7 +606,7 @@ module.exports = {
                     const hedef = m.mentions.members.first();
                     if (!hedef || hedef.id === interaction.user.id ||
                         !hedef.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)) {
-                        await interaction.followUp({ content: '⚠️ Yalnızca bu bilette yetkili izni olan başka bir personeli aktarabilirsin.', ephemeral: true }).catch(() => {});
+                        await interaction.followUp({ content: '⚠️ Yalnızca bu bilette yetkili izni olan başka bir personeli aktarabilirsin.', flags: MessageFlags.Ephemeral }).catch(() => {});
                         return;
                     }
                     await interaction.channel.permissionOverwrites.edit(hedef.id, {
@@ -625,7 +625,7 @@ module.exports = {
 
                 collector.on('end', (collected, reason) => {
                     if (reason === 'time' && collected.size === 0) {
-                        interaction.followUp({ content: '<a:baarsz:1505146967817326675> Süre doldu, aktarma iptal edildi.', ephemeral: true }).catch(() => {});
+                        interaction.followUp({ content: '<a:baarsz:1505146967817326675> Süre doldu, aktarma iptal edildi.', flags: MessageFlags.Ephemeral }).catch(() => {});
                     }
                 });
             }
@@ -636,12 +636,12 @@ module.exports = {
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({ 
                         content: '<a:baarsz:1505146967817326675> Bir hata oluştu! Lütfen daha sonra tekrar deneyiniz.', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 } else {
                     await interaction.followUp({ 
                         content: '<a:baarsz:1505146967817326675> Bir hata oluştu! Lütfen daha sonra tekrar deneyiniz.', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
             } catch (e) {

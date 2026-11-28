@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType , MessageFlags} = require('discord.js');
 const { ayarKaydet, ayarGetir } = require('../utils/db');
 
 module.exports = {
@@ -24,7 +24,7 @@ module.exports = {
                 .setDescription('Log sistemini kapatır.')),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
 

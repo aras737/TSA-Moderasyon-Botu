@@ -4,7 +4,8 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    MessageFlags
 } = require('discord.js');
 const { ayarGetir, ayarKaydet } = require('../utils/db');
 
@@ -143,7 +144,7 @@ module.exports = client => {
             if (!guild) {
                 return interaction.followUp({
                     content: '⚠️ İlgili sunucu bulunamadı veya bot artık sunucuda değil.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
@@ -152,7 +153,7 @@ module.exports = client => {
             if (!owner || interaction.user.id !== owner.id || interaction.user.id !== guild.ownerId) {
                 return interaction.followUp({
                     content: '⛔ Anti-Bot kararını yalnızca ilgili sunucunun sahibi verebilir.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
@@ -205,7 +206,7 @@ module.exports = client => {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply(response).catch(() => {});
             } else if (interaction.isRepliable()) {
-                await interaction.reply({ ...response, ephemeral: true }).catch(() => {});
+                await interaction.reply({ ...response, flags: MessageFlags.Ephemeral }).catch(() => {});
             }
         }
     });

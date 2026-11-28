@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const {
+     SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType,
+    MessageFlags
+} = require('discord.js');
 
 module.exports = {
     requiredPerms: [PermissionFlagsBits.ManageMessages],
@@ -19,7 +22,7 @@ module.exports = {
         .addBooleanOption(opt => opt.setName('everyone').setDescription('@everyone ile gönderilsin mi?').setRequired(false)),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const baslik = interaction.options.getString('baslik', true);
         const icerik = interaction.options.getString('icerik', true);
         const hedefKanal = interaction.options.getChannel('hedef') || interaction.channel;

@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+     SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits,
+    MessageFlags
+} = require('discord.js');
 const axios = require('axios');
 const Storage = require('../services/storage');
 
@@ -156,27 +159,27 @@ module.exports = {
         const yetkili = interaction.user;
 
         if (!/^\d+$/.test(ROBLOX_GRUP_ID)) {
-            return interaction.reply({ content: 'ROBLOX_GRUP_ID geçerli bir sayısal grup kimliği olmalı.', ephemeral: true });
+            return interaction.reply({ content: 'ROBLOX_GRUP_ID geçerli bir sayısal grup kimliği olmalı.', flags: MessageFlags.Ephemeral });
         }
 
         if (!ROBLOX_API_KEY) {
             return interaction.reply({
                 content: 'ROBLOX_API_KEY .env icinde ayarli degil kanka. Once API key eklenmeli.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
         if (!ROWIFI_API_KEY) {
             return interaction.reply({
                 content: '⚠️ ROWIFI_API_KEY .env içinde tanımlı değil kanka! Güvenlik doğrulaması yapılamıyor.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
         if (!/^\d+$/.test(yeniRutbeId)) {
             return interaction.reply({
                 content: 'Rutbe ID sadece rakamlardan olusmali. ID listesini `/grup_listele` ile kontrol et.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
