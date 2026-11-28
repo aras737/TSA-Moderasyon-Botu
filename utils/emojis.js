@@ -57,8 +57,8 @@ async function loadApplicationEmojis(client) {
 
   // Önce botun bulunduğu sunuculardaki mevcut özel emojileri al.
   // Slash komutlarında kullanılan eski emoji ID'leri böylece korunur.
-  for (const guild of client.guilds.cache.values()) {
-    for (const customEmoji of guild.emojis.cache.values()) {
+  for (const guild of client.guilds?.cache?.values?.() || []) {
+    for (const customEmoji of guild.emojis?.cache?.values?.() || []) {
       if (customEmoji.name) next.set(customEmoji.name, customEmoji);
     }
   }
