@@ -53,11 +53,26 @@ const ALIASES = Object.freeze({
 let emojis = new Map();
 
 async function loadApplicationEmojis(client) {
-  const fetched = await client.application.emojis.fetch();
   const next = new Map();
-  for (const emoji of fetched.values()) {
-    next.set(emoji.name, emoji);
+
+  // Önce botun bulunduğu sunuculardaki mevcut özel emojileri al.
+  // Slash komutlarında kullanılan eski emoji ID'leri böylece korunur.
+  for (const guild of client.guilds.cache.values()) {
+    for (const customEmoji of guild.emojis.cache.values()) {
+      if (customEmoji.name) next.set(customEmoji.name, customEmoji);
+    }
   }
+
+  // Uygulama emojileri aynı ada sahipse öncelik onlarda olsun.
+  try {
+    const fetched = await client.application.emojis.fetch();
+    for (const customEmoji of fetched.values()) {
+      if (customEmoji.name) next.set(customEmoji.name, customEmoji);
+    }
+  } catch (error) {
+    console.warn('[EMOJI] Application Emojis alınamadı; sunucu emojileri kullanılmaya devam edecek:', error.message);
+  }
+
   emojis = next;
   return emojis.size;
 }
