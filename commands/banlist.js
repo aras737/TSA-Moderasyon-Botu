@@ -1,199 +1,95 @@
+'use strict';
 const {
-     SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType,
-    MessageFlags
+  SlashCommandBuilder, EmbedBuilder, PermissionsBitField, ActionRowBuilder,
+  ButtonBuilder, ButtonStyle, MessageFlags
 } = require('discord.js');
+const Storage = require('../services/storage');
 
-const { registerPanel, releasePanel } = require('../utils/interaction-registry');
+const KEY = id => 'panel:banlist:' + id;
+const IDS = new Set(['onceki_sayfa', 'sonraki_sayfa', 'filtre_hepsi', 'filtre_tam', 'filtre_standart']);
+
+function splitBans(bans) {
+  const all = [...bans.values()];
+  return {
+    all,
+    global: all.filter(x => (x.reason || '').includes('TMF Küresel Yasaklama')),
+    standard: all.filter(x => !(x.reason || '').includes('TMF Küresel Yasaklama'))
+  };
+}
+function makeEmbed(guild, user, state, lists) {
+  const selected = state.filter === 'tam' ? lists.global : state.filter === 'standart' ? lists.standard : lists.all;
+  const pages = Math.max(1, Math.ceil(selected.length / 10));
+  state.page = Math.min(Math.max(0, state.page), pages - 1);
+  const rows = selected.slice(state.page * 10, state.page * 10 + 10);
+  const title = state.filter === 'tam' ? 'TMF | Tam Yasaklananlar Bölümü'
+    : state.filter === 'standart' ? 'TMF | Standart Sunucu Yasakları Bölümü' : 'TMF | Genel Yasaklı Listesi';
+  const description = rows.length ? rows.map((ban, i) => {
+    const global = (ban.reason || '').includes('TMF Küresel Yasaklama');
+    return '**' + (state.page * 10 + i + 1) + '.** **' + (ban.user?.tag || 'Bilinmeyen') +
+      '** \`(' + ban.user?.id + ')\` — ' + (global ? '🔴 \`[KÜRESEL TAM YASAK]\`' : '🟡 \`[SUNUCU YASAĞI]\`') +
+      '\n┗ **Sebep:** ' + String(ban.reason || 'Sebep belirtilmemiş.').slice(0, 180);
+  }).join('\n\n') : '*Bu bölümde listelenecek herhangi bir yasaklı üye bulunmuyor.*';
+  return new EmbedBuilder().setTitle(title).setDescription(
+    '📊 **Bölüm İstatistikleri:**\n' +
+    '• Toplam Yasaklı: **' + lists.all.length + '**\n' +
+    '• Tam Yasaklananlar: **' + lists.global.length + '**\n' +
+    '• Standart Yasaklananlar: **' + lists.standard.length + '**\n\n' +
+    '• Şu an gösterilen: **' + selected.length + '** üye\n\n' + description
+  ).setColor(state.filter === 'tam' ? '#7a0010' : state.filter === 'standart' ? '#f1c40f' : '#ff4d4d')
+   .setThumbnail(guild.iconURL() || undefined)
+   .setFooter({ text: 'Sayfa: ' + (state.page + 1) + '/' + pages + ' | Bölüm: ' + state.filter.toUpperCase() })
+   .setTimestamp();
+}
+function makeComponents(state, lists) {
+  const selected = state.filter === 'tam' ? lists.global : state.filter === 'standart' ? lists.standard : lists.all;
+  const pages = Math.max(1, Math.ceil(selected.length / 10));
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('onceki_sayfa').setLabel('Geri').setEmoji('◀️').setStyle(ButtonStyle.Primary).setDisabled(state.page <= 0),
+      new ButtonBuilder().setCustomId('sonraki_sayfa').setLabel('İleri').setEmoji('▶️').setStyle(ButtonStyle.Primary).setDisabled(state.page >= pages - 1)
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('filtre_hepsi').setLabel('Tümü').setStyle(state.filter === 'hepsi' ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('filtre_tam').setLabel('Tam Yasaklılar').setStyle(state.filter === 'tam' ? ButtonStyle.Danger : ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('filtre_standart').setLabel('Sunucu Yasakları').setStyle(state.filter === 'standart' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  ];
+}
 module.exports = {
-    requiredPerms: [PermissionsBitField.Flags.BanMembers],
-
-    data: new SlashCommandBuilder()
-        .setName('banlist')
-        .setDescription('TMF sunucusundaki yasaklıları genel, tam yasaklı ve normal diye bölümlere ayırarak listeler.')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
-
-    async execute(interaction) {
-        await interaction.deferReply();
-
-        try {
-            const bans = await interaction.guild.bans.fetch();
-
-            if (bans.size === 0) {
-                return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle('TMF | Yasaklı Listesi')
-                            .setDescription('<a:tik:1505164671081123840> Sunucuda yasaklı kullanıcı bulunmuyor kanka.')
-                            .setColor('Green')
-                    ]
-                });
-            }
-
-            const banArray = Array.from(bans.values());
-            
-            // 🔥 VERİLERİ BÖLÜMLERE (KATEGORİLERE) AYIRIYORUZ
-            const kureselBanlar = banArray.filter(ban => ban.reason && ban.reason.includes('TMF Küresel Yasaklama'));
-            const standartBanlar = banArray.filter(ban => !ban.reason || !ban.reason.includes('TMF Küresel Yasaklama'));
-
-            let mevcutFiltre = 'hepsi'; // 'hepsi', 'tam', 'standart'
-            let mevcutSayfa = 0;
-            const herSayfada = 10;
-
-            // ⚡ AKTİF BÖLÜME GÖRE VERİ SEÇEN FONKSİYON
-            const aktifListeyiGetir = () => {
-                if (mevcutFiltre === 'tam') return kureselBanlar;
-                if (mevcutFiltre === 'standart') return standartBanlar;
-                return banArray;
-            };
-
-            // 🖼️ DİNAMİK EMBED OLUŞTURUCU
-            const sayfaEmbedOlustur = () => {
-                const aktifListe = aktifListeyiGetir();
-                const toplamSayfa = Math.ceil(aktifListe.length / herSayfada) || 1;
-
-                if (mevcutSayfa >= toplamSayfa) mevcutSayfa = 0;
-
-                const baslangic = mevcutSayfa * herSayfada;
-                const bitis = baslangic + herSayfada;
-                const sayfaVerisi = aktifListe.slice(baslangic, bitis);
-
-                // Başlık metni aktif bölüme göre değişiyor kanka
-                let bolumBasligi = '<:yasaklandi:1505146022588842095> TMF | Genel Yasaklı Listesi';
-                if (mevcutFiltre === 'tam') bolumBasligi = '<:yasaklandi:1505146022588842095> TMF | Tam Yasaklananlar Bölümü';
-                if (mevcutFiltre === 'standart') bolumBasligi = '<:Paper:1505146388596391977> TMF | Standart Sunucu Yasakları Bölümü';
-
-                let listeMetni = '';
-                if (aktifListe.length === 0) {
-                    listeMetni = '*<a:uyari:1505166167189487757> Bu bölümde listelenecek herhangi bir yasaklı üye bulunmuyor kanka.*';
-                } else {
-                    listeMetni = sayfaVerisi.map((ban, index) => {
-                        const sebep = (ban.reason || 'Sebep belirtilmemiş.').slice(0, 200);
-                        const isGlobal = ban.reason && ban.reason.includes('TMF Küresel Yasaklama');
-                        const rozet = isGlobal ? '🔴 `[KÜRESEL TAM YASAK]`' : '🟡 `[SUNUCU YASAĞI]`';
-
-                        return `**${baslangic + index + 1}.** <:uzaybot_kullanicilar:1505146190973505567> **${ban.user.tag}** \`(${ban.user.id})\` — ${rozet}\n┗ <:Paper:1505146388596391977> **Sebep:** ${sebep}`;
-                    }).join('\n\n');
-                }
-
-                return new EmbedBuilder()
-                    .setTitle(bolumBasligi)
-                    .setDescription(
-                        `📊 **Bölüm İstatistikleri:**\n` +
-                        `• <:uzaybot_kullanicilar:1505146190973505567> Toplam Yasaklı: **${banArray.length}**\n` +
-                        `• <:yasaklandi:1505146022588842095> Tam Yasaklananlar: **${kureselBanlar.length}**\n` +
-                        `• <:Paper:1505146388596391977> Standart Yasaklananlar: **${standartBanlar.length}**\n\n` +
-                        `• <a:tik:1505164671081123840> Şu An Gösterilen: **${aktifListe.length}** üye listeleniyor.\n\n` +
-                        `--------------------------------------------------\n\n` +
-                        `${listeMetni}`
-                    )
-                    .setColor(mevcutFiltre === 'tam' ? '#7a0010' : (mevcutFiltre === 'standart' ? '#f1c40f' : '#ff4d4d'))
-                    .setThumbnail(interaction.guild.iconURL() || undefined)
-                    .setFooter({ text: `Sayfa: ${mevcutSayfa + 1}/${toplamSayfa} | Bölüm: ${mevcutFiltre.toUpperCase()}`, iconURL: interaction.user.displayAvatarURL() })
-                    .setTimestamp();
-            };
-
-            // 🎛️ BUTON SATIRLARINI HAZIRLAMA (SANA ÖZEL EMOJİLER ENTEGRE EDİLDİ)
-            const butonlariOlustur = () => {
-                const aktifListe = aktifListeyiGetir();
-                const toplamSayfa = Math.ceil(aktifListe.length / herSayfada) || 1;
-
-                // 1. Satır: Sayfa Değiştirme Butonları (◀️ / ▶️)
-                const yonSatiri = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('onceki_sayfa')
-                        .setLabel('Geri')
-                        .setEmoji('◀️')
-                        .setStyle(ButtonStyle.Primary)
-                        .setDisabled(mevcutSayfa === 0 || aktifListe.length === 0),
-                    new ButtonBuilder()
-                        .setCustomId('sonraki_sayfa')
-                        .setLabel('İleri')
-                        .setEmoji('▶️')
-                        .setStyle(ButtonStyle.Primary)
-                        .setDisabled(mevcutSayfa === toplamSayfa - 1 || aktifListe.length === 0)
-                );
-
-                // 2. Satır: Bölüm/Filtre Değiştirme Butonları (SENİN EMOJİLERİNLE KANKA)
-                const filtreSatiri = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('filtre_hepsi')
-                        .setLabel('Tümü')
-                        .setEmoji('<:uzaybot_kullanicilar:1505146190973505567>')
-                        .setStyle(mevcutFiltre === 'hepsi' ? ButtonStyle.Success : ButtonStyle.Secondary),
-                    new ButtonBuilder()
-                        .setCustomId('filtre_tam')
-                        .setLabel('Tam Yasaklılar')
-                        .setEmoji('<:yasaklandi:1505146022588842095>')
-                        .setStyle(mevcutFiltre === 'tam' ? ButtonStyle.Danger : ButtonStyle.Secondary),
-                    new ButtonBuilder()
-                        .setCustomId('filtre_standart')
-                        .setLabel('Sunucu Yasakları')
-                        .setEmoji('<:Paper:1505146388596391977>')
-                        .setStyle(mevcutFiltre === 'standart' ? ButtonStyle.Primary : ButtonStyle.Secondary)
-                );
-
-                return [yonSatiri, filtreSatiri];
-            };
-
-            // İlk mesajı basıyoruz kanka
-            const mesaj = await interaction.editReply({
-                embeds: [sayfaEmbedOlustur()],
-                components: butonlariOlustur()
-            });
-
-            // 🔄 ETKİLEŞİM TOPLAYICI (COLLECTOR)
-            const collector = mesaj.createMessageComponentCollector({
-                componentType: ComponentType.Button,
-                time: 120000 // 2 dakika boyunca menü aktif kalır kanka
-            });
-
-            collector.on('collect', async buttonInteraction => {
-                if (buttonInteraction.user.id !== interaction.user.id) {
-                    return buttonInteraction.reply({ content: '<a:uyari:1505166167189487757> Bu listeyi sen sorgulamadın, butonları kullanamazsın kanka.', flags: MessageFlags.Ephemeral });
-                }
-
-                if (buttonInteraction.customId === 'onceki_sayfa') {
-                    mevcutSayfa--;
-                } else if (buttonInteraction.customId === 'sonraki_sayfa') {
-                    mevcutSayfa++;
-                } else if (buttonInteraction.customId === 'filtre_hepsi') {
-                    mevcutFiltre = 'hepsi';
-                    mevcutSayfa = 0;
-                } else if (buttonInteraction.customId === 'filtre_tam') {
-                    mevcutFiltre = 'tam';
-                    mevcutSayfa = 0;
-                } else if (buttonInteraction.customId === 'filtre_standart') {
-                    mevcutFiltre = 'standart';
-                    mevcutSayfa = 0;
-                }
-
-                try {
-                    await buttonInteraction.update({
-                        embeds: [sayfaEmbedOlustur()],
-                        components: butonlariOlustur()
-                    });
-                } catch (error) {
-                    console.error('Ban listesi sayfa güncelleme hatası:', error);
-                    if (!buttonInteraction.replied && !buttonInteraction.deferred) {
-                        await buttonInteraction.reply({ content: '⚠️ Liste güncellenemedi. Komutu yeniden çalıştır.', flags: MessageFlags.Ephemeral }).catch(() => {});
-                    }
-                }
-            });
-
-            registerPanel(mesaj.id, 120000);
-            collector.on('end', () => {
-                releasePanel(mesaj.id);
-                const kapaliSatir = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('b1').setLabel('🔒 Menü Zaman Aşımına Uğradı').setStyle(ButtonStyle.Secondary).setDisabled(true)
-                );
-                mesaj.edit({ components: [kapaliSatir] }).catch(() => {});
-            });
-
-        } catch (error) {
-            console.error('Ban listesi hatası kanka:', error);
-            if (interaction.deferred) {
-                await interaction.editReply({ content: '<a:baarsz:1505146967817326675> Ban listesi bölümlere ayrılırken teknik bir hata oluştu!' });
-            }
-        }
+  requiredPerms: [PermissionsBitField.Flags.BanMembers],
+  data: new SlashCommandBuilder().setName('banlist')
+    .setDescription('TMF sunucusundaki yasaklıları bölümlere ayırarak listeler.')
+    .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
+  async execute(interaction) {
+    await interaction.deferReply();
+    try {
+      const lists = splitBans(await interaction.guild.bans.fetch());
+      const state = { ownerId: interaction.user.id, guildId: interaction.guildId, filter: 'hepsi', page: 0 };
+      const message = await interaction.editReply({ embeds: [makeEmbed(interaction.guild, interaction.user, state, lists)], components: makeComponents(state, lists) });
+      Storage.set(KEY(message.id), state);
+    } catch (error) {
+      console.error('[BANLIST] Panel oluşturulamadı:', error);
+      await interaction.editReply({ content: '❌ Yasaklı listesi alınamadı.', embeds: [], components: [] }).catch(() => {});
     }
+  },
+  async interactionHandler(interaction) {
+    if (!interaction.isButton() || !IDS.has(interaction.customId)) return;
+    const state = Storage.get(KEY(interaction.message.id));
+    if (!state) return;
+    if (interaction.guildId !== state.guildId) return interaction.reply({ content: 'Bu panel artık geçerli değil.', flags: MessageFlags.Ephemeral });
+    if (interaction.user.id !== state.ownerId) return interaction.reply({ content: 'Bu listeyi yalnızca komutu kullanan kişi yönetebilir.', flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
+    if (interaction.customId === 'onceki_sayfa') state.page = Math.max(0, state.page - 1);
+    else if (interaction.customId === 'sonraki_sayfa') state.page += 1;
+    else { state.filter = interaction.customId === 'filtre_tam' ? 'tam' : interaction.customId === 'filtre_standart' ? 'standart' : 'hepsi'; state.page = 0; }
+    try {
+      const guild = await interaction.client.guilds.fetch(state.guildId);
+      const lists = splitBans(await guild.bans.fetch());
+      await interaction.editReply({ embeds: [makeEmbed(guild, interaction.user, state, lists)], components: makeComponents(state, lists) });
+      Storage.set(KEY(interaction.message.id), state);
+    } catch (error) {
+      console.error('[BANLIST] Kalıcı panel hatası:', error);
+      await interaction.followUp({ content: 'Liste yenilenemedi. Botun Ban Members iznini kontrol et.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    }
+  }
 };
