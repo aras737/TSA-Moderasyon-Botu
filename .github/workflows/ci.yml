@@ -1,7 +1,8 @@
 name: Node.js checks
 
+# Pull Request kodu güvenilmeyen içerik olabilir; varsayılan olarak salt okunur.
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -12,6 +13,8 @@ on:
 jobs:
   syntax:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,18 +23,32 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Regenerate lockfile from pinned security updates
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm install --package-lock-only --ignore-scripts
       - name: Install dependencies
         run: npm ci
-      - name: Check JavaScript syntax
+      - name: Check JavaScript syntax and project tests
         run: npm run check
       - name: Block builds with production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=moderate
 
+  # Yazma izni yalnızca güvenilir main push'larında gereken bu işe verilir.
+  dependency-lock-update:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Regenerate lockfile from pinned security updates
+        run: npm install --package-lock-only --ignore-scripts
       - name: Commit patched dependency lock
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           if git diff --quiet -- package-lock.json; then
