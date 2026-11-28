@@ -95,10 +95,13 @@ function emojiData(name) {
 }
 
 function replaceLegacyEmojis(text) {
-  return String(text).replace(/<a?:([A-Za-z0-9_]+):(\d+)>/g, (match, oldName, id) => {
-    const name = ALIASES[id] || oldName;
-    return emoji(name);
-  });
+  return String(text)
+    .replace(/<a?:([A-Za-z0-9_]+):(\d+)>/g, (match, oldName, id) => {
+      const name = ALIASES[id] || oldName;
+      return emoji(name);
+    })
+    // Başarı/onay işaretlerinin tamamında sunucudaki özel :tik: emojisini kullan.
+    .replace(/(?:✅|✔️?|☑️)/g, () => emoji('tik'));
 }
 
 module.exports = { emoji, emojiData, loadApplicationEmojis, replaceLegacyEmojis, FALLBACKS, ALIASES };
