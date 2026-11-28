@@ -1,11 +1,10 @@
 const {
-    
-        SlashCommandBuilder,
-        EmbedBuilder,
-        PermissionFlagsBits,
-        ActionRowBuilder,
-        ButtonBuilder,
-        ButtonStyle,
+    SlashCommandBuilder,
+    EmbedBuilder,
+    PermissionFlagsBits,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
     MessageFlags
 } = require('discord.js');
 
@@ -82,14 +81,16 @@ module.exports = {
         let targetUser;
         try {
             targetUser = await interaction.client.users.fetch(targetId);
-        } catch {
+        } catch (error) {
+            console.warn('[TAMYASAKLA] Hedef kullanıcı alınamadı:', error?.message || error);
             return interaction.editReply('❌ Bu Discord kullanıcısı bulunamadı. ID bilgisini kontrol et.');
         }
 
         let approver;
         try {
             approver = await interaction.client.users.fetch(ONAY_YETKILISI_ID);
-        } catch {
+        } catch (error) {
+            console.error('[TAMYASAKLA] Onay yetkilisi alınamadı:', error?.message || error);
             return interaction.editReply('❌ Onay yetkilisi hesabına ulaşılamadı. İşlem başlatılmadı.');
         }
 
@@ -193,13 +194,14 @@ module.exports = {
             basarisiz.length ? `\n**İşlem yapılamayan sunucular:**\n${basarisiz.slice(0, 10).map(item => `• ${item.guild}`).join('\n')}` : ''
         ].filter(Boolean).join('\n');
 
-        await interaction.followUp({ content: rapor.slice(0, 1900), allowedMentions: { users: [request.requesterId, ONAY_YETKILISI_ID] } }).catch(() => null);
+        await interaction.followUp({ content: rapor.slice(0, 1900), allowedMentions: { users: [request.requesterId, ONAY_YETKILISI_ID] } })
+            .catch(error => console.error('[TAMYASAKLA] Onay raporu gönderilemedi:', error?.message || error));
 
         try {
             const requester = await interaction.client.users.fetch(request.requesterId);
             await requester.send(rapor.slice(0, 1900));
-        } catch {
-            // Talep sahibinin DM'leri kapalıysa onay DM'indeki rapor yine görünür.
+        } catch (error) {
+            console.warn('[TAMYASAKLA] Talep sahibine sonuç DM gönderilemedi:', error?.message || error);
         }
     }
 };
