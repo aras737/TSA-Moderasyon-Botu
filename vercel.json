@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": ".",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 10
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
+}

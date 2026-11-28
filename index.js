@@ -201,11 +201,9 @@ client.once('clientReady', async () => {
     void sendOwnerStartupNotice(client, Storage, slashCommands.length)
         .catch(error => console.error('[OWNER-DM] Beklenmeyen bildirim hatası:', error));
 
-    try {
-        await loadApplicationEmojis(client);
-    } catch (error) {
+    void loadApplicationEmojis(client).catch(error => {
         console.warn('[EMOJIS] Application Emoji yüklenemedi; Unicode yedekleri kullanılacak:', error?.message || error);
-    }
+    });
 
     // Süresi dolmuş küresel yasaklama onaylarını açılışta temizle.
     try {

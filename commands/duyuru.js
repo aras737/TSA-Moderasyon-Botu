@@ -1,0 +1,104 @@
+const {
+     SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType,
+    MessageFlags
+} = require('discord.js');
+
+module.exports = {
+    requiredPerms: [PermissionFlagsBits.ManageMessages],
+
+    data: new SlashCommandBuilder()
+        .setName('duyuru')
+        .setDescription('📢 Sunucuda gelişmiş duyuru gönderir.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+        .addStringOption(opt => opt.setName('baslik').setDescription('Duyurunun başlığı').setMaxLength(256).setRequired(true))
+        .addStringOption(opt => opt.setName('icerik').setDescription('Duyurunun içeriği').setMaxLength(3500).setRequired(true))
+        .addChannelOption(opt => opt.setName('hedef').setDescription('Duyurunun gönderileceği kanal').addChannelTypes(ChannelType.GuildText).setRequired(false))
+        .addStringOption(opt => opt.setName('tip').setDescription('Duyuru tipi').setRequired(false).addChoices(
+            { name: 'Embed (Şık Kutu)', value: 'embed' },
+            { name: 'Düz Yazı', value: 'text' }
+        ))
+        .addStringOption(opt => opt.setName('resim').setDescription('Duyuru görselinin HTTPS URL adresi').setMaxLength(500).setRequired(false))
+        .addStringOption(opt => opt.setName('footer').setDescription('Alt yazı').setMaxLength(2048).setRequired(false))
+        .addBooleanOption(opt => opt.setName('everyone').setDescription('@everyone ile gönderilsin mi?').setRequired(false)),
+
+    async execute(interaction) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const baslik = interaction.options.getString('baslik', true);
+        const icerik = interaction.options.getString('icerik', true);
+        const hedefKanal = interaction.options.getChannel('hedef') || interaction.channel;
+        const tip = interaction.options.getString('tip') || 'embed';
+        const resim = interaction.options.getString('resim');
+        const footer = interaction.options.getString('footer');
+        const everyone = interaction.options.getBoolean('everyone') ?? false;
+
+        const moderatorPermissions = interaction.memberPermissions;
+        if (everyone && !moderatorPermissions?.has(PermissionFlagsBits.MentionEveryone) &&
+            !moderatorPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.editReply({ content: '⛔ @everyone kullanmak için Mention Everyone yetkisine sahip olmalısın.' });
+        }
+
+        const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+        if (!botMember) {
+            return interaction.editReply({ content: '❌ Bot üye bilgisi alınamadı.' });
+        }
+
+        const botPermissions = hedefKanal.permissionsFor(botMember);
+        if (!botPermissions?.has(PermissionFlagsBits.SendMessages) ||
+            (tip === 'embed' && !botPermissions.has(PermissionFlagsBits.EmbedLinks))) {
+            return interaction.editReply({ content: '❌ Botun seçilen kanalda mesaj veya embed gönderme yetkisi yok.' });
+        }
+        if (everyone && !botPermissions.has(PermissionFlagsBits.MentionEveryone)) {
+            return interaction.editReply({ content: '❌ Botun seçilen kanalda @everyone etiketleme yetkisi yok.' });
+        }
+
+        if (resim) {
+            try {
+                const parsed = new URL(resim);
+                if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('URL scheme');
+            } catch {
+                return interaction.editReply({ content: '⚠️ Görsel için geçerli bir HTTP/HTTPS URL adresi gir.' });
+            }
+        }
+
+        const moderator = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (!moderator) {
+            return interaction.editReply({ content: '❌ Yetkili bilgisi alınamadı.' });
+        }
+        const roleName = moderator.roles.highest?.name || 'Yetkili';
+        const byline = `[ ${roleName} ] ${interaction.user.username} tarafından.`;
+        const allowedMentions = everyone ? { parse: ['everyone'] } : { parse: [] };
+
+        try {
+            if (tip === 'embed') {
+                const embed = new EmbedBuilder()
+                    .setTitle(baslik)
+                    .setDescription(`${icerik}\n\n*${byline}*`)
+                    .setColor('#f1c40f')
+                    .setTimestamp();
+                if (resim) embed.setImage(resim);
+                if (footer) embed.setFooter({ text: footer });
+
+                await hedefKanal.send({
+                    content: everyone ? '@everyone' : undefined,
+                    embeds: [embed],
+                    allowedMentions
+                });
+            } else {
+                let text = `📢 **${baslik}**\n\n${icerik}\n\n*${byline}*`;
+                if (footer) text += `\n\n*${footer}*`;
+                if (everyone) text = `@everyone\n${text}`;
+
+                // Discord mesaj sınırına sığmayan icerikleri sessizce kırpmak yerine reddet.
+                if (text.length > 2000) {
+                    return interaction.editReply({ content: '⚠️ Düz yazı duyurusu 2.000 karakter sınırını aşıyor.' });
+                }
+                await hedefKanal.send({ content: text, allowedMentions });
+            }
+
+            return interaction.editReply({ content: `✅ Duyuru ${hedefKanal} kanalına gönderildi.` });
+        } catch (error) {
+            console.error('Duyuru gönderme hatası:', error);
+            return interaction.editReply({ content: '❌ Duyuru gönderilemedi. Kanal izinlerini ve görsel adresini kontrol et.' });
+        }
+    }
+};
