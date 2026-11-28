@@ -267,15 +267,30 @@ module.exports = {
             const yeniRutbeAdi = hedefPublicRol.name || hedefRoleId;
             const yetkiliRutbeAdi = yetkiliPublicRol?.name || 'Bilinmiyor';
             const yetkiliRank = Number(yetkiliPublicRol?.rank ?? -1);
+            const mevcutHedefRank = Number(eskiPublicRol?.rank ?? -1);
             const hedefRank = Number(hedefPublicRol.rank ?? -1);
 
-            if (hedefRank < 0 || yetkiliRank < 0 || hedefRank >= yetkiliRank) {
+            // Yetkili yalnızca kendi rütbesinden düşük bir rütbe veremez;
+            // ayrıca mevcut rütbesi kendisine eşit/yüksek olan üyeyi de değiştiremez.
+            // Bu kontrol, üst rütbeli bir üyeyi daha aşağıya indirerek hiyerarşiyi
+            // dolanma açığını kapatır.
+            const yetkiliHiyerarsisiGecersiz =
+                hedefRank < 0 ||
+                yetkiliRank < 0 ||
+                mevcutHedefRank < 0 ||
+                hedefRank >= yetkiliRank ||
+                mevcutHedefRank >= yetkiliRank;
+
+            if (yetkiliHiyerarsisiGecersiz) {
                 const yetkiEmbed = new EmbedBuilder()
-                    .setTitle('🏅 Rutbe Yetkisi Yetersiz')
-                    .setDescription(`<a:baarsz:1505146967817326675> **${yetkiliRobloxUser.name}** Roblox grubunda kendi rutbesinden yuksek bir rutbe veremez.`)
+                    .setTitle('🏅 Rütbe Yetkisi Yetersiz')
+                    .setDescription(
+                        `<a:baarsz:1505146967817326675> **${yetkiliRobloxUser.name}** yalnızca kendi mevcut rütbesinden düşük üyelerin rütbesini değiştirebilir ve kendi rütbesinden düşük bir rütbe verebilir.`
+                    )
                     .addFields(
-                        { name: '📌 Yetkilinin Roblox Rutbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
-                        { name: '📌 Verilmek Istenen Rutbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
+                        { name: '📌 Yetkilinin Roblox Rütbesi', value: `\`${yetkiliRutbeAdi}\` [Rank: \`${yetkiliRank}\`]`, inline: false },
+                        { name: '📌 Hedefin Mevcut Rütbesi', value: `\`${eskiRutbeAdi}\` [Rank: \`${mevcutHedefRank}\`]`, inline: false },
+                        { name: '📌 Verilmek İstenen Rütbe', value: `\`${yeniRutbeAdi}\` [Rank: \`${hedefRank}\`]`, inline: false }
                     )
                     .setColor('#7a0010');
 
