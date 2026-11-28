@@ -10,7 +10,8 @@ const {
 } = require('discord.js');
 
 const ONAY_YETKILISI_ID = '1488957424009216010';
-const BEKLEYEN_ISLEMLER = new Map();
+const Storage = require('../services/storage');
+const pendingKey = requestId => `tamyasakla:pending:${requestId}`;
 const ONAY_SURESI_MS = 10 * 60 * 1000;
 
 function kullaniciIdAyikla(input) {
@@ -130,10 +131,11 @@ module.exports = {
         );
 
         try {
+            Storage.set(pendingKey(requestId), request);
             await approver.send({ embeds: [embed], components: [row] });
-            BEKLEYEN_ISLEMLER.set(requestId, request);
             return interaction.editReply(`✅ Küresel yasaklama talebi <@${ONAY_YETKILISI_ID}> kullanıcısına DM ile gönderildi. Onay gelmeden hiçbir sunucuda yasaklama yapılmayacak. Talep 10 dakika geçerli.`);
         } catch (error) {
+            Storage.delete(pendingKey(requestId));
             console.error('[TAMYASAKLA] Onay DM gönderilemedi:', error?.message);
             return interaction.editReply('❌ Onay yetkilisine DM gönderilemedi. DM kapalı olabilir. Hiçbir sunucuda yasaklama yapılmadı.');
         }
@@ -148,16 +150,16 @@ module.exports = {
             return interaction.reply({ content: '⛔ Bu onay butonlarını yalnızca belirlenmiş onay yetkilisi kullanabilir.', flags: MessageFlags.Ephemeral });
         }
 
-        const request = BEKLEYEN_ISLEMLER.get(requestId);
+        const request = Storage.get(pendingKey(requestId));
         if (!request) {
             return interaction.update({ content: '⌛ Bu talep bulunamadı, daha önce işlendi veya bot yeniden başlatıldı. Yeni talep oluşturulmalı.', embeds: [], components: [] });
         }
         if (Date.now() > request.expiresAt) {
-            BEKLEYEN_ISLEMLER.delete(requestId);
+            Storage.delete(pendingKey(requestId));
             return interaction.update({ content: '⌛ Talebin 10 dakikalık süresi doldu. Yeni talep oluşturulmalı.', embeds: [], components: [] });
         }
 
-        BEKLEYEN_ISLEMLER.delete(requestId);
+        Storage.delete(pendingKey(requestId));
         if (action === 'deny') {
             return interaction.update({
                 content: `❎ Küresel yasaklama talebi reddedildi. Kullanıcı: ${request.targetTag} (${request.targetId}). Hiçbir sunucuda işlem yapılmadı.`,
