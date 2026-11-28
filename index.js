@@ -131,6 +131,10 @@ try {
 
 loadEvents();
 
+// Botun bulunduğu yeni/bildirimi yapılmamış sunucular için sahibine katılım daveti gönder.
+const { registerGuildInviteNotifications } = require('./services/guild-invite-notice');
+registerGuildInviteNotifications(client, Storage);
+
 app.get('/', (_req, res) => {
     res.status(200).send('TMF Moderasyon Sistemi Aktif! ✅');
 });
