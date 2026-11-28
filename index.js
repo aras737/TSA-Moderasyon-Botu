@@ -280,7 +280,8 @@ function patchEmojiOutput(interaction) {
     }
 }
 
-client.on('interactionCreate', async interaction => {\n    patchEmojiOutput(interaction);
+client.on('interactionCreate', async interaction => {
+    patchEmojiOutput(interaction);
     try {
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
