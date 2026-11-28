@@ -86,12 +86,10 @@ function kureselYasakRaporuOlustur(request, basarili, basarisiz) {
             first = false;
         }
 
-        const room = 25 - embed.data.fields.length;
+        const room = Math.min(5, 25 - embed.data.fields.length);
         if (room > 0 && listFields.length) embed.addFields(listFields.splice(0, room));
         embeds.push(embed);
 
-        // Her embed 25 field ve 6000 toplam karakter sınırının altında tutulur.
-        if (embeds.length > 100) break;
     }
     return embeds;
 }
