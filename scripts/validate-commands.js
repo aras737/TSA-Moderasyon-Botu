@@ -63,9 +63,19 @@ for (const file of fs.readdirSync(commandsDir).filter(name => name.endsWith('.js
         if (typeof json.description !== 'string' || json.description.length < 1 || json.description.length > 100) {
             errors.push(`${file}: komut açıklaması 1-100 karakter olmalı`);
         }
-        if (Array.isArray(command.requiredPerms) && command.requiredPerms.length > 0 &&
-            json.default_member_permissions == null) {
+        const hasRuntimePermissions = Array.isArray(command.requiredPerms) && command.requiredPerms.length > 0;
+        const hasDiscordDefaultPermissions = json.default_member_permissions != null;
+
+        if (hasRuntimePermissions && !hasDiscordDefaultPermissions) {
             errors.push(`${file}: requiredPerms tanımlı ama varsayılan Discord izni ayarlanmamış`);
+        }
+        if (hasDiscordDefaultPermissions && !hasRuntimePermissions) {
+            errors.push(`${file}: varsayılan Discord izni tanımlı ama index.js runtime yetki kontrolü için requiredPerms eksik`);
+        }
+        if (hasRuntimePermissions &&
+            command.requiredPerms.includes(require('discord.js').PermissionFlagsBits.Administrator) &&
+            command.requiredPerms.length > 1) {
+            errors.push(`${file}: Administrator diğer requiredPerms değerleriyle birleştirilmemeli; index.js yönetici yetkisini zaten ayrı ele alır`);
         }
         if (!/^[a-z0-9_-]{1,32}$/.test(json.name || '')) {
             errors.push(`${file}: geçersiz komut adı "${json.name}"`);

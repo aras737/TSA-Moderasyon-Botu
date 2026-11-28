@@ -82,7 +82,7 @@ module.exports = {
                     )
                     .setColor('#ff4d4d')
                     .setTimestamp()]
-            }).catch(() => {});
+            }).catch(error => console.warn('[BAN] Kullanıcıya DM gönderilemedi:', error?.message || error));
         } catch (error) {
             console.error('[BAN] Komut hatası:', error);
             await interaction.editReply({

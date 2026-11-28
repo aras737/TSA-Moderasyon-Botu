@@ -80,7 +80,7 @@ module.exports = {
                     )
                     .setColor('#e67e22')
                     .setTimestamp()]
-            }).catch(() => {});
+            }).catch(error => console.warn('[KICK] Kullanıcıya DM gönderilemedi:', error?.message || error));
         } catch (error) {
             console.error('[KICK] Komut hatası:', error);
             await interaction.editReply({
