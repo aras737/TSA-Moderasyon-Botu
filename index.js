@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { sendOwnerStartupNotice } = require('./utils/owner-notice');
-const { loadApplicationEmojis } = require('./utils/emojis');
+const { loadApplicationEmojis, replaceLegacyEmojis, emojiData, FALLBACKS } = require('./utils/emojis');
 
 require('dotenv').config();
 
@@ -236,7 +236,51 @@ async function sendInteractionError(interaction, content) {
     }
 }
 
-client.on('interactionCreate', async interaction => {
+
+function normalizeEmojiPayload(value, key = '') {
+    if (typeof value === 'string') return replaceLegacyEmojis(value);
+    if (Array.isArray(value)) return value.map(item => normalizeEmojiPayload(item));
+    if (!value || typeof value !== 'object') return value;
+
+    if (key === 'emoji' && typeof value.name === 'string') {
+        const custom = emojiData(value.name);
+        if (custom) return custom;
+        return { name: FALLBACKS[value.name] || '🔹' };
+    }
+
+    if (typeof value.toJSON === 'function') {
+        try {
+            return normalizeEmojiPayload(value.toJSON());
+        } catch {
+            // Bilinmeyen builder nesnelerinde normal nesne işlemine devam et.
+        }
+    }
+
+    const normalized = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+        normalized[childKey] = normalizeEmojiPayload(childValue, childKey);
+    }
+    return normalized;
+}
+
+function patchEmojiOutput(interaction) {
+    for (const method of ['reply', 'editReply', 'followUp', 'update']) {
+        if (typeof interaction[method] !== 'function') continue;
+        const original = interaction[method].bind(interaction);
+        interaction[method] = (...args) => original(...args.map(arg => normalizeEmojiPayload(arg)));
+    }
+
+    if (interaction.channel && typeof interaction.channel.send === 'function') {
+        const channel = interaction.channel;
+        if (!channel.__tmfEmojiPatched) {
+            const originalSend = channel.send.bind(channel);
+            channel.send = (...args) => originalSend(...args.map(arg => normalizeEmojiPayload(arg)));
+            Object.defineProperty(channel, '__tmfEmojiPatched', { value: true });
+        }
+    }
+}
+
+client.on('interactionCreate', async interaction => {\n    patchEmojiOutput(interaction);
     try {
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
