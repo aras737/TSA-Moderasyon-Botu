@@ -11,7 +11,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { sendOwnerStartupNotice } = require('./utils/owner-notice');
-const { loadApplicationEmojis, replaceLegacyEmojis, emojiData, FALLBACKS } = require('./utils/emojis');
+const { isHandledElsewhere } = require('./utils/interaction-registry');
+const { loadApplicationEmojis, replaceLegacyEmojis, emojiData, FALLBACKS, emoji } = require('./utils/emojis');
 
 require('dotenv').config();
 
@@ -41,6 +42,7 @@ client.commands = new Collection();
 const slashCommands = [];
 let isShuttingDown = false;
 let commandRegistrationPromise = null;
+let commandsRegistered = false;
 
 function loadCommands() {
     const commandsPath = path.join(__dirname, 'commands');
@@ -148,6 +150,10 @@ app.get('/health', (_req, res) => {
         discord: ready ? 'ready' : 'connecting',
         bot: ready ? client.user.tag : null,
         commands: slashCommands.length,
+        commandsRegistered,
+        guilds: client.guilds.cache.size,
+        shards: client.ws.shards.size,
+        memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
         uptimeSeconds: Math.floor(process.uptime())
     });
 });
@@ -159,7 +165,9 @@ app.get('/ready', (_req, res) => {
         ok: ready,
         status: ready ? 'ready' : 'connecting',
         bot: ready ? client.user.tag : null,
-        commands: slashCommands.length
+        commands: slashCommands.length,
+        commandsRegistered,
+        guilds: client.guilds.cache.size
     });
 });
 
@@ -186,6 +194,7 @@ async function registerSlashCommands() {
             { body: slashCommands }
         );
 
+        commandsRegistered = true;
         console.log(`✅ ${registered.length} slash komut Discord'a kaydedildi.`);
         return registered;
     })();
@@ -193,6 +202,7 @@ async function registerSlashCommands() {
     try {
         return await commandRegistrationPromise;
     } catch (error) {
+        commandsRegistered = false;
         commandRegistrationPromise = null;
         throw error;
     }
@@ -291,11 +301,11 @@ client.on('interactionCreate', async interaction => {
             const command = client.commands.get(interaction.commandName);
 
             if (!command) {
-                return sendInteractionError(interaction, '❌ Bu komut botun mevcut sürümünde bulunamadı. Biraz sonra tekrar dene.');
+                return sendInteractionError(interaction, `${emoji('baarsz')} Bu komut botun mevcut sürümünde bulunamadı. Biraz sonra tekrar dene.`);
             }
 
             if (!interaction.inGuild()) {
-                return sendInteractionError(interaction, '⛔ Bu komut yalnızca bir Discord sunucusunda kullanılabilir.');
+                return sendInteractionError(interaction, `${emoji('uyari')} Bu komut yalnızca bir Discord sunucusunda kullanılabilir.`);
             }
 
             if (Array.isArray(command.requiredPerms) && command.requiredPerms.length > 0) {
@@ -304,7 +314,7 @@ client.on('interactionCreate', async interaction => {
                 const hasAllRequiredPermissions = command.requiredPerms.every(permission => permissions?.has(permission));
 
                 if (!isAdmin && !hasAllRequiredPermissions) {
-                    return sendInteractionError(interaction, '⛔ Bu komutu kullanmak için gerekli sunucu yetkilerine sahip değilsin.');
+                    return sendInteractionError(interaction, `${emoji('uyari')} Bu komutu kullanmak için gerekli sunucu yetkilerine sahip değilsin.`);
                 }
             }
 
@@ -315,7 +325,7 @@ client.on('interactionCreate', async interaction => {
                 await command.execute(interaction);
             } catch (error) {
                 console.error(`❌ Komut hatası: /${interaction.commandName} | ${interaction.id}`, error);
-                await sendInteractionError(interaction, '💥 Komut çalıştırılırken hata oluştu. Hata kaydedildi; daha sonra tekrar dene.');
+                await sendInteractionError(interaction, `${emoji('baarsz')} Komut çalıştırılırken hata oluştu. Hata kaydedildi; daha sonra tekrar dene.`);
                 return;
             }
 
@@ -326,32 +336,60 @@ client.on('interactionCreate', async interaction => {
             );
 
             if (!acknowledged) {
-                await sendInteractionError(interaction, '⚠️ Komut yanıt üretmedi. Lütfen tekrar dene.');
+                await sendInteractionError(interaction, `${emoji('uyari')} Komut yanıt üretmedi. Lütfen tekrar dene.`);
             }
             return;
         }
 
         if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
-            for (const command of client.commands.values()) {
+            // Kendi dinleyicisi/collector'ı olan paneller (antibot, ses paneli, banlist,
+            // grup_listele) etkileşimi kendisi ACK eder; burada ikinci kez yanıtlanmaz.
+            if (isHandledElsewhere(interaction)) return;
+
+            // Her komutun handler'ı yalıtılmış çalışır. Bir modüldeki hata,
+            // diğer modüllerin etkileşim yöneticisini veya botun tamamını düşürmez.
+            for (const [commandName, command] of client.commands) {
                 if (typeof command.interactionHandler !== 'function') continue;
                 if (interaction.replied || interaction.deferred) break;
 
-                await command.interactionHandler(interaction);
-            }
-
-            if (!interaction.replied && !interaction.deferred && interaction.isRepliable()) {
-                // Bilinmeyen/eski panel butonları sessizce beklemede kalmasın.
-                if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
-                    await sendInteractionError(interaction, '⚠️ Bu panel etkileşimi tanınmadı veya süresi doldu. Paneli yeniden açmayı dene.');
+                try {
+                    await command.interactionHandler(interaction);
+                } catch (handlerError) {
+                    console.error(
+                        `❌ Etkileşim modülü hatası: /${commandName} | ${interaction.customId || interaction.id}`,
+                        handlerError
+                    );
+                    if (!interaction.replied && !interaction.deferred) {
+                        await sendInteractionError(
+                            interaction,
+                            `${emoji('baarsz')} Bu panel işlemi tamamlanamadı. Hata kaydedildi; paneli yeniden açmayı dene.`
+                        );
+                    }
+                    break;
                 }
             }
+
+            // Buton/select collector'ları kendi etkileşimlerini ayrıca dinler.
+            // Burada tanınmayan her bileşeni otomatik ACK etmek collector'larla
+            // yarışıp sayfalama ve panel butonlarını bozabilir. Bu yüzden
+            // eşleşmeyen bileşenleri sessizce bırakıyoruz; ilgili collector
+            // veya komut kendi süresini ve yanıtını yönetir.
         }
     } catch (error) {
         console.error('❌ Etkileşim işleyici hatası:', error);
-        await sendInteractionError(interaction, '💥 İşlem sırasında beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar dene.');
+        await sendInteractionError(interaction, `${emoji('baarsz')} İşlem sırasında beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar dene.`);
     }
 });
 
+client.on('shardResume', (shardId, replayedEvents) => {
+    console.log(`✅ Discord shard yeniden bağlandı: ${shardId} | tekrar oynatılan olay: ${replayedEvents}`);
+});
+client.on('rateLimit', rateLimitData => {
+    console.warn(
+        `⚠️ Discord API rate limit: ${rateLimitData.route || 'bilinmeyen rota'} | ` +
+        `süre: ${rateLimitData.timeToReset || 0}ms | global: ${Boolean(rateLimitData.global)}`
+    );
+});
 client.on('shardReconnecting', shardId => {
     console.warn('🔄 Discord shard yeniden bağlanıyor:', shardId);
 });
@@ -367,10 +405,10 @@ process.on('unhandledRejection', error => console.error('❌ Yakalanmamış Prom
 
 process.on('uncaughtException', error => {
     console.error('❌ Yakalanmamış işlem hatası; süreç güvenli biçimde kapatılıyor:', error);
-    shutdown('uncaughtException');
+    shutdown('uncaughtException', 1);
 });
 
-function shutdown(signal) {
+function shutdown(signal, exitCode = 0) {
     if (isShuttingDown) return;
     isShuttingDown = true;
     console.log(`🛑 ${signal} alındı. TMF güvenli şekilde kapatılıyor...`);
@@ -385,14 +423,14 @@ function shutdown(signal) {
     const forceExit = setTimeout(() => {
         console.error('⚠️ Kapatma zaman aşımı. Süreç sonlandırılıyor.');
         client.destroy();
-        process.exit(1);
+        process.exit(exitCode || 1);
     }, 10000);
     forceExit.unref();
 
     server.close(() => {
         client.destroy();
         clearTimeout(forceExit);
-        process.exit(0);
+        process.exit(exitCode);
     });
 }
 

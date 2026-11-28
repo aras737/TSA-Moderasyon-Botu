@@ -7,6 +7,10 @@ const {
     PermissionFlagsBits,
     MessageFlags
 } = require('discord.js');
+const { registerPrefix } = require('../utils/interaction-registry');
+
+// Sahip karar butonlarını bu dosyadaki dinleyici ACK eder (genel yönetici dokunmaz).
+registerPrefix('antibot_');
 const { ayarGetir, ayarKaydet } = require('../utils/db');
 
 const AUDIT_MAX_AGE_MS = 15000;
